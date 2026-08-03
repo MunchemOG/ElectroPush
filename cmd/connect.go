@@ -1,43 +1,77 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 
+	"github.com/andreibanu/pusher/internal/adb"
+	"github.com/andreibanu/pusher/internal/config"
 	"github.com/andreibanu/pusher/internal/wifi"
 	"github.com/spf13/cobra"
 )
 
 var connectCmd = &cobra.Command{
 	Use:   "connect",
-	Short: "Check robot Wi-Fi connection",
-	Long:  `Checks whether you are connected to the robot's Wi-Fi (192.168.43.x) without changing networks.`,
+	Short: "Join the robot's Wi-Fi and connect ADB",
+	Long:  `Joins the robot's Wi-Fi network and establishes an ADB connection, without building or deploying.`,
 	RunE:  runConnect,
 }
 
 func runConnect(cmd *cobra.Command, args []string) error {
+	if !adb.IsInstalled() {
+		return fmt.Errorf("adb not found - please install Android SDK Platform-Tools")
+	}
+
+	if device, ok := adb.FindUSBDevice(); ok {
+		fmt.Printf("[OK] Hub already attached over USB: %s\n", device.Label())
+		fmt.Println("[*] Run 'pusher' to build and deploy.")
+		return nil
+	}
+
 	wifiMgr := wifi.NewManager()
-	ip, err := wifiMgr.GetIPv4()
+
+	onRobot, err := wifiMgr.IsOnRobotNetwork()
 	if err != nil {
-		return fmt.Errorf("failed to read Wi-Fi IP address: %w", err)
-	}
-	if ip == "" {
-		fmt.Println("[!] No IPv4 address on Wi-Fi interface (en0).")
-		fmt.Println("    Please connect to the robot's Wi-Fi (192.168.43.x) in macOS Wi-Fi settings.")
-		return fmt.Errorf("robot Wi-Fi not connected")
+		return fmt.Errorf("failed to check the current network: %w", err)
 	}
 
-	onRobotNet, err := wifiMgr.IsOnRobotNetwork()
-	if err != nil {
-		return fmt.Errorf("failed to verify robot network: %w", err)
-	}
-	if !onRobotNet {
-		fmt.Printf("[!] Wi-Fi IPv4 on en0 is %s, not 192.168.43.x.\n", ip)
-		fmt.Println("    Please connect to the robot's Wi-Fi in macOS Wi-Fi settings.")
-		return fmt.Errorf("robot Wi-Fi not connected")
+	if onRobot {
+		fmt.Println("[OK] Already on the robot network")
+	} else {
+		if err := ensureProfile(); err != nil {
+			return err
+		}
+
+		profile, err := config.GetDefaultProfile()
+		if err != nil {
+			return fmt.Errorf("no robot profile configured: %w\n\nRun 'pusher settings' to add one", err)
+		}
+
+		ssid, ssidErr := wifiMgr.CurrentSSID()
+		switch {
+		case ssidErr == nil && ssid != "":
+			fmt.Printf("[OK] Currently on: %s\n", ssid)
+		case errors.Is(ssidErr, wifi.ErrSSIDUnavailable):
+			if inferred, err := wifiMgr.MostRecentNetwork(robotSSIDs()...); err == nil && inferred != "" {
+				fmt.Printf("[*] macOS hides the network name; assuming you are on %q\n", inferred)
+			}
+		}
+
+		fmt.Printf("\n[>] Joining robot Wi-Fi: %s\n", profile.SSID)
+		ip, err := wifiMgr.JoinAndWait(profile.SSID, profile.Password, wifi.RobotSubnet, joinTimeout)
+		if err != nil {
+			return fmt.Errorf("failed to join %q: %w", profile.SSID, err)
+		}
+		fmt.Printf("[OK] On the robot network (%s)\n", ip)
 	}
 
-	fmt.Println("[OK] Robot Wi-Fi detected (192.168.43.x)")
-	fmt.Println("[*] Run 'pusher' to build and deploy.")
+	fmt.Println("\n[+] Connecting to robot via ADB...")
+	if err := adb.Connect(); err != nil {
+		return fmt.Errorf("failed to connect via ADB: %w", err)
+	}
+
+	fmt.Println("[OK] Connected via ADB")
+	fmt.Println("[*] Run 'pusher' to build and deploy, or 'pusher exit' when you're done.")
 
 	return nil
 }

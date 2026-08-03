@@ -1,260 +1,101 @@
-# Pusher - FTC Robot Deployment Tool
+```
+From Team #14270
 
-A production-quality CLI tool for FTC robotics developers that automates connecting to robots, building, and deploying Android Studio projects.
+ ██████╗ ██╗   ██╗ █████╗ ███╗   ██╗████████╗██╗   ██╗███╗   ███╗
+██╔═══██╗██║   ██║██╔══██╗████╗  ██║╚══██╔══╝██║   ██║████╗ ████║
+██║   ██║██║   ██║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+██║▄▄ ██║██║   ██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+╚██████╔╝╚██████╔╝██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+ ╚══▀▀═╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-## Features
-
-- Automatic robot Wi-Fi connection with retry logic
-- ADB connection management
-- Gradle build and deployment automation
-- Robot profile management
-- Wi-Fi state restoration
-- Clean, animated terminal UI
-
-## Installation
-
-### From Source
-
-```bash
-# Clone the repository
-git clone https://github.com/andreibanu/pusher
-cd pusher
-
-# Build the binary
-go build -o pusher
-
-# Move to your PATH (optional)
-sudo mv pusher /usr/local/bin/
+ ██████╗  ██████╗ ██████╗  ██████╗ ████████╗██╗ ██████╗███████╗
+██╔══██╗██╔═══██╗██╔══██╗██╔═══██╗╚══██╔══╝██║██╔════╝██╔════╝
+██████╔╝██║   ██║██████╔╝██║   ██║   ██║   ██║██║     ███████╗
+██╔══██╗██║   ██║██╔══██╗██║   ██║   ██║   ██║██║     ╚════██║
+██║  ██║╚██████╔╝██████╔╝╚██████╔╝   ██║   ██║╚██████╗███████║
+╚═╝  ╚═╝ ╚═════╝ ╚═════╝  ╚═════╝    ╚═╝   ╚═╝ ╚═════╝╚══════╝
 ```
 
-### Using Homebrew (coming soon)
+# Pusher
 
-```bash
-brew tap PzmuV1517/PzmuV1517
-brew install PzmuV1517/PzmuV1517/pusher
-```
-
-or just
-```bash
-brew install PzmuV1517/PzmuV1517/pusher
-```
-both have the same result
-
-## Prerequisites
-
-- **macOS** (Linux and Windows support coming soon)
-- **ADB (Android Debug Bridge)** - Install via Android SDK Platform-Tools
-- **Gradle wrapper** in your Android Studio project
-- **Go 1.21+** (for building from source)
-
-## Quick Start
-
-### First Run
-
-On your first run, Pusher will prompt you to set up a robot profile:
+One command to build an FTC project and deploy it to the robot.
 
 ```bash
 pusher
 ```
 
-You'll be asked to enter:
-- Robot Wi-Fi SSID
-- Robot Wi-Fi Password
+If a hub is on USB it uses that and leaves your Wi-Fi alone. Otherwise it builds
+first, joins the robot's Wi-Fi, deploys, and puts you back on the network you
+started on.
 
-This profile will be saved as your default profile.
-
-### Basic Usage
-
-#### Deploy to Robot
+## Install
 
 ```bash
-# Connect to robot, build, and deploy
-pusher
+brew install PzmuV1517/PzmuV1517/pusher
 ```
 
-This command will:
-1. Save your current Wi-Fi connection
-2. Connect to the robot's Wi-Fi
-3. Establish ADB connection at 192.168.43.1
-4. Detect Gradle wrapper
-5. Build and deploy your app
-
-#### Disconnect ADB
+Or from source:
 
 ```bash
-# Disconnect ADB only (keep Wi-Fi)
-pusher dc
-# or
-pusher disconnect
+go build -o pusher && sudo mv pusher /usr/local/bin/
 ```
 
-#### Disconnect and Restore Wi-Fi
+Requires macOS, `adb` (`brew install android-platform-tools`), and a `gradlew`
+in your FTC project.
 
-```bash
-# Disconnect ADB and restore previous Wi-Fi
-pusher exit
-```
+## Commands
 
-## Profile Management
+| Command | Description |
+|---|---|
+| `pusher` | Build and deploy |
+| `pusher connect` | Join the robot Wi-Fi and connect adb |
+| `pusher exit` | Disconnect adb and return to your Wi-Fi |
+| `pusher dc` | Disconnect adb only |
+| `pusher settings` | Profiles and preferences |
+| `pusher slim` | Shrink the APK (`--undo` to revert) |
+| `pusher doctor` | Diagnose Wi-Fi, adb and project problems |
+| `pusher prepare` | Cache Gradle dependencies while online |
+| `pusher help` | Help |
 
-### List Profiles
+## Settings
 
-```bash
-pusher profile list
-```
+`pusher settings` opens a menu covering robot profiles, which network to return
+to, whether to prefer USB, slimming, delta transfer, and Gradle threads. Changes
+save immediately to `~/.config/pusher/config.yaml`.
 
-Shows all saved robot profiles with the default marked.
+## Making deploys faster
 
-### Add a Profile
+**Put the Control Hub on 5 GHz.** Hold the hub's button through power-on and
+release when the LED turns magenta (yellow is 2.4 GHz). Needs Control Hub OS
+1.1.2+. Biggest win available, and it costs nothing.
 
-```bash
-pusher profile add
-```
+**Only changed parts are sent.** On by default. The hub keeps the APK in pieces
+under `/data/local/tmp/pusher`, which survives reboots, so later pushes transfer
+only what differs — measured at 0.6 MB instead of 74 MB for a one-line change.
+The rebuilt APK is checksummed on the hub before installing; anything unexpected
+falls back to a full transfer.
 
-Interactive prompt to add a new robot profile.
+**`pusher slim`** drops the native libraries for the CPU your hub does not have,
+which is about 10 MB of a stock FTC APK. It asks the connected hub which
+architecture it runs and refuses to guess, so connect the robot first. Files it
+edits are backed up next to themselves; `pusher slim --undo` restores them.
 
-### Edit a Profile
+## macOS and Wi-Fi names
 
-```bash
-pusher profile edit <profile-name>
-```
+macOS hides the current Wi-Fi name from command-line tools, and your terminal
+cannot be added to Location Services by hand — macOS only lists apps that have
+already asked, and command-line tools have not been able to ask since macOS 13.
 
-Update SSID or password for an existing profile.
-
-### Set Default Profile
-
-```bash
-pusher profile use <profile-name>
-```
-
-Set which profile to use by default.
-
-## Configuration
-
-Pusher stores its configuration in `~/.config/pusher/config.yaml`.
-
-Example configuration:
-```yaml
-default_profile: default
-last_wifi: MyHomeWiFi
-profiles:
-  default:
-    name: default
-    ssid: DIRECT-RobotController
-    password: mypassword
-  team_robot:
-    name: team_robot
-    ssid: FTC-12345
-    password: teampassword
-```
-
-## Commands Reference
-
-| Command | Alias | Description |
-|---------|-------|-------------|
-| `pusher` | - | Connect, build, and deploy (default action) |
-| `pusher dc` | `disconnect` | Disconnect ADB only |
-| `pusher exit` | - | Disconnect ADB and restore Wi-Fi |
-| `pusher profile list` | - | List all robot profiles |
-| `pusher profile add` | - | Add a new profile |
-| `pusher profile edit` | - | Edit an existing profile |
-| `pusher profile use` | - | Set default profile |
-| `pusher help` | - | Show help with ASCII art |
-
-## Troubleshooting
-
-### ADB Not Found
-
-Install Android SDK Platform-Tools:
-```bash
-brew install android-platform-tools
-```
-
-### Wi-Fi Connection Issues
-
-- Ensure you have the correct Wi-Fi SSID and password
-- Check that you're in range of the robot's Wi-Fi
-- Verify you have permission to change Wi-Fi settings
-- Pusher automatically retries connection 3 times
-
-### Gradle Wrapper Not Found
-
-- Ensure you're running Pusher from within or near your Android Studio project directory
-- Pusher searches up to 3 parent directories for `gradlew`
-- Make sure `gradlew` exists in your project root
-
-### Permission Issues
-
-If you encounter permission errors with `networksetup`, you may need to run with elevated privileges:
-```bash
-sudo pusher
-```
-
-However, this should generally not be necessary on macOS.
-
-## Development
-
-### Building
-
-```bash
-# Build for current platform
-go build -o pusher
-
-# Build with version information
-go build -ldflags "-X main.version=1.0.0" -o pusher
-
-# Build for multiple platforms
-GOOS=darwin GOARCH=amd64 go build -o pusher-darwin-amd64
-GOOS=darwin GOARCH=arm64 go build -o pusher-darwin-arm64
-GOOS=linux GOARCH=amd64 go build -o pusher-linux-amd64
-```
-
-### Running Tests
-
-```bash
-go test ./...
-```
-
-### Project Structure
-
-```
-pusher/
-├── cmd/                    # Cobra commands
-│   ├── root.go            # Root command setup
-│   ├── push.go            # Main push logic
-│   ├── disconnect.go      # Disconnect command
-│   ├── exit.go            # Exit command
-│   ├── profile.go         # Profile management
-│   └── help.go            # Help command
-├── internal/
-│   ├── adb/               # ADB connection logic
-│   ├── config/            # Configuration management
-│   ├── gradle/            # Gradle build logic
-│   ├── tui/               # Terminal UI components
-│   └── wifi/              # Wi-Fi management (OS-specific)
-├── main.go                # Entry point
-├── go.mod                 # Go module definition
-└── README.md              # This file
-```
-
-## Roadmap
-
-- [ ] Linux support
-- [ ] Windows support
-- [ ] Enhanced build output filtering
-- [ ] Support for custom ADB addresses
-- [ ] Integration with FTC SDK tools
-- [ ] Automated testing
-- [ ] CI/CD pipeline
+Pusher works around it by reading the saved-network list, which macOS keeps in
+most-recently-joined order, so the network you are on is the first entry. That
+needs no permission and is recomputed every run, so moving between home, the lab
+and a competition venue needs no setup. If it ever guesses wrong, pin it in
+`pusher settings` → Home Wi-Fi network.
 
 ## Credits
 
-Made with love by **Andrei Banu**
+Made with love by **Andrei "PzmuV1517" Banu**
 
-## License
+From **Team #14270**
 
-MIT License - feel free to use and modify as needed.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+MIT licensed.

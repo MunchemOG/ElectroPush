@@ -2,31 +2,67 @@
 
 package wifi
 
-import "fmt"
+import (
+	"errors"
+	"time"
+)
 
-// Manager is a stub Wi-Fi manager for non-macOS platforms.
-// It exists so the project can build on CI (Linux/Windows), but
-// all Wi-Fi-dependent commands are effectively disabled.
+const RobotSubnet = "192.168.43."
+
+var ErrSSIDUnavailable = errors.New("macOS will not report the current Wi-Fi network")
+
+const LocationHint = "Wi-Fi management is only supported on macOS."
+
+var errUnsupported = errors.New("Wi-Fi management is only supported on macOS")
+
 type Manager struct {
 	iface string
 }
 
-// NewManager creates a new Wi-Fi manager.
 func NewManager() *Manager {
 	return &Manager{iface: ""}
 }
 
-// GetIPv4 always returns an empty IP on non-macOS platforms.
 func (m *Manager) GetIPv4() (string, error) {
 	return "", nil
 }
 
-// IsOnRobotNetwork always reports false on non-macOS platforms.
 func (m *Manager) IsOnRobotNetwork() (bool, error) {
 	return false, nil
 }
 
-// PowerCycle returns an unsupported error on non-macOS platforms.
+func (m *Manager) CurrentSSID() (string, error) {
+	return "", nil
+}
+
+func (m *Manager) PreferredNetworks() ([]string, error) {
+	return nil, nil
+}
+
+func (m *Manager) MostRecentNetwork(exclude ...string) (string, error) {
+	return "", nil
+}
+
+func (m *Manager) IsPoweredOn() bool {
+	return false
+}
+
+func (m *Manager) PowerOn() error {
+	return errUnsupported
+}
+
+func (m *Manager) Join(ssid, password string) error {
+	return errUnsupported
+}
+
+func (m *Manager) JoinAndWait(ssid, password, subnet string, timeout time.Duration) (string, error) {
+	return "", errUnsupported
+}
+
+func (m *Manager) WaitForIP(subnet string, timeout time.Duration) (string, error) {
+	return "", errUnsupported
+}
+
 func (m *Manager) PowerCycle() error {
-	return fmt.Errorf("Wi-Fi power-cycling is only supported on macOS")
+	return errUnsupported
 }

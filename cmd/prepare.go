@@ -10,9 +10,13 @@ import (
 
 var prepareCmd = &cobra.Command{
 	Use:   "prepare",
-	Short: "Prepare Gradle for offline pusher builds",
-	Long:  `Runs the Gradle wrapper online to download and cache dependencies so that 'pusher' can build offline later.`,
-	RunE:  runPrepare,
+	Short: "Warm the Gradle cache while you have internet",
+	Long: `Runs a full online build so every dependency is cached locally.
+
+pusher already builds before it switches to the robot's Wi-Fi, so this is not
+required. It is worth running before an event, where internet may be unreliable
+and you want the build to succeed from cache alone.`,
+	RunE: runPrepare,
 }
 
 func runPrepare(cmd *cobra.Command, args []string) error {
@@ -26,12 +30,12 @@ func runPrepare(cmd *cobra.Command, args []string) error {
 	fmt.Println("\n[#] Preparing Gradle cache (online build)...")
 	fmt.Println("─────────────────────────────────────────")
 
-	if err := gradle.BuildOnline(wrapper, os.Stdout); err != nil {
+	if err := gradle.Build(wrapper, false, os.Stdout); err != nil {
 		return fmt.Errorf("prepare failed: %w", err)
 	}
 
 	fmt.Println("─────────────────────────────────────────")
-	fmt.Println("\n[OK] Gradle dependencies prepared. You can now use 'pusher' on the robot Wi-Fi.")
+	fmt.Println("\n[OK] Gradle dependencies cached. Builds will now work without internet.")
 
 	return nil
 }
