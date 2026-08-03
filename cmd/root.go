@@ -27,11 +27,9 @@ var rootCmd = &cobra.Command{
 	},
 }
 
-// Execute runs the root command
 func Execute(version string) {
 	appVersion = version
 
-	// Initialize config
 	if err := config.Initialize(); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to initialize config: %v\n", err)
 		os.Exit(1)
@@ -43,16 +41,16 @@ func Execute(version string) {
 }
 
 func init() {
-	// Add flags
+
 	rootCmd.Flags().BoolVarP(&versionFlag, "version", "v", false, "Show version information")
 
-	// Add subcommands
 	rootCmd.AddCommand(pushCmd)
 	rootCmd.AddCommand(connectCmd)
 	rootCmd.AddCommand(disconnectCmd)
 	rootCmd.AddCommand(exitCmd)
 	rootCmd.AddCommand(prepareCmd)
-	rootCmd.AddCommand(profileCmd)
-	rootCmd.AddCommand(threadsCmd)
+	rootCmd.AddCommand(settingsCmd)
+	rootCmd.AddCommand(slimCmd)
+	rootCmd.AddCommand(doctorCmd)
 	rootCmd.AddCommand(helpCmd)
 }
