@@ -40,8 +40,13 @@ Or from source:
 go build -o pusher && sudo mv pusher /usr/local/bin/
 ```
 
-Requires macOS, `adb` (`brew install android-platform-tools`), and a `gradlew`
-in your FTC project.
+Requires `adb` and an FTC project with a Gradle wrapper.
+
+| OS | Wi-Fi switching via | adb |
+|---|---|---|
+| macOS | `networksetup` | `brew install android-platform-tools` |
+| Debian/Ubuntu | `nmcli` (`sudo apt install network-manager`) | `sudo apt install adb` |
+| Windows | `netsh` + PowerShell | Android SDK Platform-Tools |
 
 ## Commands
 
@@ -80,17 +85,33 @@ which is about 10 MB of a stock FTC APK. It asks the connected hub which
 architecture it runs and refuses to guess, so connect the robot first. Files it
 edits are backed up next to themselves; `pusher slim --undo` restores them.
 
-## macOS and Wi-Fi names
+## Per-OS notes
 
-macOS hides the current Wi-Fi name from command-line tools, and your terminal
-cannot be added to Location Services by hand — macOS only lists apps that have
-already asked, and command-line tools have not been able to ask since macOS 13.
+Pusher needs to know which network to put you back on. How it works that out
+differs by platform. `pusher doctor` shows which backend is in use.
 
-Pusher works around it by reading the saved-network list, which macOS keeps in
-most-recently-joined order, so the network you are on is the first entry. That
-needs no permission and is recomputed every run, so moving between home, the lab
-and a competition venue needs no setup. If it ever guesses wrong, pin it in
-`pusher settings` → Home Wi-Fi network.
+**macOS** hides the current Wi-Fi name from command-line tools, and your
+terminal cannot be added to Location Services by hand — macOS only lists apps
+that have already asked, and command-line tools have not been able to ask since
+macOS 13. Pusher instead reads the saved-network list, which macOS keeps in
+most-recently-joined order, so the network you are on is the first entry. No
+permission needed, recomputed every run.
+
+**Debian/Ubuntu** is the easiest case. NetworkManager reports the SSID freely
+and records a real last-connected timestamp per saved network, so returning you
+to the right network is stored fact rather than inference. Machines managed by
+ifupdown or systemd-networkd instead of NetworkManager cannot switch networks;
+connect to the robot yourself and pusher will deploy over that connection.
+
+**Windows** reports the SSID freely, so a normal push is fine. But it keeps no
+record of when each saved network was last used, so a standalone `pusher exit`
+cannot tell where you came from — set the network to return to in
+`pusher settings` → Home Wi-Fi network. Note also that `netsh` cannot take a
+password inline, so pusher generates a WPA2-PSK profile and imports it before
+connecting.
+
+If the network is ever guessed wrong on any platform, pin it in
+`pusher settings` → Home Wi-Fi network, which always wins.
 
 ## Credits
 

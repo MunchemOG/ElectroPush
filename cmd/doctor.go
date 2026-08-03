@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/andreibanu/pusher/internal/adb"
@@ -17,7 +18,7 @@ import (
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
 	Short: "Check that everything pusher needs is working",
-	Long: `Reports what pusher can and cannot see: whether macOS will name your
+	Long: `Reports what pusher can and cannot see: whether the system will name your
 Wi-Fi network, whether adb is installed and what it is talking to, and how
 large the APK your project builds is.
 
@@ -28,6 +29,7 @@ Run this first when something is not behaving.`,
 func runDoctor(cmd *cobra.Command, args []string) error {
 	fmt.Println("Pusher doctor")
 	fmt.Println("═════════════════════════════════════════")
+	fmt.Printf("Platform: %s/%s (Wi-Fi via %s)\n", runtime.GOOS, runtime.GOARCH, wifiBackend())
 
 	locationOK := reportWiFi()
 	fmt.Println()
@@ -45,6 +47,21 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// wifiBackend names the tool driving Wi-Fi, so a report from a user makes
+// clear which code path was in play.
+func wifiBackend() string {
+	switch runtime.GOOS {
+	case "darwin":
+		return "networksetup"
+	case "linux":
+		return "nmcli/NetworkManager"
+	case "windows":
+		return "netsh/PowerShell"
+	default:
+		return "unsupported"
+	}
 }
 
 func reportWiFi() bool {
@@ -71,7 +88,7 @@ func reportWiFi() bool {
 	ssid, ssidErr := wifiMgr.CurrentSSID()
 	switch {
 	case errors.Is(ssidErr, wifi.ErrSSIDUnavailable):
-		fmt.Println("  Current network    : hidden by macOS")
+		fmt.Println("  Current network    : hidden by the OS")
 
 		inferred, _ := wifiMgr.MostRecentNetwork(robotSSIDs()...)
 		if inferred != "" {

@@ -7,27 +7,76 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/andreibanu/pusher/internal/config"
 )
 
-func DetectWrapper() (string, error) {
+// wrapperName is gradlew everywhere except Windows, which needs the batch file.
+func wrapperName() string {
+	if runtime.GOOS == "windows" {
+		return "gradlew.bat"
+	}
+	return "gradlew"
+}
 
-	wrapper := "./gradlew"
+func DetectWrapper() (string, error) {
+	name := wrapperName()
+
+	wrapper := filepath.Join(".", name)
 	if _, err := os.Stat(wrapper); err == nil {
 		return wrapper, nil
 	}
 
 	for i := 0; i < 3; i++ {
-		wrapper = filepath.Join(strings.Repeat("../", i+1), "gradlew")
+		wrapper = filepath.Join(strings.Repeat("../", i+1), name)
 		if _, err := os.Stat(wrapper); err == nil {
 			absPath, _ := filepath.Abs(wrapper)
 			return absPath, nil
 		}
 	}
 
-	return "", fmt.Errorf("gradlew not found in current directory or parent directories")
+	return "", fmt.Errorf("%s not found in current directory or parent directories", name)
+}
+
+// androidStudioJDK finds the JDK bundled with Android Studio, so a machine
+// that has only ever built through the IDE still works without JAVA_HOME set.
+func androidStudioJDK() string {
+	var candidates []string
+
+	switch runtime.GOOS {
+	case "darwin":
+		candidates = []string{
+			"/Applications/Android Studio.app/Contents/jbr/Contents/Home",
+			filepath.Join(os.Getenv("HOME"), "Applications/Android Studio.app/Contents/jbr/Contents/Home"),
+		}
+	case "linux":
+		home := os.Getenv("HOME")
+		candidates = []string{
+			"/opt/android-studio/jbr",
+			"/usr/local/android-studio/jbr",
+			filepath.Join(home, "android-studio/jbr"),
+			// The JetBrains Toolbox and snap layouts.
+			filepath.Join(home, ".local/share/JetBrains/Toolbox/apps/android-studio/jbr"),
+			"/snap/android-studio/current/android-studio/jbr",
+		}
+	case "windows":
+		for _, base := range []string{os.Getenv("ProgramFiles"), os.Getenv("LOCALAPPDATA")} {
+			if base != "" {
+				candidates = append(candidates,
+					filepath.Join(base, "Android", "Android Studio", "jbr"))
+			}
+		}
+	}
+
+	for _, candidate := range candidates {
+		if st, err := os.Stat(candidate); err == nil && st.IsDir() {
+			return candidate
+		}
+	}
+
+	return ""
 }
 
 func ProjectDir(wrapper string) string {
@@ -43,8 +92,11 @@ func Build(wrapper string, offline bool, outputWriter io.Writer) error {
 		return fmt.Errorf("gradle wrapper not found: %s", wrapper)
 	}
 
-	if err := os.Chmod(wrapper, 0755); err != nil {
-		return fmt.Errorf("failed to make gradlew executable: %w", err)
+	// Windows has no execute bit, and chmod there would be a no-op at best.
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(wrapper, 0755); err != nil {
+			return fmt.Errorf("failed to make %s executable: %w", wrapperName(), err)
+		}
 	}
 
 	threads := config.GetThreads()
@@ -64,13 +116,10 @@ func Build(wrapper string, offline bool, outputWriter io.Writer) error {
 	cmd.Dir = wrapperDir
 
 	if os.Getenv("JAVA_HOME") == "" {
-		candidate := "/Applications/Android Studio.app/Contents/jbr/Contents/Home"
-		if st, err := os.Stat(candidate); err == nil && st.IsDir() {
-			if cmd.Env == nil {
-				cmd.Env = os.Environ()
-			}
-			cmd.Env = append(cmd.Env, "JAVA_HOME="+candidate)
-			cmd.Env = append(cmd.Env, "PATH="+filepath.Join(candidate, "bin")+string(os.PathListSeparator)+os.Getenv("PATH"))
+		if jdk := androidStudioJDK(); jdk != "" {
+			cmd.Env = os.Environ()
+			cmd.Env = append(cmd.Env, "JAVA_HOME="+jdk)
+			cmd.Env = append(cmd.Env, "PATH="+filepath.Join(jdk, "bin")+string(os.PathListSeparator)+os.Getenv("PATH"))
 		}
 	}
 

@@ -53,7 +53,7 @@ func runConnect(cmd *cobra.Command, args []string) error {
 			fmt.Printf("[OK] Currently on: %s\n", ssid)
 		case errors.Is(ssidErr, wifi.ErrSSIDUnavailable):
 			if inferred, err := wifiMgr.MostRecentNetwork(robotSSIDs()...); err == nil && inferred != "" {
-				fmt.Printf("[*] macOS hides the network name; assuming you are on %q\n", inferred)
+				fmt.Printf("[*] The network name is hidden; assuming you are on %q\n", inferred)
 			}
 		}
 
