@@ -49,13 +49,13 @@ func runExit(cmd *cobra.Command, args []string) error {
 
 	if home == "" {
 
-		fmt.Println("\n[*] No home network known; power-cycling Wi-Fi so macOS re-picks...")
+		fmt.Println("\n[*] No home network known; cycling Wi-Fi so the system re-picks...")
 		if err := wifiMgr.PowerCycle(); err != nil {
 			fmt.Printf("[!] Warning: failed to power-cycle Wi-Fi: %v\n", err)
 			fmt.Println("    You may need to switch networks manually.")
 			return nil
 		}
-		fmt.Println("[OK] Wi-Fi power-cycled. macOS should auto-join your usual network.")
+		fmt.Println("[OK] Wi-Fi cycled. Your system should auto-join its usual network.")
 		fmt.Println("    Tip: set a home network in 'pusher settings' for a clean switch back.")
 		return nil
 	}

@@ -185,7 +185,7 @@ func resolveHomeNetwork(wifiMgr *wifi.Manager, onRobot, switchBack bool, robotSS
 
 		inferred, inferErr := wifiMgr.MostRecentNetwork(robotSSID)
 		if inferErr == nil && inferred != "" {
-			fmt.Printf("[*] macOS hides the network name; assuming you are on %q\n", inferred)
+			fmt.Printf("[*] The network name is hidden; assuming you are on %q\n", inferred)
 			fmt.Println("    (set it explicitly in 'pusher settings' if that is wrong)")
 			return inferred, nil
 		}
