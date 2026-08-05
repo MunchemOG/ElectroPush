@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -30,12 +31,33 @@ const (
 
 // Credentials is what gets stored on disk.
 type Credentials struct {
-	Token string `json:"token"`
+	// Token is set only when it was typed in. A token found somewhere this
+	// machine already keeps one is referenced by Source instead and read back
+	// on demand, so pusher does not become a second place a GitHub token lives.
+	Token  string `json:"token,omitempty"`
+	Source string `json:"source,omitempty"`
 	// Login and CheckedAt record the last check that succeeded, so an offline
 	// machine can still be trusted.
 	Login     string `json:"login,omitempty"`
 	CheckedAt int64  `json:"checked_at,omitempty"`
+	// Declined records that the token was removed on purpose. Without it, the
+	// next lookup would find the machine's own GitHub login and undo that.
+	Declined bool `json:"declined,omitempty"`
 }
+
+// Secret is the token itself, read from its source when it was not stored.
+func (c Credentials) Secret() string {
+	if c.Token != "" {
+		return c.Token
+	}
+	if source, ok := sourceByID(c.Source); ok {
+		return strings.TrimSpace(source.Read())
+	}
+	return ""
+}
+
+// Discovered reports whether the token came from elsewhere on this machine.
+func (c Credentials) Discovered() bool { return c.Token == "" && c.Source != "" }
 
 func (c Credentials) verified() bool { return c.CheckedAt > 0 }
 
@@ -130,16 +152,10 @@ func Save(creds Credentials) error {
 	return os.Chmod(path, 0o600)
 }
 
-// Clear removes the stored token.
+// Clear forgets the token and records that this was deliberate, so the next
+// lookup does not immediately re-adopt the machine's own GitHub login.
 func Clear() error {
-	path, err := Path()
-	if err != nil {
-		return err
-	}
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("cannot remove credentials: %w", err)
-	}
-	return nil
+	return Save(Credentials{Declined: true})
 }
 
 // SetToken validates a token and stores it only if GitHub accepts it, so a
@@ -165,7 +181,21 @@ func SetToken(token string) (Credentials, error) {
 // worse than trusting a week-old answer.
 func Resolve() (Status, Credentials) {
 	creds, err := Load()
-	if err != nil || creds.Token == "" {
+	if err != nil {
+		return NoToken, creds
+	}
+
+	// Nothing to go on. Before asking anyone to paste a token, look for one
+	// this machine already has: the people who can see the repository are
+	// generally already signed in to GitHub somewhere.
+	if creds.Secret() == "" {
+		if creds.Declined {
+			return NoToken, creds
+		}
+		if found, ok := discover(); ok {
+			Save(found)
+			return Verified, found
+		}
 		return NoToken, creds
 	}
 
@@ -173,7 +203,7 @@ func Resolve() (Status, Credentials) {
 		return Cached, creds
 	}
 
-	login, err := validate(creds.Token)
+	login, err := validate(creds.Secret())
 	if err != nil {
 		if isDenied(err) {
 			// GitHub answered and said no. Drop the stale approval so the menu

@@ -133,10 +133,19 @@ func (m *SettingsModel) blobLabel() string {
 }
 
 func (m *SettingsModel) tokenLabel() string {
-	if m.blob.creds.Login != "" && m.blob.auth.OK() {
-		return m.blob.auth.String() + " (" + m.blob.creds.Login + ")"
+	if m.blob.creds.Login == "" || !m.blob.auth.OK() {
+		return m.blob.auth.String()
 	}
-	return m.blob.auth.String()
+
+	who := m.blob.creds.Login
+	// Say where a token came from when it was not typed in here, so nobody has
+	// to wonder why they were never asked for one.
+	if m.blob.creds.Discovered() {
+		if from := ghauth.SourceLabel(m.blob.creds.Source); from != "" {
+			who += " via " + from
+		}
+	}
+	return m.blob.auth.String() + " (" + who + ")"
 }
 
 func (m *SettingsModel) updateBlob(key tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -228,7 +237,7 @@ func ensureLibrary(root, token, artifact, version string) error {
 }
 
 func (m *SettingsModel) switchVariant() tea.Cmd {
-	root, token := m.projectRoot(), m.blob.creds.Token
+	root, token := m.projectRoot(), m.blob.creds.Secret()
 	version := m.blob.dep.Version
 
 	target := blobdep.ArtifactDev
@@ -254,7 +263,7 @@ func (m *SettingsModel) switchVariant() tea.Cmd {
 }
 
 func (m *SettingsModel) bumpVersion() tea.Cmd {
-	root, token := m.projectRoot(), m.blob.creds.Token
+	root, token := m.projectRoot(), m.blob.creds.Secret()
 	artifact, previous := m.blob.dep.Artifact, m.blob.dep.Version
 
 	m.blob.busy = true
@@ -280,7 +289,7 @@ func (m *SettingsModel) bumpVersion() tea.Cmd {
 }
 
 func (m *SettingsModel) addBlob() tea.Cmd {
-	root, token := m.projectRoot(), m.blob.creds.Token
+	root, token := m.projectRoot(), m.blob.creds.Secret()
 
 	m.blob.busy = true
 	return blobOp(func() (string, error) {
@@ -403,6 +412,8 @@ func (m *SettingsModel) viewBlobToken() string {
 	b.WriteString(helpStyle.Render("  A GitHub token with read access to the private blob repository.") + "\n")
 	b.WriteString(helpStyle.Render("  Classic tokens need the repo scope. Fine-grained tokens need") + "\n")
 	b.WriteString(helpStyle.Render("  Contents: Read on that repository.") + "\n\n")
+	b.WriteString(helpStyle.Render("  Only needed if this machine has no GitHub login pusher can use.") + "\n")
+	b.WriteString(helpStyle.Render("  It already tried GH_TOKEN, the gh CLI and git's credential helper.") + "\n\n")
 
 	b.WriteString(fmt.Sprintf("  Token: %s\n", strings.Repeat("*", len(m.input))))
 

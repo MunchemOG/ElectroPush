@@ -12,7 +12,23 @@ func isolate(t *testing.T) string {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
+
+	// Tests must not adopt whatever GitHub login the machine running them is
+	// signed in to, which would make the result depend on the developer.
+	restore := discover
+	discover = func() (Credentials, bool) { return Credentials{}, false }
+	t.Cleanup(func() { discover = restore })
+
 	return home
+}
+
+// findable makes discovery succeed, standing in for a machine that is already
+// signed in to an account with access.
+func findable(t *testing.T, creds Credentials) {
+	t.Helper()
+	restore := discover
+	discover = func() (Credentials, bool) { return creds, true }
+	t.Cleanup(func() { discover = restore })
 }
 
 func TestSaveWritesOwnerOnly(t *testing.T) {
@@ -125,6 +141,30 @@ func TestResolveWithoutATokenFailsClosed(t *testing.T) {
 
 	if status, _ := Resolve(); status != NoToken || status.OK() {
 		t.Errorf("got %v, want a closed NoToken", status)
+	}
+}
+
+// The point of discovery: someone already signed in is never asked to paste a
+// token, and what gets stored references the source rather than copying it.
+func TestResolveAdoptsAnExistingGitHubLogin(t *testing.T) {
+	isolate(t)
+	findable(t, Credentials{Source: "env", Login: "someone", CheckedAt: time.Now().Unix()})
+
+	status, creds := Resolve()
+	if status != Verified || !status.OK() {
+		t.Fatalf("got %v, want Verified", status)
+	}
+	if creds.Login != "someone" || !creds.Discovered() {
+		t.Errorf("got %+v", creds)
+	}
+
+	// And it is remembered, so the probes do not run on every call.
+	stored, _ := Load()
+	if stored.Source != "env" {
+		t.Errorf("discovery was not persisted: %+v", stored)
+	}
+	if stored.Token != "" {
+		t.Error("a discovered token must not be copied into the file")
 	}
 }
 
