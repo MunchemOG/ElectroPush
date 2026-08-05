@@ -35,6 +35,7 @@ const (
 	screenThreads
 	screenBlob
 	screenBlobRuns
+	screenUpdate
 )
 
 type addStep int
@@ -71,6 +72,7 @@ type SettingsModel struct {
 	blob     blobState
 	root     string
 	gateStep int
+	update   updateState
 
 	status string
 	err    error
@@ -144,6 +146,7 @@ var mainItems = []string{
 	"Send only changed parts",
 	"Gradle threads",
 	"blob library",
+	"Update pusher",
 	"Exit",
 }
 
@@ -152,6 +155,23 @@ func (m *SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = size.Height
 
 		m.offset = clampOffset(m.offset, m.cursor, m.visibleRows(), m.listLength())
+		return m, nil
+	}
+
+	// The update screen does its work in commands, so its results arrive here
+	// rather than on a keystroke.
+	switch msg := msg.(type) {
+	case releaseFoundMsg:
+		m.update.checking = false
+		m.update.release = msg.release
+		m.update.err = msg.err
+		return m, nil
+
+	case updateAppliedMsg:
+		m.update.busy = false
+		m.update.done = msg.err == nil
+		m.update.result = msg.result
+		m.update.err = msg.err
 		return m, nil
 	}
 
@@ -180,6 +200,8 @@ func (m *SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateBlob(key)
 	case screenBlobRuns:
 		return m.updateBlobRuns(key)
+	case screenUpdate:
+		return m.updateUpdate(key)
 	}
 
 	return m, nil
@@ -278,6 +300,8 @@ func (m *SettingsModel) updateMain(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.blob.latest = ""
 			m.goTo(screenBlob, 0)
 		case 8:
+			return m, m.enterUpdate()
+		case 9:
 			m.quit = true
 			return m, tea.Quit
 		}
@@ -510,6 +534,8 @@ func (m *SettingsModel) listLength() int {
 		return len(m.blobMenuItems())
 	case screenBlobRuns:
 		return len(m.blob.traces)
+	case screenUpdate:
+		return 0
 	}
 	return 0
 }
@@ -591,6 +617,8 @@ func (m *SettingsModel) View() string {
 		b.WriteString(m.viewBlob())
 	case screenBlobRuns:
 		b.WriteString(m.viewBlobRuns())
+	case screenUpdate:
+		b.WriteString(m.viewUpdate())
 	}
 
 	if m.err != nil {
@@ -612,6 +640,7 @@ func (m *SettingsModel) viewMain() string {
 		onOff(config.GetDeltaTransfer()),
 		strconv.Itoa(config.GetThreads()),
 		m.blobLabel(),
+		m.updateLabel(),
 		"",
 	}
 
