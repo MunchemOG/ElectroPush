@@ -69,12 +69,6 @@ Requires `adb` and an FTC project with a Gradle wrapper.
 to, whether to prefer USB, slimming, delta transfer, and Gradle threads. Changes
 save immediately to `~/.config/pusher/config.yaml`.
 
-If the project uses the blob path follower, a **blob library** entry appears with
-its version and current build variant. From there you can switch between the
-competition and dev builds (the menu explains the difference), bump to the newest
-tag on GitHub, and browse the runs recorded on the robot. If blob is not in
-`TeamCode/build.gradle`, the entry offers to add it instead.
-
 ## Visualising an autonomous
 
 `pusher visualiser CloseBlue` pulls a path trace off the robot and renders an HTML

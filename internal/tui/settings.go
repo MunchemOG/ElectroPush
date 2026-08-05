@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/andreibanu/pusher/internal/config"
+	"github.com/andreibanu/pusher/internal/feature"
 	"github.com/andreibanu/pusher/internal/pathtrace"
-	"github.com/andreibanu/pusher/internal/unlock"
 	"github.com/andreibanu/pusher/internal/wifi"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -70,7 +70,7 @@ type SettingsModel struct {
 
 	blob     blobState
 	root     string
-	codeStep int
+	gateStep int
 
 	status string
 	err    error
@@ -185,17 +185,18 @@ func (m *SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// blobRow is the position of the blob library entry in mainItems. It is hidden
-// until the code is entered, so the visible list and the action switch both
-// have to go through rows() rather than indexing mainItems directly.
-const blobRow = 7
+// optionalRow is the position in mainItems of the entry an install only shows
+// once it has been turned on. The visible list and the action switch both go
+// through rows() rather than indexing mainItems directly, since the positions
+// stop lining up otherwise.
+const optionalRow = 7
 
 func (m *SettingsModel) rows() []int {
-	unlocked := unlock.Unlocked()
+	enabled := feature.Enabled()
 
 	out := make([]int, 0, len(mainItems))
 	for i := range mainItems {
-		if i == blobRow && !unlocked {
+		if i == optionalRow && !enabled {
 			continue
 		}
 		out = append(out, i)
@@ -203,27 +204,25 @@ func (m *SettingsModel) rows() []int {
 	return out
 }
 
-// tryUnlock walks the key sequence and reports whether this keystroke finished
-// it. A wrong key restarts, and may itself be the first key of a fresh attempt.
+// checkGate reports whether this keystroke completed the activation pattern.
 //
-// Only the keys that would navigate away get swallowed. Up and down still move
-// the cursor throughout, so the menu behaves normally and nothing on screen
-// hints that a sequence is in progress.
-func (m *SettingsModel) tryUnlock(key tea.KeyMsg) bool {
-	if unlock.Unlocked() {
+// Only the inputs that would navigate away are consumed. Up and down still move
+// the cursor throughout, so the screen behaves exactly as it always does and
+// gives no sign of being partway through anything.
+func (m *SettingsModel) checkGate(key tea.KeyMsg) bool {
+	if feature.Enabled() {
 		return false
 	}
 
 	name := key.String()
 
-	next, done := unlock.Advance(m.codeStep, name)
-	m.codeStep = next
+	next, done := feature.Match(m.gateStep, name)
+	m.gateStep = next
 
 	switch {
 	case done:
-		m.codeStep = 0
-		m.err = unlock.Remember()
-		m.status = "blob library unlocked"
+		m.gateStep = 0
+		m.err = feature.Grant()
 		m.cursor, m.offset = 0, 0
 		return true
 
@@ -235,7 +234,7 @@ func (m *SettingsModel) tryUnlock(key tea.KeyMsg) bool {
 }
 
 func (m *SettingsModel) updateMain(key tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if m.tryUnlock(key) {
+	if m.checkGate(key) {
 		return m, nil
 	}
 
