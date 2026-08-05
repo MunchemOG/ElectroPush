@@ -59,6 +59,7 @@ Requires `adb` and an FTC project with a Gradle wrapper.
 | `pusher settings` | Profiles and preferences |
 | `pusher slim` | Shrink the APK (`--undo` to revert) |
 | `pusher doctor` | Diagnose Wi-Fi, adb and project problems |
+| `pusher visualiser <OpMode>` | Draw the path an auto drove, coloured by speed |
 | `pusher prepare` | Cache Gradle dependencies while online |
 | `pusher help` | Help |
 
@@ -67,6 +68,34 @@ Requires `adb` and an FTC project with a Gradle wrapper.
 `pusher settings` opens a menu covering robot profiles, which network to return
 to, whether to prefer USB, slimming, delta transfer, and Gradle threads. Changes
 save immediately to `~/.config/pusher/config.yaml`.
+
+## Visualising an autonomous
+
+`pusher visualiser CloseBlue` pulls a path trace off the robot and renders an HTML
+page: the whole flow of the auto, every curve coloured by modelled speed, and a
+duration estimate next to the measured time.
+
+```bash
+pusher visualiser CloseBlue     # newest trace for that OpMode
+pusher visualiser               # newest trace on the robot
+pusher visualiser --file t.json # a trace you already have
+```
+
+Segments are labelled with the `case` they came from. The blob library captures a
+stack trace on each path commit and pusher maps the line number back into your
+source, so it works whatever shape the auto is: state machine, inheritance chain,
+poses from a constants class. Nothing to annotate.
+
+Colour is modelled speed, not commanded power. Pusher runs a forward/backward
+sweep over each curve capped by `maxPower`, by acceleration, and by how hard the
+curve bends, so a leg that stays cold is usually cornering-limited and lowering
+maxPower there costs you nothing. Tune the model to your drivetrain with
+`--top-speed`, `--accel`, `--decel` and `--lat-accel`; the gap between the
+estimate and the measured time tells you how far off the defaults are.
+
+Recording requires the `blob-dev` artifact and `BlobParams.recordTrace = true`.
+Competition builds of blob contain no recording code at all, so a robot you take
+to a match cannot log even if the flag is set.
 
 ## Making deploys faster
 
