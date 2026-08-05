@@ -289,15 +289,15 @@ func SetDeltaTransfer(enabled bool) error {
 	return Save(cfg)
 }
 
-// The unlock token is written straight through rather than going via Save, so
-// nothing about it appears in Config. A device that has never been unlocked has
-// no key in its config file at all.
-func GetUnlockToken() string {
+// The install key is written straight through rather than going via Save, so
+// nothing about it appears in Config. A fresh device has no such key in its
+// config file at all.
+func GetInstallKey() string {
 	return viper.GetString("install_key")
 }
 
-func SetUnlockToken(token string) error {
-	viper.Set("install_key", token)
+func SetInstallKey(key string) error {
+	viper.Set("install_key", key)
 	return viper.WriteConfig()
 }
 
