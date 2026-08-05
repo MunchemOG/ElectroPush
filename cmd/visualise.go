@@ -64,7 +64,7 @@ func runVisualise(cmd *cobra.Command, args []string) error {
 
 	// No OpMode named and nothing to override: let them pick from the robot.
 	if len(args) == 0 && visOut == "" && !visNoOpen {
-		return tui.RunTracePicker()
+		return tui.RunTracePicker(visProject, limits)
 	}
 
 	serial, traces, err := visual.List()

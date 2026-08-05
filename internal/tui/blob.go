@@ -23,6 +23,10 @@ type blobState struct {
 	traces  []adb.RemoteTrace
 	serial  string
 	tracErr error
+
+	// limits the renderer runs with. Defaults unless `pusher visualiser` was
+	// given tuning flags to pass down.
+	limits pathtrace.Limits
 }
 
 // Menu rows when blob is installed.
@@ -40,12 +44,17 @@ var blobMissingItems = []string{
 }
 
 // RunTracePicker opens the recorded-runs list on its own, for `pusher visualiser`
-// with no arguments.
-func RunTracePicker() error {
+// with no arguments. projectRoot and lim carry the command's flags, which would
+// otherwise be dropped on the way into the picker.
+func RunTracePicker(projectRoot string, lim pathtrace.Limits) error {
 	m, err := NewSettingsModel()
 	if err != nil {
 		return err
 	}
+	if projectRoot != "" {
+		m.root = projectRoot
+	}
+	m.blob.limits = lim
 
 	m.loadTraces()
 	m.blob.pickerOnly = true
@@ -221,7 +230,7 @@ func (m *SettingsModel) updateBlobRuns(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 		trace := m.blob.traces[m.cursor]
-		out, err := visual.Render(m.blob.serial, trace, m.projectRoot(), "", pathtrace.DefaultLimits())
+		out, err := visual.Render(m.blob.serial, trace, m.projectRoot(), "", m.blob.limits)
 		if err != nil {
 			m.err = err
 			return m, nil

@@ -152,12 +152,23 @@ func findSource(root, class string, cache map[string][]string) string {
 	relative := strings.ReplaceAll(class, ".", string(filepath.Separator)) + ".java"
 	var found string
 
-	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info == nil || info.IsDir() || found != "" {
+	// Build output and version control dwarf the source tree, and walking them
+	// costs more than the lookup itself.
+	skip := map[string]bool{"build": true, ".gradle": true, ".git": true, ".idea": true}
+
+	filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil || entry == nil {
 			return nil
 		}
-		if strings.HasSuffix(path, relative) || filepath.Base(path) == simple+".java" {
+		if entry.IsDir() {
+			if skip[entry.Name()] {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasSuffix(path, relative) || entry.Name() == simple+".java" {
 			found = path
+			return filepath.SkipAll
 		}
 		return nil
 	})

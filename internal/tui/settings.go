@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/andreibanu/pusher/internal/config"
+	"github.com/andreibanu/pusher/internal/pathtrace"
 	"github.com/andreibanu/pusher/internal/wifi"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -90,6 +91,7 @@ func NewSettingsModel() (*SettingsModel, error) {
 	}
 
 	m := &SettingsModel{cfg: cfg, confirmDeleteIndex: -1, height: defaultHeight}
+	m.blob.limits = pathtrace.DefaultLimits()
 	m.refreshProfiles()
 	m.refreshBlob()
 	return m, nil
