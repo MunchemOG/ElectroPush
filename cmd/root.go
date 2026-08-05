@@ -6,6 +6,7 @@ import (
 
 	"github.com/andreibanu/pusher/internal/config"
 	"github.com/andreibanu/pusher/internal/feature"
+	"github.com/andreibanu/pusher/internal/selfupdate"
 	"github.com/spf13/cobra"
 )
 
@@ -30,6 +31,7 @@ var rootCmd = &cobra.Command{
 
 func Execute(version string) {
 	appVersion = version
+	selfupdate.SetCurrent(version)
 
 	if err := config.Initialize(); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to initialize config: %v\n", err)
@@ -38,7 +40,7 @@ func Execute(version string) {
 
 	// Config is only readable now, so the hidden commands cannot be settled in
 	// init(). Hidden keeps them out of help, completions and suggestions.
-	visualiseCmd.Hidden = !feature.Enabled()
+	visualiseCmd.Hidden = !feature.Revealed()
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

@@ -44,8 +44,15 @@ build from ` + "`pusher settings` -> blob library" + `.
 func runVisualise(cmd *cobra.Command, args []string) error {
 	// Matches what cobra says for a command that does not exist, so a locked
 	// install gives nothing away.
-	if !feature.Enabled() {
+	if !feature.Revealed() {
 		return fmt.Errorf("unknown command %q for %q", "visualiser", "pusher")
+	}
+
+	// Revealing the command is a local flag; using it needs access to the
+	// private library the traces come from.
+	if status, _ := feature.Authorized(); !status.OK() {
+		return fmt.Errorf("the visualiser needs read access to the blob repository.\n" +
+			"Set a GitHub token in `pusher settings` -> blob library -> GitHub token")
 	}
 
 	limits := pathtrace.DefaultLimits()

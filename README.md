@@ -69,6 +69,10 @@ Requires `adb` and an FTC project with a Gradle wrapper.
 to, whether to prefer USB, slimming, delta transfer, and Gradle threads. Changes
 save immediately to `~/.config/pusher/config.yaml`.
 
+**Update pusher** checks for a newer release and installs it. A Homebrew install
+is handed to `brew upgrade` so the next one does not undo it; anything else
+replaces its own binary, verified against the release checksums.
+
 ## Visualising an autonomous
 
 `pusher visualiser CloseBlue` pulls a path trace off the robot and renders an HTML

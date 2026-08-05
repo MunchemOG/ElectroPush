@@ -2,10 +2,13 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/andreibanu/pusher/internal/adb"
 	"github.com/andreibanu/pusher/internal/blobdep"
+	"github.com/andreibanu/pusher/internal/blobrel"
+	"github.com/andreibanu/pusher/internal/ghauth"
 	"github.com/andreibanu/pusher/internal/pathtrace"
 	"github.com/andreibanu/pusher/internal/visual"
 	tea "github.com/charmbracelet/bubbletea"
@@ -18,6 +21,13 @@ type blobState struct {
 	// settings the user never asked for.
 	pickerOnly bool
 
+	auth  ghauth.Status
+	creds ghauth.Credentials
+	// checking and busy keep the screen honest while a command is out, since
+	// every one of these touches the network.
+	checking bool
+	busy     bool
+
 	dep     *blobdep.Dep
 	latest  string
 	traces  []adb.RemoteTrace
@@ -29,18 +39,34 @@ type blobState struct {
 	limits pathtrace.Limits
 }
 
-// Menu rows when blob is installed.
-var blobItems = []string{
-	"Build variant",
-	"Version",
-	"Recorded runs",
-	"Back",
+// Menu rows, which depend on whether access resolved and whether the library is
+// already in the project.
+var (
+	blobItems        = []string{"Build variant", "Version", "GitHub token", "Recorded runs", "Back"}
+	blobMissingItems = []string{"Add blob to the project", "GitHub token", "Back"}
+	blobLockedItems  = []string{"GitHub token", "Back"}
+)
+
+type blobAuthMsg struct {
+	status ghauth.Status
+	creds  ghauth.Credentials
 }
 
-// Menu rows when it is not.
-var blobMissingItems = []string{
-	"Add blob to build.gradle",
-	"Back",
+type blobOpMsg struct {
+	status string
+	err    error
+}
+
+func checkBlobAuth() tea.Msg {
+	status, creds := ghauth.Resolve()
+	return blobAuthMsg{status: status, creds: creds}
+}
+
+func blobOp(run func() (string, error)) tea.Cmd {
+	return func() tea.Msg {
+		status, err := run()
+		return blobOpMsg{status: status, err: err}
+	}
 }
 
 // RunTracePicker opens the recorded-runs list on its own, for `pusher visualiser`
@@ -64,11 +90,20 @@ func RunTracePicker(projectRoot string, lim pathtrace.Limits) error {
 	return err
 }
 
+// enterBlob opens the blob menu and starts the access check.
+func (m *SettingsModel) enterBlob() tea.Cmd {
+	m.refreshBlob()
+	m.blob.latest = ""
+	m.blob.checking = true
+	m.goTo(screenBlob, 0)
+	return checkBlobAuth
+}
+
 func (m *SettingsModel) refreshBlob() {
 	dep, err := blobdep.Detect(m.projectRoot())
 	if err != nil {
-		// Not an FTC project, or no TeamCode/build.gradle. Treat as "not installed"
-		// rather than an error: the menu still offers to add it.
+		// Not an FTC project, or no TeamCode/build.gradle. Treat as "not
+		// installed" rather than an error: the menu still offers to add it.
 		m.blob.dep = nil
 		return
 	}
@@ -76,7 +111,10 @@ func (m *SettingsModel) refreshBlob() {
 }
 
 func (m *SettingsModel) blobMenuItems() []string {
-	if m.blob.dep == nil {
+	switch {
+	case !m.blob.auth.OK():
+		return blobLockedItems
+	case m.blob.dep == nil:
 		return blobMissingItems
 	}
 	return blobItems
@@ -94,11 +132,30 @@ func (m *SettingsModel) blobLabel() string {
 	return m.blob.dep.Version + " (" + variant + ")"
 }
 
+func (m *SettingsModel) tokenLabel() string {
+	if m.blob.creds.Login == "" || !m.blob.auth.OK() {
+		return m.blob.auth.String()
+	}
+
+	who := m.blob.creds.Login
+	// Say where a token came from when it was not typed in here, so nobody has
+	// to wonder why they were never asked for one.
+	if m.blob.creds.Discovered() {
+		if from := ghauth.SourceLabel(m.blob.creds.Source); from != "" {
+			who += " via " + from
+		}
+	}
+	return m.blob.auth.String() + " (" + who + ")"
+}
+
 func (m *SettingsModel) updateBlob(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	items := m.blobMenuItems()
 
 	switch key.String() {
 	case "esc", "q", "left", "h":
+		if m.blob.busy {
+			return m, nil
+		}
 		m.goTo(screenMain, 0)
 		m.status = ""
 
@@ -108,94 +165,201 @@ func (m *SettingsModel) updateBlob(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.moveCursor(1, len(items))
 
 	case "enter", " ", "right", "l":
+		if m.blob.busy || m.blob.checking {
+			return m, nil
+		}
 		m.status = ""
 		m.err = nil
 
-		if m.blob.dep == nil {
-			switch m.cursor {
-			case 0:
-				m.addBlob()
-			case 1:
-				m.goTo(screenMain, 0)
-			}
-			return m, nil
-		}
-
-		switch m.cursor {
-		case 0:
-			m.toggleBlobVariant()
-		case 1:
-			m.updateBlobVersion()
-		case 2:
-			m.loadTraces()
-			m.goTo(screenBlobRuns, 0)
-		case 3:
-			m.goTo(screenMain, 0)
-		}
+		return m.chooseBlob(items[m.cursor])
 	}
 
 	return m, nil
 }
 
-func (m *SettingsModel) toggleBlobVariant() {
+// chooseBlob dispatches on the row's label rather than its index, because the
+// menu has three shapes and the indices do not line up between them.
+func (m *SettingsModel) chooseBlob(item string) (tea.Model, tea.Cmd) {
+	switch item {
+	case "GitHub token":
+		m.input = ""
+		m.maskInput = true
+		m.goTo(screenBlobToken, 0)
+
+	case "Back":
+		m.goTo(screenMain, 0)
+
+	case "Build variant":
+		return m, m.switchVariant()
+
+	case "Version":
+		return m, m.bumpVersion()
+
+	case "Add blob to the project":
+		return m, m.addBlob()
+
+	case "Recorded runs":
+		m.loadTraces()
+		m.goTo(screenBlobRuns, 0)
+	}
+
+	return m, nil
+}
+
+// ensureLibrary puts the AAR for a variant in the project, downloading it only
+// when it is not already there.
+//
+// It refuses outright if git is already tracking a blob AAR. FTC team repos are
+// usually public, and a committed AAR publishes the library to everyone; adding
+// a .gitignore rule afterwards does not take it back.
+func ensureLibrary(root, token, artifact, version string) error {
+	if tracked := blobdep.TrackedAARs(root); len(tracked) > 0 {
+		return fmt.Errorf("git is already tracking %s.\n"+
+			"blob is private and FTC team repositories are usually public, so this\n"+
+			"would publish it. Untrack it first:\n"+
+			"    git rm --cached %s",
+			strings.Join(tracked, ", "), strings.Join(tracked, " "))
+	}
+
+	if _, err := blobdep.EnsureIgnored(root); err != nil {
+		return err
+	}
+
+	if _, err := os.Stat(blobdep.AARPath(root, artifact, version)); err == nil {
+		return nil
+	}
+
+	data, err := blobrel.Fetch(token, blobrel.Variant(artifact), version)
+	if err != nil {
+		return err
+	}
+	return blobdep.Place(root, artifact, version, data)
+}
+
+func (m *SettingsModel) switchVariant() tea.Cmd {
+	root, token := m.projectRoot(), m.blob.creds.Secret()
+	version := m.blob.dep.Version
+
 	target := blobdep.ArtifactDev
 	if m.blob.dep.IsDev() {
 		target = blobdep.ArtifactComp
 	}
 
-	if err := blobdep.SetArtifact(m.projectRoot(), target); err != nil {
-		m.err = err
-		return
-	}
-	m.refreshBlob()
+	m.blob.busy = true
+	return blobOp(func() (string, error) {
+		if err := ensureLibrary(root, token, target, version); err != nil {
+			return "", err
+		}
+		if err := blobdep.SetArtifact(root, target); err != nil {
+			return "", err
+		}
+		blobdep.Prune(root, target, version)
 
-	if target == blobdep.ArtifactDev {
-		m.status = "Switched to dev. Records traces. Do not take this to a match. Gradle sync + redeploy."
-	} else {
-		m.status = "Switched to competition. No logging code in the APK. Gradle sync + redeploy."
+		if target == blobdep.ArtifactDev {
+			return "Switched to dev. Records traces. Do not take this to a match. Gradle sync + redeploy.", nil
+		}
+		return "Switched to competition. No logging code in the APK. Gradle sync + redeploy.", nil
+	})
+}
+
+func (m *SettingsModel) bumpVersion() tea.Cmd {
+	root, token := m.projectRoot(), m.blob.creds.Secret()
+	artifact, previous := m.blob.dep.Artifact, m.blob.dep.Version
+
+	m.blob.busy = true
+	return blobOp(func() (string, error) {
+		latest, err := blobrel.LatestTag(token)
+		if err != nil {
+			return "", err
+		}
+		if latest == previous {
+			return "Already on " + latest, nil
+		}
+
+		if err := ensureLibrary(root, token, artifact, latest); err != nil {
+			return "", err
+		}
+		if err := blobdep.SetVersion(root, latest); err != nil {
+			return "", err
+		}
+		blobdep.Prune(root, artifact, latest)
+
+		return fmt.Sprintf("Updated %s to %s. Gradle sync to pick it up.", previous, latest), nil
+	})
+}
+
+func (m *SettingsModel) addBlob() tea.Cmd {
+	root, token := m.projectRoot(), m.blob.creds.Secret()
+
+	m.blob.busy = true
+	return blobOp(func() (string, error) {
+		version, err := blobrel.LatestTag(token)
+		if err != nil {
+			// Offline is not a reason to refuse outright, but the download will
+			// still need network, so say what happened.
+			return "", err
+		}
+
+		if err := ensureLibrary(root, token, blobdep.ArtifactComp, version); err != nil {
+			return "", err
+		}
+		if err := blobdep.Add(root, blobdep.ArtifactComp, version); err != nil {
+			return "", err
+		}
+
+		return fmt.Sprintf("Added blob %s (competition build) to TeamCode/libs. Gradle sync to pick it up.", version), nil
+	})
+}
+
+// saveToken stores the token only if GitHub accepts it.
+func (m *SettingsModel) saveToken(token string) tea.Cmd {
+	return func() tea.Msg {
+		if strings.TrimSpace(token) == "" {
+			if err := ghauth.Clear(); err != nil {
+				return blobAuthMsg{status: ghauth.NoToken}
+			}
+			return blobAuthMsg{status: ghauth.NoToken}
+		}
+
+		creds, err := ghauth.SetToken(strings.TrimSpace(token))
+		if err != nil {
+			return blobOpMsg{err: err}
+		}
+		return blobAuthMsg{status: ghauth.Verified, creds: creds}
 	}
 }
 
-func (m *SettingsModel) updateBlobVersion() {
-	latest, err := blobdep.LatestVersion()
-	if err != nil {
-		m.err = err
-		return
-	}
-	m.blob.latest = latest
+func (m *SettingsModel) updateBlobToken(key tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch key.Type {
+	case tea.KeyEsc:
+		m.input = ""
+		m.maskInput = false
+		m.goTo(screenBlob, 0)
+		m.status = "Cancelled"
+		return m, nil
 
-	if latest == m.blob.dep.Version {
-		m.status = "Already on " + latest
-		return
+	case tea.KeyBackspace:
+		if len(m.input) > 0 {
+			m.input = m.input[:len(m.input)-1]
+		}
+		return m, nil
+
+	case tea.KeyEnter:
+		token := m.input
+		// Never keep the token in model state: it would end up on screen the
+		// next time any screen renders m.input.
+		m.input = ""
+		m.maskInput = false
+		m.blob.busy = true
+		m.goTo(screenBlob, 0)
+		return m, m.saveToken(token)
+
+	case tea.KeyRunes:
+		m.input += string(key.Runes)
+		return m, nil
 	}
 
-	previous := m.blob.dep.Version
-	if err := blobdep.SetVersion(m.projectRoot(), latest); err != nil {
-		m.err = err
-		return
-	}
-	m.refreshBlob()
-	m.status = fmt.Sprintf("Updated %s to %s. Gradle sync to pick it up.", previous, latest)
-}
-
-func (m *SettingsModel) addBlob() {
-	version, err := blobdep.LatestVersion()
-	if err != nil {
-		// Offline is not a reason to refuse: pin something sane and say so.
-		version = blobdep.FallbackVersion
-	}
-
-	warning, addErr := blobdep.Add(m.projectRoot(), blobdep.ArtifactComp, version)
-	if addErr != nil {
-		m.err = addErr
-		return
-	}
-	m.refreshBlob()
-
-	m.status = fmt.Sprintf("Added blob %s (competition build). Gradle sync to pick it up.", version)
-	if warning != "" {
-		m.status += " " + warning
-	}
+	return m, nil
 }
 
 func (m *SettingsModel) loadTraces() {
@@ -212,7 +376,7 @@ func (m *SettingsModel) updateBlobRuns(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.quit = true
 			return m, tea.Quit
 		}
-		m.goTo(screenBlob, 2)
+		m.goTo(screenBlob, 3)
 		m.status = ""
 
 	case "r":
@@ -242,53 +406,74 @@ func (m *SettingsModel) updateBlobRuns(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *SettingsModel) viewBlob() string {
+func (m *SettingsModel) viewBlobToken() string {
 	var b strings.Builder
 
-	if m.blob.dep == nil {
-		b.WriteString(helpStyle.Render("  blob is not in TeamCode/build.gradle.") + "\n\n")
-		b.WriteString(m.renderList(len(blobMissingItems), func(i int) string {
-			return renderRow(i == m.cursor, blobMissingItems[i], "", 29)
-		}))
-		b.WriteString("\n" + helpStyle.Render("  Adds the competition build, which carries no logging code.") + "\n")
-		b.WriteString(helpStyle.Render("  ↑/↓ move · enter select · esc back") + "\n")
-		return b.String()
+	b.WriteString(helpStyle.Render("  A GitHub token with read access to the private blob repository.") + "\n")
+	b.WriteString(helpStyle.Render("  Classic tokens need the repo scope. Fine-grained tokens need") + "\n")
+	b.WriteString(helpStyle.Render("  Contents: Read on that repository.") + "\n\n")
+	b.WriteString(helpStyle.Render("  Only needed if this machine has no GitHub login pusher can use.") + "\n")
+	b.WriteString(helpStyle.Render("  It already tried GH_TOKEN, the gh CLI and git's credential helper.") + "\n\n")
+
+	b.WriteString(fmt.Sprintf("  Token: %s\n", strings.Repeat("*", len(m.input))))
+
+	b.WriteString("\n" + helpStyle.Render("  Stored in ~/.config/pusher/credentials, readable only by you,") + "\n")
+	b.WriteString(helpStyle.Render("  and never written into the FTC project.") + "\n")
+	b.WriteString("\n" + helpStyle.Render("  enter save · empty + enter removes · esc cancel") + "\n")
+	return b.String()
+}
+
+func (m *SettingsModel) viewBlob() string {
+	var b strings.Builder
+	items := m.blobMenuItems()
+
+	if m.blob.checking {
+		b.WriteString(helpStyle.Render("  Checking access...") + "\n\n")
 	}
 
-	latest := m.blob.latest
-	if latest == "" {
-		latest = "press enter to check"
-	} else if latest == m.blob.dep.Version {
-		latest = m.blob.dep.Version + " (latest)"
-	} else {
-		latest = m.blob.dep.Version + " -> " + latest
+	if !m.blob.auth.OK() && !m.blob.checking {
+		b.WriteString(m.blobLockedNotice())
 	}
 
-	values := []string{
-		m.blob.dep.VariantName(),
-		latest,
-		"",
-		"",
+	values := make([]string, len(items))
+	for i, item := range items {
+		switch item {
+		case "Build variant":
+			values[i] = m.blob.dep.VariantName()
+		case "Version":
+			values[i] = m.versionValue()
+		case "GitHub token":
+			values[i] = m.tokenLabel()
+		}
 	}
 
-	b.WriteString(m.renderList(len(blobItems), func(i int) string {
-		return renderRow(i == m.cursor, blobItems[i], values[i], 29)
+	b.WriteString(m.renderList(len(items), func(i int) string {
+		return renderRow(i == m.cursor, items[i], values[i], 29)
 	}))
 
 	b.WriteString("\n")
-	switch m.cursor {
-	case 0:
-		b.WriteString(helpStyle.Render("  competition: recorder methods are empty, no file IO ships.") + "\n")
-		b.WriteString(helpStyle.Render("  dev: records path traces for the visualiser. Practice only.") + "\n")
-		b.WriteString(helpStyle.Render("  Enter swaps them. Gradle sync and redeploy afterwards.") + "\n")
-	case 1:
-		b.WriteString(helpStyle.Render("  Enter checks GitHub and bumps every blob line to the newest tag.") + "\n")
-	case 2:
-		b.WriteString(helpStyle.Render("  Lists runs recorded on the robot and opens one in your browser.") + "\n")
+	if m.blob.busy {
+		b.WriteString(okStyle.Render("  Working...") + "\n")
+	} else if m.blob.dep != nil && !m.blob.dep.Present && m.blob.auth.OK() {
+		b.WriteString(errStyle.Render("  The AAR this project references is missing from TeamCode/libs.") + "\n")
+		b.WriteString(helpStyle.Render("  Switching variant or version downloads it again.") + "\n")
 	}
 
 	b.WriteString(helpStyle.Render("  ↑/↓ move · enter select · esc back") + "\n")
 	return b.String()
+}
+
+func (m *SettingsModel) versionValue() string {
+	if m.blob.dep == nil {
+		return ""
+	}
+	if m.blob.latest == "" {
+		return m.blob.dep.Version
+	}
+	if m.blob.latest == m.blob.dep.Version {
+		return m.blob.dep.Version + " (latest)"
+	}
+	return m.blob.dep.Version + " -> " + m.blob.latest
 }
 
 func (m *SettingsModel) viewBlobRuns() string {
@@ -318,5 +503,20 @@ func (m *SettingsModel) viewBlobRuns() string {
 	}))
 
 	b.WriteString("\n" + helpStyle.Render("  enter opens the visualiser · r refresh · esc back") + "\n")
+	return b.String()
+}
+
+func (m *SettingsModel) blobLockedNotice() string {
+	var b strings.Builder
+
+	switch m.blob.auth {
+	case ghauth.Denied:
+		b.WriteString(errStyle.Render("  This token cannot read the blob repository.") + "\n")
+		b.WriteString(helpStyle.Render("  Ask for access, or set a token that has it.") + "\n\n")
+	default:
+		b.WriteString(helpStyle.Render("  blob is a private library. Using it needs a GitHub token with") + "\n")
+		b.WriteString(helpStyle.Render("  read access to the repository.") + "\n\n")
+	}
+
 	return b.String()
 }
