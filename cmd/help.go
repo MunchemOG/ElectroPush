@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/andreibanu/pusher/internal/unlock"
 	"github.com/spf13/cobra"
 )
 
@@ -45,6 +46,9 @@ func runHelp(cmd *cobra.Command, args []string) {
 	fmt.Println("  pusher slim           Shrink the APK so deploys transfer less")
 	fmt.Println("    pusher slim --undo       Put the gradle files back")
 	fmt.Println("  pusher prepare        Cache dependencies while you have internet")
+	if unlock.Unlocked() {
+		fmt.Println("  pusher visualiser     Draw the path an auto drove (alias: vis)")
+	}
 	fmt.Println("  pusher --version      Show version information")
 	fmt.Println("  pusher help           Show this help")
 	fmt.Println("")

@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/andreibanu/pusher/internal/config"
+	"github.com/andreibanu/pusher/internal/unlock"
 	"github.com/spf13/cobra"
 )
 
@@ -34,6 +35,10 @@ func Execute(version string) {
 		fmt.Fprintf(os.Stderr, "Failed to initialize config: %v\n", err)
 		os.Exit(1)
 	}
+
+	// Config is only readable now, so the hidden commands cannot be settled in
+	// init(). Hidden keeps them out of help, completions and suggestions.
+	visualiseCmd.Hidden = !unlock.Unlocked()
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

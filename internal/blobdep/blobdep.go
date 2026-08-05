@@ -19,8 +19,13 @@ const (
 	// ArtifactDev is the practice build: records traces for `pusher visualiser`.
 	ArtifactDev = "blob-dev"
 
-	DefaultGroup = "com.github.PzmuV1517.blob"
-	tagsAPI      = "https://api.github.com/repos/PzmuV1517/blob/tags"
+	// The competition artifact keeps the coordinate it has had since v1.0.0; the
+	// dev artifact is additive. Tags are vX.Y.Z and JitPack resolves the tag name.
+	DefaultGroup = "com.github.PzmuV1517"
+
+	// FallbackVersion is used when GitHub cannot be reached.
+	FallbackVersion = "v1.4.0"
+	tagsAPI         = "https://api.github.com/repos/PzmuV1517/blob/tags"
 )
 
 // Dep is a blob dependency found in a gradle file.

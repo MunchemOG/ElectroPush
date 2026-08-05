@@ -289,6 +289,18 @@ func SetDeltaTransfer(enabled bool) error {
 	return Save(cfg)
 }
 
+// The unlock token is written straight through rather than going via Save, so
+// nothing about it appears in Config. A device that has never been unlocked has
+// no key in its config file at all.
+func GetUnlockToken() string {
+	return viper.GetString("install_key")
+}
+
+func SetUnlockToken(token string) error {
+	viper.Set("install_key", token)
+	return viper.WriteConfig()
+}
+
 func GetHubABI() string {
 	return viper.GetString("hub_abi")
 }

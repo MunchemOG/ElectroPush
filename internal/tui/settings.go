@@ -8,6 +8,7 @@ import (
 
 	"github.com/andreibanu/pusher/internal/config"
 	"github.com/andreibanu/pusher/internal/pathtrace"
+	"github.com/andreibanu/pusher/internal/unlock"
 	"github.com/andreibanu/pusher/internal/wifi"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -67,8 +68,9 @@ type SettingsModel struct {
 	maskInput          bool
 	confirmDeleteIndex int
 
-	blob blobState
-	root string
+	blob     blobState
+	root     string
+	codeStep int
 
 	status string
 	err    error
@@ -183,22 +185,77 @@ func (m *SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// blobRow is the position of the blob library entry in mainItems. It is hidden
+// until the code is entered, so the visible list and the action switch both
+// have to go through rows() rather than indexing mainItems directly.
+const blobRow = 7
+
+func (m *SettingsModel) rows() []int {
+	unlocked := unlock.Unlocked()
+
+	out := make([]int, 0, len(mainItems))
+	for i := range mainItems {
+		if i == blobRow && !unlocked {
+			continue
+		}
+		out = append(out, i)
+	}
+	return out
+}
+
+// tryUnlock walks the key sequence and reports whether this keystroke finished
+// it. A wrong key restarts, and may itself be the first key of a fresh attempt.
+//
+// Only the keys that would navigate away get swallowed. Up and down still move
+// the cursor throughout, so the menu behaves normally and nothing on screen
+// hints that a sequence is in progress.
+func (m *SettingsModel) tryUnlock(key tea.KeyMsg) bool {
+	if unlock.Unlocked() {
+		return false
+	}
+
+	name := key.String()
+
+	next, done := unlock.Advance(m.codeStep, name)
+	m.codeStep = next
+
+	switch {
+	case done:
+		m.codeStep = 0
+		m.err = unlock.Remember()
+		m.status = "blob library unlocked"
+		m.cursor, m.offset = 0, 0
+		return true
+
+	case next > 0 && name == "right":
+		return true
+	}
+
+	return false
+}
+
 func (m *SettingsModel) updateMain(key tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.tryUnlock(key) {
+		return m, nil
+	}
+
+	rows := m.rows()
+
 	switch key.String() {
 	case "q", "esc":
 		m.quit = true
 		return m, tea.Quit
 
 	case "up", "k":
-		m.moveCursor(-1, len(mainItems))
+		m.moveCursor(-1, len(rows))
 	case "down", "j":
-		m.moveCursor(1, len(mainItems))
+		m.moveCursor(1, len(rows))
 
 	case "enter", " ", "right", "l":
 		m.status = ""
 		m.err = nil
 
-		switch m.cursor {
+		switch rows[m.cursor] {
 		case 0:
 			m.confirmDeleteIndex = -1
 			m.refreshProfiles()
@@ -444,7 +501,7 @@ func (m *SettingsModel) goTo(target screen, cursor int) {
 func (m *SettingsModel) listLength() int {
 	switch m.screen {
 	case screenMain:
-		return len(mainItems)
+		return len(m.rows())
 	case screenProfiles:
 		return len(m.profiles)
 	case screenHomeNetwork:
@@ -559,9 +616,11 @@ func (m *SettingsModel) viewMain() string {
 		"",
 	}
 
+	rows := m.rows()
+
 	var b strings.Builder
-	b.WriteString(m.renderList(len(mainItems), func(i int) string {
-		return renderRow(i == m.cursor, mainItems[i], values[i], 29)
+	b.WriteString(m.renderList(len(rows), func(i int) string {
+		return renderRow(i == m.cursor, mainItems[rows[i]], values[rows[i]], 29)
 	}))
 
 	b.WriteString("\n" + helpStyle.Render("  ↑/↓ move · enter select · q quit") + "\n")
