@@ -58,6 +58,7 @@ Requires `adb` and an FTC project with a Gradle wrapper.
 | `pusher dc` | Disconnect adb only |
 | `pusher settings` | Profiles and preferences |
 | `pusher slim` | Shrink the APK (`--undo` to revert) |
+| `pusher hwconfig` | Pull, edit and push the robot's hardware configs |
 | `pusher doctor` | Diagnose Wi-Fi, adb and project problems |
 | `pusher visualiser <OpMode>` | Draw the path an auto drove, coloured by speed |
 | `pusher prepare` | Cache Gradle dependencies while online |
@@ -72,6 +73,73 @@ save immediately to `~/.config/pusher/config.yaml`.
 **Update pusher** checks for a newer release and installs it. A Homebrew install
 is handed to `brew upgrade` so the next one does not undo it; anything else
 replaces its own binary, verified against the release checksums.
+
+## Hardware configurations
+
+The robot's hardware configuration is one XML file in `/sdcard/FIRST` that the
+Driver Station writes. `pusher hwconfig` brings those into your project so they
+can be read, edited and committed next to the code that names the devices.
+
+Run it on its own and it opens a menu covering all of it. Everything below is
+also a subcommand, for scripting or for when you know exactly what you want:
+
+```
+pusher hwconfig                 open the menu
+pusher hwconfig list            what the robot and the project each have
+pusher hwconfig pull            copy the robot's configs into configs/
+pusher hwconfig view comp       show what is wired where
+pusher hwconfig edit comp       open it in $EDITOR, check it, offer to push
+pusher hwconfig diff            what changed against the robot
+pusher hwconfig push comp       copy it back
+```
+
+Configurations land in `configs/` at your FTC project root. Use `--dir` to keep
+them somewhere else.
+
+### The editor
+
+The menu's editor works on ports and devices rather than on XML, which is what
+lets it help:
+
+- **Device types autocomplete.** Type `pinpoint` and it finds
+  `goBILDAPinpoint`; type `go` and it lists the goBILDA parts. The list is every
+  type the SDK ships, read out of the FTC jars.
+- **New devices land on a free port.** Pick a type and the port is filled in
+  with the lowest one nothing is using — per bus, for I2C.
+- **Problems show up as you type**, not after a failed push: a name that is
+  already taken, a port that is already used, a port the hub does not have.
+- **Nothing is written until you save.** Backing out of an edit leaves the file
+  untouched, and the whole tree is marked with what is wrong before you push.
+
+Reading, saving and pushing all preserve the file byte for byte apart from what
+you actually changed — same declaration, same indentation, same attribute order
+as the Driver Station writes. A rename comes out as a one-line diff.
+
+If you would rather use your own editor, `pusher hwconfig edit <name>` opens
+`$EDITOR` on the raw XML and checks it when you save.
+
+Files move byte for byte in both directions — pusher parses them to check and
+describe them, never to rewrite them.
+
+**Before pushing**, each file is checked for what the robot controller would
+reject: two devices sharing a name, two devices on one port, a port the hub does
+not have, an Expansion Hub on the address reserved for the Control Hub. Errors
+stop the push (`--force` overrides); anything pusher is unsure about is a
+warning. Device types it does not recognise — your own OnBotJava or external
+library drivers — still have their names checked but are left alone otherwise.
+
+**Overwriting is guarded.** The robot's copy of anything about to be replaced is
+saved into `configs/.pusher-backup/` first, because it may have been changed on
+the Driver Station since you pulled it. `--no-backup` skips that.
+
+**Pushing does not activate.** The robot controller reads a configuration when
+it is selected, not while it is running one, so overwriting the active file
+changes nothing until you re-select it on the Driver Station: Configure Robot →
+pick it → Activate. Pusher says so when the file you pushed is the active one.
+
+Reading *which* configuration is active needs privileged adb. That works on a
+Control Hub; on a phone robot controller pusher says it could not tell rather
+than guessing.
 
 ## Visualising an autonomous
 

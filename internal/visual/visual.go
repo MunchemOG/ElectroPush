@@ -16,16 +16,7 @@ import (
 
 // Device picks the robot to talk to. USB wins over Wi-Fi, matching deploy.
 func Device() (string, error) {
-	if !adb.IsInstalled() {
-		return "", fmt.Errorf("adb not found - install Android SDK Platform-Tools")
-	}
-	if dev, ok := adb.FindUSBDevice(); ok {
-		return dev.Serial, nil
-	}
-	if adb.IsConnected() {
-		return adb.RobotAddr(), nil
-	}
-	return "", fmt.Errorf("no robot connected - plug in USB or run `pusher connect`")
+	return adb.Target()
 }
 
 // List returns the traces on the robot, newest first.

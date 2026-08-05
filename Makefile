@@ -2,12 +2,14 @@
 
 # Variables
 BINARY_NAME=pusher
-VERSION?=dev
+# The series in VERSION with a local marker, so a hand-built binary is never
+# mistaken for a release and does not offer to update itself sideways.
+VERSION?=$(shell cat VERSION 2>/dev/null || echo 0.0).0-dev
 BUILD_DIR=dist
 INSTALL_PATH=/usr/local/bin
 
 # Build flags
-LDFLAGS=-s -w
+LDFLAGS=-s -w -X main.version=$(VERSION)
 GO_BUILD=go build -ldflags="$(LDFLAGS)"
 
 help: ## Show this help
