@@ -10,10 +10,10 @@ import (
 func project(t *testing.T, gradle string) string {
 	t.Helper()
 	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, "TeamCode"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "TeamCode"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(GradleFile(root), []byte(gradle), 0644); err != nil {
+	if err := os.WriteFile(GradleFile(root), []byte(gradle), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return root
@@ -28,9 +28,20 @@ func read(t *testing.T, root string) string {
 	return string(data)
 }
 
+// activeLines counts uncommented blob dependency lines.
+func activeLines(gradle string) int {
+	n := 0
+	for _, line := range strings.Split(gradle, "\n") {
+		if m := depRe.FindStringSubmatch(line); m != nil && m[2] == "" {
+			n++
+		}
+	}
+	return n
+}
+
 const withComp = `dependencies {
     implementation 'org.firstinspires.ftc:Vision:11.1.0'
-    implementation 'com.github.PzmuV1517.blob:blob:2.0.0'
+    implementation files('libs/blob-competition-v1.4.0.aar')
 }
 `
 
@@ -42,11 +53,29 @@ func TestDetectFindsTheActiveDependency(t *testing.T) {
 	if dep == nil {
 		t.Fatal("expected to find blob")
 	}
-	if dep.Artifact != ArtifactComp || dep.Version != "2.0.0" {
-		t.Errorf("got %s:%s", dep.Artifact, dep.Version)
+	if dep.Artifact != ArtifactComp || dep.Version != "v1.4.0" {
+		t.Errorf("got %s %s", dep.Artifact, dep.Version)
 	}
 	if dep.Commented {
 		t.Error("dependency is not commented out")
+	}
+	if dep.Present {
+		t.Error("no AAR was placed, so Present must be false")
+	}
+}
+
+func TestDetectReportsThePresenceOfTheAAR(t *testing.T) {
+	root := project(t, withComp)
+	if err := Place(root, ArtifactComp, "v1.4.0", []byte("not really an aar")); err != nil {
+		t.Fatal(err)
+	}
+
+	dep, err := Detect(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !dep.Present {
+		t.Error("the AAR is on disk, so Present must be true")
 	}
 }
 
@@ -60,142 +89,254 @@ func TestDetectReturnsNilWhenAbsent(t *testing.T) {
 	}
 }
 
-// An active line must win, otherwise the menu would report the variant you are
-// not building.
 func TestDetectPrefersActiveOverCommented(t *testing.T) {
-	gradle := `dependencies {
-    // implementation 'com.github.PzmuV1517.blob:blob-dev:2.0.0'
-    implementation 'com.github.PzmuV1517.blob:blob:2.0.0'
+	root := project(t, `dependencies {
+    // implementation files('libs/blob-dev-v1.4.0.aar')
+    implementation files('libs/blob-competition-v1.4.0.aar')
 }
-`
-	dep, err := Detect(project(t, gradle))
+`)
+
+	dep, err := Detect(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if dep.Artifact != ArtifactComp {
-		t.Errorf("should report the active variant, got %s", dep.Artifact)
+	if dep.Artifact != ArtifactComp || dep.Commented {
+		t.Errorf("got %+v, want the active competition line", dep)
 	}
 }
 
 func TestSetArtifactSwitchesToDev(t *testing.T) {
 	root := project(t, withComp)
+
 	if err := SetArtifact(root, ArtifactDev); err != nil {
 		t.Fatal(err)
 	}
 
 	dep, _ := Detect(root)
-	if dep.Artifact != ArtifactDev {
-		t.Fatalf("expected dev, got %s", dep.Artifact)
+	if dep == nil || !dep.IsDev() || dep.Commented {
+		t.Fatalf("got %+v, want an active dev line", dep)
 	}
-	if dep.Version != "2.0.0" {
-		t.Errorf("version should survive the switch, got %s", dep.Version)
+	if !strings.Contains(read(t, root), "libs/blob-dev-v1.4.0.aar") {
+		t.Error("the files() path should name the dev AAR")
 	}
 }
 
 func TestSetArtifactIsReversible(t *testing.T) {
 	root := project(t, withComp)
-	for _, want := range []string{ArtifactDev, ArtifactComp, ArtifactDev} {
-		if err := SetArtifact(root, want); err != nil {
-			t.Fatal(err)
-		}
-		dep, _ := Detect(root)
-		if dep.Artifact != want {
-			t.Fatalf("expected %s, got %s", want, dep.Artifact)
-		}
-	}
-}
 
-// Switching must never leave two live blob dependencies, which would be an
-// unresolvable build at best and a logging competition build at worst.
-func TestSetArtifactNeverLeavesTwoActiveLines(t *testing.T) {
-	gradle := `dependencies {
-    implementation 'com.github.PzmuV1517.blob:blob:2.0.0'
-    // implementation 'com.github.PzmuV1517.blob:blob-dev:2.0.0'
-}
-`
-	root := project(t, gradle)
 	if err := SetArtifact(root, ArtifactDev); err != nil {
 		t.Fatal(err)
 	}
-
-	active := 0
-	for _, line := range strings.Split(read(t, root), "\n") {
-		if m := depRe.FindStringSubmatch(line); m != nil && m[2] == "" {
-			active++
-		}
+	if err := SetArtifact(root, ArtifactComp); err != nil {
+		t.Fatal(err)
 	}
-	if active != 1 {
-		t.Errorf("expected exactly 1 active blob line, got %d\n%s", active, read(t, root))
+
+	dep, _ := Detect(root)
+	if dep == nil || dep.IsDev() || dep.Commented {
+		t.Fatalf("got %+v, want an active competition line", dep)
+	}
+}
+
+// Two active lines would hand Gradle two copies of the same classes. This is
+// the invariant that matters most in this file.
+func TestSetArtifactNeverLeavesTwoActiveLines(t *testing.T) {
+	starts := []string{
+		withComp,
+		`dependencies {
+    implementation files('libs/blob-competition-v1.4.0.aar')
+    implementation files('libs/blob-dev-v1.4.0.aar')
+}
+`,
+		`dependencies {
+    // implementation files('libs/blob-competition-v1.4.0.aar')
+    // implementation files('libs/blob-dev-v1.4.0.aar')
+}
+`,
+		`dependencies {
+    implementation files('libs/blob-dev-v1.4.0.aar')
+    // implementation files('libs/blob-dev-v1.4.0.aar')
+}
+`,
+	}
+
+	for _, start := range starts {
+		for _, target := range []string{ArtifactComp, ArtifactDev} {
+			root := project(t, start)
+			if err := SetArtifact(root, target); err != nil {
+				t.Fatalf("%s: %v", target, err)
+			}
+
+			gradle := read(t, root)
+			if n := activeLines(gradle); n != 1 {
+				t.Errorf("target %s left %d active lines:\n%s", target, n, gradle)
+			}
+
+			dep, _ := Detect(root)
+			if dep == nil || dep.Artifact != target || dep.Commented {
+				t.Errorf("target %s: active line is %+v", target, dep)
+			}
+		}
 	}
 }
 
 func TestSetVersionUpdatesCommentedLinesToo(t *testing.T) {
-	gradle := `dependencies {
-    implementation 'com.github.PzmuV1517.blob:blob:2.0.0'
-    // implementation 'com.github.PzmuV1517.blob:blob-dev:2.0.0'
+	root := project(t, `dependencies {
+    implementation files('libs/blob-competition-v1.4.0.aar')
+    // implementation files('libs/blob-dev-v1.4.0.aar')
 }
-`
-	root := project(t, gradle)
-	if err := SetVersion(root, "2.1.0"); err != nil {
+`)
+
+	if err := SetVersion(root, "v1.5.0"); err != nil {
 		t.Fatal(err)
 	}
 
-	out := read(t, root)
-	if strings.Contains(out, "2.0.0") {
-		t.Errorf("old version survived:\n%s", out)
+	gradle := read(t, root)
+	if strings.Contains(gradle, "v1.4.0") {
+		t.Errorf("a line was left on the old version:\n%s", gradle)
 	}
-	if strings.Count(out, "2.1.0") != 2 {
-		t.Errorf("both lines should be bumped so they cannot drift:\n%s", out)
+	if !strings.Contains(gradle, "// implementation files('libs/blob-dev-v1.5.0.aar')") {
+		t.Errorf("the parked line should stay parked and move version:\n%s", gradle)
+	}
+	if n := activeLines(gradle); n != 1 {
+		t.Errorf("SetVersion changed how many lines are active: %d", n)
 	}
 }
 
 func TestAddInsertsIntoDependenciesBlock(t *testing.T) {
 	root := project(t, "dependencies {\n    implementation 'x:y:1'\n}\n")
-	if _, err := Add(root, ArtifactComp, "2.0.0"); err != nil {
+
+	if err := Add(root, ArtifactComp, "v1.4.0"); err != nil {
 		t.Fatal(err)
 	}
 
-	dep, err := Detect(root)
-	if err != nil || dep == nil {
-		t.Fatalf("added dependency not detected: %v", err)
+	dep, _ := Detect(root)
+	if dep == nil || dep.Artifact != ArtifactComp || dep.Version != "v1.4.0" {
+		t.Fatalf("got %+v", dep)
 	}
-	if dep.Artifact != ArtifactComp || dep.Version != "2.0.0" {
-		t.Errorf("got %s:%s", dep.Artifact, dep.Version)
+	if !strings.Contains(read(t, root), "files('libs/blob-competition-v1.4.0.aar')") {
+		t.Error("expected a files() line")
 	}
 }
 
-func TestAddWarnsWhenJitPackIsMissing(t *testing.T) {
-	root := project(t, "dependencies {\n}\n")
-	warning, err := Add(root, ArtifactComp, "2.0.0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if warning == "" {
-		t.Error("expected a warning about the missing JitPack repository")
-	}
-}
-
-func TestAddStaysQuietWhenJitPackIsPresent(t *testing.T) {
-	root := project(t, "dependencies {\n}\n")
-	os.WriteFile(filepath.Join(root, "settings.gradle"),
-		[]byte("maven { url = 'https://jitpack.io' }"), 0644)
-
-	warning, err := Add(root, ArtifactComp, "2.0.0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if warning != "" {
-		t.Errorf("unexpected warning: %s", warning)
+func TestAddRefusesWhenBlobIsAlreadyThere(t *testing.T) {
+	if err := Add(project(t, withComp), ArtifactDev, "v1.4.0"); err == nil {
+		t.Error("adding a second blob dependency should be refused")
 	}
 }
 
 func TestDetectHandlesDoubleQuotesAndParens(t *testing.T) {
-	root := project(t, "dependencies {\n    implementation(\"com.github.PzmuV1517.blob:blob-dev:v1.3.0\")\n}\n")
+	root := project(t, `dependencies {
+    api files("libs/blob-dev-v1.4.0.aar")
+}
+`)
+
 	dep, err := Detect(root)
-	if err != nil || dep == nil {
-		t.Fatalf("not detected: %v", err)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if dep.Artifact != ArtifactDev || dep.Version != "v1.3.0" {
-		t.Errorf("got %s:%s", dep.Artifact, dep.Version)
+	if dep == nil || !dep.IsDev() {
+		t.Fatalf("got %+v", dep)
+	}
+}
+
+func TestEnsureIgnoredIsIdempotent(t *testing.T) {
+	root := project(t, withComp)
+
+	added, err := EnsureIgnored(root)
+	if err != nil || !added {
+		t.Fatalf("first call: added=%v err=%v", added, err)
+	}
+
+	added, err = EnsureIgnored(root)
+	if err != nil || added {
+		t.Fatalf("second call should be a no-op: added=%v err=%v", added, err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(root, ".gitignore"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(string(data), ignoreRule); n != 1 {
+		t.Errorf("rule appears %d times, want 1:\n%s", n, data)
+	}
+}
+
+func TestEnsureIgnoredKeepsExistingContent(t *testing.T) {
+	root := project(t, withComp)
+	path := filepath.Join(root, ".gitignore")
+
+	// No trailing newline, which is where naive appends corrupt the last rule.
+	if err := os.WriteFile(path, []byte("build/\n.idea/"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := EnsureIgnored(root); err != nil {
+		t.Fatal(err)
+	}
+
+	data, _ := os.ReadFile(path)
+	for _, want := range []string{"build/", ".idea/", ignoreRule} {
+		if !strings.Contains(string(data), want) {
+			t.Errorf("%q missing from:\n%s", want, data)
+		}
+	}
+	if strings.Contains(string(data), ".idea/"+ignoreRule) {
+		t.Errorf("the last existing rule got mangled:\n%s", data)
+	}
+}
+
+func TestPruneRemovesOtherBlobAARsOnly(t *testing.T) {
+	root := project(t, withComp)
+
+	for _, name := range []string{
+		"blob-competition-v1.4.0.aar",
+		"blob-dev-v1.4.0.aar",
+		"blob-competition-v1.3.0.aar",
+	} {
+		if err := os.MkdirAll(LibsDir(root), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(LibsDir(root), name), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Something else living in libs must survive.
+	if err := os.WriteFile(filepath.Join(LibsDir(root), "someones-other.aar"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Prune(root, ArtifactComp, "v1.4.0"); err != nil {
+		t.Fatal(err)
+	}
+
+	entries, _ := os.ReadDir(LibsDir(root))
+	got := map[string]bool{}
+	for _, e := range entries {
+		got[e.Name()] = true
+	}
+
+	if !got["blob-competition-v1.4.0.aar"] {
+		t.Error("the AAR in use was removed")
+	}
+	if !got["someones-other.aar"] {
+		t.Error("Prune must not touch AARs that are not blob's")
+	}
+	if got["blob-dev-v1.4.0.aar"] || got["blob-competition-v1.3.0.aar"] {
+		t.Errorf("stale blob AARs were left behind: %v", got)
+	}
+}
+
+func TestPruneSurvivesAMissingLibsDir(t *testing.T) {
+	if err := Prune(project(t, withComp), ArtifactComp, "v1.4.0"); err != nil {
+		t.Errorf("no libs directory is not an error: %v", err)
+	}
+}
+
+func TestAARNameMatchesTheReleaseAssetContract(t *testing.T) {
+	if got := AARName(ArtifactComp, "v1.4.0"); got != "blob-competition-v1.4.0.aar" {
+		t.Errorf("got %q", got)
+	}
+	if got := AARName(ArtifactDev, "v1.4.0"); got != "blob-dev-v1.4.0.aar" {
+		t.Errorf("got %q", got)
 	}
 }

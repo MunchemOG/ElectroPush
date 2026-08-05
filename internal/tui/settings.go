@@ -35,6 +35,7 @@ const (
 	screenThreads
 	screenBlob
 	screenBlobRuns
+	screenBlobToken
 	screenUpdate
 )
 
@@ -173,6 +174,21 @@ func (m *SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.update.result = msg.result
 		m.update.err = msg.err
 		return m, nil
+
+	case blobAuthMsg:
+		m.blob.checking = false
+		m.blob.busy = false
+		m.blob.auth = msg.status
+		m.blob.creds = msg.creds
+		m.cursor, m.offset = 0, 0
+		return m, nil
+
+	case blobOpMsg:
+		m.blob.busy = false
+		m.err = msg.err
+		m.status = msg.status
+		m.refreshBlob()
+		return m, nil
 	}
 
 	key, ok := msg.(tea.KeyMsg)
@@ -200,6 +216,8 @@ func (m *SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateBlob(key)
 	case screenBlobRuns:
 		return m.updateBlobRuns(key)
+	case screenBlobToken:
+		return m.updateBlobToken(key)
 	case screenUpdate:
 		return m.updateUpdate(key)
 	}
@@ -214,7 +232,7 @@ func (m *SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 const optionalRow = 7
 
 func (m *SettingsModel) rows() []int {
-	enabled := feature.Enabled()
+	enabled := feature.Revealed()
 
 	out := make([]int, 0, len(mainItems))
 	for i := range mainItems {
@@ -232,7 +250,7 @@ func (m *SettingsModel) rows() []int {
 // the cursor throughout, so the screen behaves exactly as it always does and
 // gives no sign of being partway through anything.
 func (m *SettingsModel) checkGate(key tea.KeyMsg) bool {
-	if feature.Enabled() {
+	if feature.Revealed() {
 		return false
 	}
 
@@ -296,9 +314,7 @@ func (m *SettingsModel) updateMain(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.input = strconv.Itoa(config.GetThreads())
 			m.goTo(screenThreads, 0)
 		case 7:
-			m.refreshBlob()
-			m.blob.latest = ""
-			m.goTo(screenBlob, 0)
+			return m, m.enterBlob()
 		case 8:
 			return m, m.enterUpdate()
 		case 9:
@@ -534,6 +550,8 @@ func (m *SettingsModel) listLength() int {
 		return len(m.blobMenuItems())
 	case screenBlobRuns:
 		return len(m.blob.traces)
+	case screenBlobToken:
+		return 0
 	case screenUpdate:
 		return 0
 	}
@@ -617,6 +635,8 @@ func (m *SettingsModel) View() string {
 		b.WriteString(m.viewBlob())
 	case screenBlobRuns:
 		b.WriteString(m.viewBlobRuns())
+	case screenBlobToken:
+		b.WriteString(m.viewBlobToken())
 	case screenUpdate:
 		b.WriteString(m.viewUpdate())
 	}

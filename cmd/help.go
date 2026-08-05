@@ -46,7 +46,7 @@ func runHelp(cmd *cobra.Command, args []string) {
 	fmt.Println("  pusher slim           Shrink the APK so deploys transfer less")
 	fmt.Println("    pusher slim --undo       Put the gradle files back")
 	fmt.Println("  pusher prepare        Cache dependencies while you have internet")
-	if feature.Enabled() {
+	if feature.Revealed() {
 		fmt.Println("  pusher visualiser     Draw the path an auto drove (alias: vis)")
 	}
 	fmt.Println("  pusher --version      Show version information")

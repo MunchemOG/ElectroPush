@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/andreibanu/pusher/internal/config"
+	"github.com/andreibanu/pusher/internal/ghauth"
 )
 
 // token marks a device that has turned the optional surfaces on. Opaque so the
@@ -94,9 +95,18 @@ func Match(step int, value string) (next int, done bool) {
 	return step, step == len(pattern)
 }
 
-// Enabled reports whether this device has the optional surfaces turned on.
-func Enabled() bool {
+// Revealed reports whether the optional surfaces are shown at all. This is a
+// local flag and nothing more: it decides what appears in a menu, never what
+// anyone is allowed to do. Cheap enough to consult on every invocation.
+func Revealed() bool {
 	return config.GetInstallKey() == token
+}
+
+// Authorized reports real access to the private blob repository, which is what
+// actually gates the library. Kept separate from Revealed because a flag in a
+// config file is something anyone can set, and this is not.
+func Authorized() (ghauth.Status, ghauth.Credentials) {
+	return ghauth.Resolve()
 }
 
 // Grant turns them on for this device.

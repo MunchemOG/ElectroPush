@@ -40,7 +40,7 @@ func Execute(version string) {
 
 	// Config is only readable now, so the hidden commands cannot be settled in
 	// init(). Hidden keeps them out of help, completions and suggestions.
-	visualiseCmd.Hidden = !feature.Enabled()
+	visualiseCmd.Hidden = !feature.Revealed()
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
