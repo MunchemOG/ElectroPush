@@ -177,3 +177,9 @@ func (m *Manager) PowerCycle() error {
 	time.Sleep(2 * time.Second)
 	return nil
 }
+
+// netsh connects by profile name and reuses the stored key, so leaving needs no
+// special handling.
+func (m *Manager) rejoin(ssid string, _ []string) error {
+	return m.Join(ssid, "")
+}

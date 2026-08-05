@@ -127,11 +127,12 @@ func pushOverWiFi(gradlePath string) error {
 
 	if leavingRobot {
 		fmt.Printf("\n[<] Returning to %s...\n", home)
-		if err := wifiMgr.Join(home, ""); err != nil {
+		if err := wifiMgr.Rejoin(home, robotSSIDs()); err != nil {
 			fmt.Printf("[!] Could not rejoin %s: %v\n", home, err)
 			fmt.Println("    You will need to switch back manually.")
-		} else if _, err := wifiMgr.WaitForIP("", 30*time.Second); err != nil {
-			fmt.Printf("[!] Rejoined %s but no IP address yet: %v\n", home, err)
+		} else if _, err := wifiMgr.WaitToLeave(wifi.RobotSubnet, 45*time.Second); err != nil {
+			fmt.Printf("[!] Could not get back onto %s: %v\n", home, err)
+			fmt.Println("    You will need to switch back manually.")
 		} else {
 			fmt.Printf("[OK] Back on %s\n", home)
 		}

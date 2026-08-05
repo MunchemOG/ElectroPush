@@ -147,6 +147,26 @@ func (m *Manager) Join(ssid, password string) error {
 	return nil
 }
 
+// networksetup -setairportnetwork refuses to join without a password even for a
+// network macOS already has in the keychain, failing with -3900 and dropping the
+// association it already had. Auto-join does work, so the way back is to make
+// the networks we are leaving ineligible and let the OS pick the next preferred
+// one. Dropping the robot is safe: every push re-adds it with the profile
+// password, and its key is the one credential pusher actually holds.
+func (m *Manager) rejoin(ssid string, leaving []string) error {
+	iface := m.wifiInterface()
+
+	for _, network := range leaving {
+		if network == "" || network == ssid {
+			continue
+		}
+		// Fails when the network was never saved, which is not worth reporting.
+		_ = exec.Command("networksetup", "-removepreferredwirelessnetwork", iface, network).Run()
+	}
+
+	return m.PowerCycle()
+}
+
 func (m *Manager) PowerCycle() error {
 	iface := m.wifiInterface()
 

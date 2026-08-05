@@ -89,6 +89,36 @@ func (m *Manager) MostRecentNetwork(exclude ...string) (string, error) {
 	return firstNotIn(networks, exclude), nil
 }
 
+// Rejoin returns to a network the OS already holds the key for. leaving names
+// the networks to get off of, which matters on macOS where the only credential
+// free way back is to make the current network ineligible for auto-join.
+func (m *Manager) Rejoin(ssid string, leaving []string) error {
+	return m.rejoin(ssid, leaving)
+}
+
+// WaitToLeave blocks until the interface holds an IPv4 address outside subnet.
+// Leaving the robot has to be confirmed by address because macOS will not name
+// the current network.
+func (m *Manager) WaitToLeave(subnet string, timeout time.Duration) (string, error) {
+	deadline := time.Now().Add(timeout)
+
+	for {
+		ip, err := m.GetIPv4()
+		if err == nil && ip != "" && !strings.HasPrefix(ip, subnet) {
+			return ip, nil
+		}
+
+		if time.Now().After(deadline) {
+			if ip != "" {
+				return "", fmt.Errorf("still on %s after %s", ip, timeout)
+			}
+			return "", fmt.Errorf("timed out after %s waiting for an IP address", timeout)
+		}
+
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
 func (m *Manager) JoinAndWait(ssid, password, subnet string, timeout time.Duration) (string, error) {
 	if err := m.Join(ssid, password); err != nil {
 		return "", err

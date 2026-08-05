@@ -125,3 +125,9 @@ func (m *Manager) PowerCycle() error {
 
 	return nil
 }
+
+// NetworkManager brings up a saved profile with its stored key, so leaving
+// needs no special handling.
+func (m *Manager) rejoin(ssid string, _ []string) error {
+	return m.Join(ssid, "")
+}
