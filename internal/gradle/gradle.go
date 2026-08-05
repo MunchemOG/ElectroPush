@@ -21,19 +21,15 @@ func wrapperName() string {
 	return "gradlew"
 }
 
+// The path returned is always absolute. exec looks a bare name like "gradlew"
+// up in $PATH instead of running the file in the project directory.
 func DetectWrapper() (string, error) {
 	name := wrapperName()
 
-	wrapper := filepath.Join(".", name)
-	if _, err := os.Stat(wrapper); err == nil {
-		return wrapper, nil
-	}
-
-	for i := 0; i < 3; i++ {
-		wrapper = filepath.Join(strings.Repeat("../", i+1), name)
+	for i := 0; i < 4; i++ {
+		wrapper := filepath.Join(strings.Repeat("../", i), name)
 		if _, err := os.Stat(wrapper); err == nil {
-			absPath, _ := filepath.Abs(wrapper)
-			return absPath, nil
+			return filepath.Abs(wrapper)
 		}
 	}
 
