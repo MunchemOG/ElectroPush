@@ -7,6 +7,7 @@ import (
 	"github.com/andreibanu/pusher/internal/adb"
 	"github.com/andreibanu/pusher/internal/pathtrace"
 	"github.com/andreibanu/pusher/internal/tui"
+	"github.com/andreibanu/pusher/internal/unlock"
 	"github.com/andreibanu/pusher/internal/visual"
 	"github.com/spf13/cobra"
 )
@@ -41,6 +42,12 @@ build from ` + "`pusher settings` -> blob library" + `.
 }
 
 func runVisualise(cmd *cobra.Command, args []string) error {
+	// Matches what cobra says for a command that does not exist, so a locked
+	// install gives nothing away.
+	if !unlock.Unlocked() {
+		return fmt.Errorf("unknown command %q for %q", "visualiser", "pusher")
+	}
+
 	limits := pathtrace.DefaultLimits()
 	if visTopSpeed > 0 {
 		limits.TopSpeed = visTopSpeed
