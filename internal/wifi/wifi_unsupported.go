@@ -23,3 +23,7 @@ func (m *Manager) PowerOn() error { return errUnsupported }
 func (m *Manager) Join(ssid, password string) error { return errUnsupported }
 
 func (m *Manager) PowerCycle() error { return errUnsupported }
+
+func (m *Manager) rejoin(ssid string, _ []string) error {
+	return m.Join(ssid, "")
+}
