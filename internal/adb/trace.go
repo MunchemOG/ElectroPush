@@ -27,6 +27,26 @@ func Pull(serial, remote, local string) error {
 	return err
 }
 
+// Push copies a file onto the device.
+func Push(serial, local, remote string) error {
+	_, err := run(serial, "push", local, remote)
+	return err
+}
+
+// Target picks the robot to talk to, preferring USB the way deploying does.
+func Target() (string, error) {
+	if !IsInstalled() {
+		return "", fmt.Errorf("adb not found - install Android SDK Platform-Tools")
+	}
+	if dev, ok := FindUSBDevice(); ok {
+		return dev.Serial, nil
+	}
+	if IsConnected() {
+		return RobotAddr(), nil
+	}
+	return "", fmt.Errorf("no robot connected - plug in USB or run `pusher connect`")
+}
+
 // ListTraces returns the trace files on the device, newest first.
 //
 // ls -t orders by mtime, which is what "newest" has to mean here: the filename

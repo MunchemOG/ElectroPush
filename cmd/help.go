@@ -45,6 +45,10 @@ func runHelp(cmd *cobra.Command, args []string) {
 	fmt.Println("  pusher settings       Robot profiles and preferences (alias: config)")
 	fmt.Println("  pusher slim           Shrink the APK so deploys transfer less")
 	fmt.Println("    pusher slim --undo       Put the gradle files back")
+	fmt.Println("  pusher hwconfig       Hardware config menu and editor (alias: hw)")
+	fmt.Println("    pusher hwconfig list     Print what the robot and the project have")
+	fmt.Println("    pusher hwconfig pull     Copy the robot's configs into your project")
+	fmt.Println("    pusher hwconfig push X   Copy X back to the robot")
 	fmt.Println("  pusher prepare        Cache dependencies while you have internet")
 	if feature.Revealed() {
 		fmt.Println("  pusher visualiser     Draw the path an auto drove (alias: vis)")
