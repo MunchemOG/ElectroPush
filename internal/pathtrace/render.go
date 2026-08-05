@@ -5,28 +5,27 @@ import (
 	"html/template"
 	"math"
 	"os"
-	"strings"
 )
 
 // viewBox is the SVG drawing space. Field coordinates are mapped into it.
 const viewSize = 1000.0
 
 type renderSegment struct {
-	Index      int
-	Label      string
-	Source     string
-	Type       string
-	MaxPower   string
-	Length     string
-	Est        string
-	Actual     string
-	Peak       string
-	Slow       bool
-	Strokes    []stroke
-	Markers    []marker
-	TargetX    float64
-	TargetY    float64
-	HasTarget  bool
+	Index     int
+	Label     string
+	Source    string
+	Type      string
+	MaxPower  string
+	Length    string
+	Est       string
+	Actual    string
+	Peak      string
+	Slow      bool
+	Strokes   []stroke
+	Markers   []marker
+	TargetX   float64
+	TargetY   float64
+	HasTarget bool
 }
 
 type stroke struct {
@@ -35,9 +34,9 @@ type stroke struct {
 }
 
 type marker struct {
-	X, Y   float64
-	Kind   string
-	Title  string
+	X, Y  float64
+	Kind  string
+	Title string
 }
 
 type renderData struct {
@@ -214,11 +213,11 @@ func heatColour(f float64) string {
 	f = math.Max(0, math.Min(1, f))
 
 	stops := [][3]float64{
-		{56, 108, 255},  // blue
-		{0, 190, 210},   // cyan
-		{54, 179, 126},  // green
-		{255, 190, 60},  // amber
-		{255, 86, 48},   // red
+		{56, 108, 255}, // blue
+		{0, 190, 210},  // cyan
+		{54, 179, 126}, // green
+		{255, 190, 60}, // amber
+		{255, 86, 48},  // red
 	}
 
 	x := f * float64(len(stops)-1)
@@ -234,5 +233,3 @@ func heatColour(f float64) string {
 
 	return fmt.Sprintf("#%02x%02x%02x", int(r), int(g), int(b))
 }
-
-var _ = strings.TrimSpace

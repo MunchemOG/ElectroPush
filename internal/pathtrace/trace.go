@@ -34,11 +34,11 @@ type Segment struct {
 	CallSite         []string    `json:"callSite"`
 
 	// Filled in by Annotate and Profile.
-	Label      string  `json:"-"`
-	Source     string  `json:"-"`
-	Length     float64 `json:"-"`
-	EstSeconds float64 `json:"-"`
-	PeakSpeed  float64 `json:"-"`
+	Label      string    `json:"-"`
+	Source     string    `json:"-"`
+	Length     float64   `json:"-"`
+	EstSeconds float64   `json:"-"`
+	PeakSpeed  float64   `json:"-"`
 	Speeds     []float64 `json:"-"`
 }
 

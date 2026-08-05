@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -30,6 +31,8 @@ const (
 	screenAddProfile
 	screenHomeNetwork
 	screenThreads
+	screenBlob
+	screenBlobRuns
 )
 
 type addStep int
@@ -63,9 +66,21 @@ type SettingsModel struct {
 	maskInput          bool
 	confirmDeleteIndex int
 
+	blob blobState
+	root string
+
 	status string
 	err    error
 	quit   bool
+}
+
+// projectRoot is the directory pusher was invoked from, which is where an FTC
+// project's TeamCode/build.gradle lives.
+func (m *SettingsModel) projectRoot() string {
+	if m.root == "" {
+		m.root, _ = os.Getwd()
+	}
+	return m.root
 }
 
 func NewSettingsModel() (*SettingsModel, error) {
@@ -76,6 +91,7 @@ func NewSettingsModel() (*SettingsModel, error) {
 
 	m := &SettingsModel{cfg: cfg, confirmDeleteIndex: -1, height: defaultHeight}
 	m.refreshProfiles()
+	m.refreshBlob()
 	return m, nil
 }
 
@@ -123,6 +139,7 @@ var mainItems = []string{
 	"Slim APK before every push",
 	"Send only changed parts",
 	"Gradle threads",
+	"blob library",
 	"Exit",
 }
 
@@ -155,6 +172,10 @@ func (m *SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateHomeNetwork(key)
 	case screenThreads:
 		return m.updateThreads(key)
+	case screenBlob:
+		return m.updateBlob(key)
+	case screenBlobRuns:
+		return m.updateBlobRuns(key)
 	}
 
 	return m, nil
@@ -195,6 +216,10 @@ func (m *SettingsModel) updateMain(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.input = strconv.Itoa(config.GetThreads())
 			m.goTo(screenThreads, 0)
 		case 7:
+			m.refreshBlob()
+			m.blob.latest = ""
+			m.goTo(screenBlob, 0)
+		case 8:
 			m.quit = true
 			return m, tea.Quit
 		}
@@ -423,6 +448,10 @@ func (m *SettingsModel) listLength() int {
 	case screenHomeNetwork:
 
 		return len(m.networks) + 1
+	case screenBlob:
+		return len(m.blobMenuItems())
+	case screenBlobRuns:
+		return len(m.blob.traces)
 	}
 	return 0
 }
@@ -500,6 +529,10 @@ func (m *SettingsModel) View() string {
 		b.WriteString(m.viewHomeNetwork())
 	case screenThreads:
 		b.WriteString(m.viewThreads())
+	case screenBlob:
+		b.WriteString(m.viewBlob())
+	case screenBlobRuns:
+		b.WriteString(m.viewBlobRuns())
 	}
 
 	if m.err != nil {
@@ -520,6 +553,7 @@ func (m *SettingsModel) viewMain() string {
 		m.autoSlimLabel(),
 		onOff(config.GetDeltaTransfer()),
 		strconv.Itoa(config.GetThreads()),
+		m.blobLabel(),
 		"",
 	}
 
