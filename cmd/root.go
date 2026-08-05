@@ -52,5 +52,6 @@ func init() {
 	rootCmd.AddCommand(settingsCmd)
 	rootCmd.AddCommand(slimCmd)
 	rootCmd.AddCommand(doctorCmd)
+	rootCmd.AddCommand(visualiseCmd)
 	rootCmd.AddCommand(helpCmd)
 }
