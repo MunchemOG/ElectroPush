@@ -182,7 +182,7 @@ func (m *SettingsModel) addBlob() {
 	version, err := blobdep.LatestVersion()
 	if err != nil {
 		// Offline is not a reason to refuse: pin something sane and say so.
-		version = "2.0.0"
+		version = blobdep.FallbackVersion
 	}
 
 	warning, addErr := blobdep.Add(m.projectRoot(), blobdep.ArtifactComp, version)
