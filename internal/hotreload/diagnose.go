@@ -41,7 +41,6 @@ func Diagnose(serial string) Diagnosis {
 	dir := currentOutputDir(serial)
 	if dir == "" {
 		d.find("%s names no directory, so the SDK has nowhere to read classes from", PointerFile)
-		dir = FallbackOutputDir
 	}
 	d.OutputDir = dir
 

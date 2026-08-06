@@ -43,9 +43,21 @@ const TriggerFile = JavaDir + "/status/buildSuccessful.txt"
 // points. Writing to any other directory is invisible to the SDK.
 const PointerFile = JavaDir + "/status/currentOnBotJavaDir.txt"
 
-// FallbackOutputDir is used when OnBotJava has never built anything, so the
-// pointer file does not exist yet and there is nothing to join.
-const FallbackOutputDir = JavaDir + "/build/jars/pusher"
+// OutputRoot is where each attempt gets its own directory.
+//
+// A fresh directory every time, never an overwrite. The running app has the
+// previous dex open and mapped, and rewriting that file in place leaves the
+// mapping inconsistent, so the reload finds nothing loadable and the OpMode
+// disappears instead of changing.
+//
+// This is why currentOnBotJavaDir.txt exists: OnBotJava rotates its output
+// directory per build and repoints the file, rather than writing over what the
+// app is already using. Doing the same thing is the fix.
+const OutputRoot = JavaDir + "/build/jars"
+
+// DirPrefix marks the directories this tool owns, so old ones can be cleared
+// without touching anything OnBotJava built.
+const DirPrefix = "pusher-"
 
 // Package is deliberately not one the SDK or a team project would use. The
 // classloader is parent-first, so a class that also exists in the APK would
@@ -290,20 +302,16 @@ func Run(serial, marker string) *Result {
 	out.step("built a %d byte jar and a %d byte dex in %s",
 		out.JarBytes, out.DexBytes, out.Compile.Round(time.Millisecond))
 
-	dir, pointed, err := outputDir(serial)
+	dir, err := newOutputDir(serial, marker)
 	if err != nil {
 		out.Err = err
 		return out
 	}
 	out.RemoteDir = dir
-	out.Pointed = pointed
+	out.Pointed = true
 	out.RemoteDex = dir + "/" + ProofName + ".dex"
 	out.RemoteJar = dir + "/" + ProofName + ".jar"
-	if pointed {
-		out.step("no OnBotJava build on this hub, so %s now points at %s", PointerFile, dir)
-	} else {
-		out.step("output directory the SDK is reading: %s", dir)
-	}
+	out.step("fresh directory for this attempt: %s", dir)
 
 	// The jar is what gets the class name discovered, the dex is what loads it.
 	// Both, or nothing happens.
@@ -318,6 +326,16 @@ func Run(serial, marker string) *Result {
 	}
 	out.Push = time.Since(start)
 	out.step("pushed the jar and the dex in %s", out.Push.Round(time.Millisecond))
+
+	// Point the SDK at the new directory only once both files are there, or a
+	// reload could fire against a directory that is half written.
+	if err := writePointer(serial, dir); err != nil {
+		out.Err = err
+		return out
+	}
+	out.step("pointed %s at it", PointerFile)
+
+	clearOldDirs(serial, dir)
 
 	if err := trigger(serial); err != nil {
 		out.Err = err
@@ -337,26 +355,34 @@ func Run(serial, marker string) *Result {
 	return out
 }
 
-// outputDir is the directory the SDK will actually read, which is whatever the
-// pointer file names.
+// newOutputDir creates a directory for this attempt and points the SDK at it.
 //
-// When OnBotJava has already built something the pointer is valid and the files
-// go alongside its own, leaving it working. When it has not, there is nothing
-// to disturb and the pointer gets written to a directory of ours.
-func outputDir(serial string) (string, bool, error) {
-	if dir := currentOutputDir(serial); dir != "" {
-		return dir, false, nil
+// Rotating rather than overwriting, for the reason on OutputRoot. The previous
+// attempt's directory is removed once the pointer no longer names it.
+func newOutputDir(serial, marker string) (string, error) {
+	dir := OutputRoot + "/" + DirPrefix + strings.NewReplacer(":", "", " ", "-").Replace(marker)
+
+	if _, err := adb.Shell(serial, "mkdir", "-p", shellQuote(dir)); err != nil {
+		return "", fmt.Errorf("cannot create %s on the hub: %w", dir, err)
+	}
+	return dir, nil
+}
+
+// clearOldDirs removes previous attempts, leaving the current one and anything
+// this tool did not create.
+func clearOldDirs(serial, keep string) {
+	out, err := adb.Shell(serial, "ls", "-d", OutputRoot+"/"+DirPrefix+"*", "2>/dev/null")
+	if err != nil {
+		return
 	}
 
-	if _, err := adb.Shell(serial, "mkdir", "-p", FallbackOutputDir); err != nil {
-		return "", false, fmt.Errorf("cannot create %s on the hub: %w", FallbackOutputDir, err)
+	for _, line := range strings.Split(out, "\n") {
+		dir := strings.TrimSpace(strings.TrimRight(line, "\r"))
+		if dir == "" || dir == keep || !strings.Contains(dir, DirPrefix) {
+			continue
+		}
+		_, _ = adb.Shell(serial, "rm", "-rf", shellQuote(dir))
 	}
-
-	if err := writePointer(serial, FallbackOutputDir); err != nil {
-		return "", false, err
-	}
-
-	return FallbackOutputDir, true, nil
 }
 
 // currentOutputDir reads the pointer file and confirms it names a directory
@@ -419,19 +445,11 @@ func trigger(serial string) error {
 
 // Clean removes what the experiment left on the robot.
 func Clean(serial string) error {
-	dir := currentOutputDir(serial)
-	if dir == "" {
-		dir = FallbackOutputDir
-	}
+	clearOldDirs(serial, "")
 
-	if _, err := adb.Shell(serial, "rm", "-f",
-		shellQuote(dir+"/"+ProofName+".dex"), shellQuote(dir+"/"+ProofName+".jar")); err != nil {
-		return err
-	}
-
-	// Only drop the pointer when it is ours. Removing OnBotJava's would break
-	// a hub somebody actually uses it on.
-	if dir == FallbackOutputDir {
+	// Only drop the pointer when it names one of ours. Removing OnBotJava's
+	// would break a hub somebody actually uses it on.
+	if dir := currentOutputDir(serial); strings.Contains(dir, DirPrefix) || dir == "" {
 		_, _ = adb.Shell(serial, "rm", "-f", PointerFile)
 	}
 

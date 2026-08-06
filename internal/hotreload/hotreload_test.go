@@ -129,14 +129,38 @@ func TestThePointerFileIsWhereTheSDKLooks(t *testing.T) {
 		t.Errorf("got %q", PointerFile)
 	}
 
-	// The fallback has to be somewhere OnBotJava would plausibly own, under
-	// the build directory rather than beside it.
-	if !strings.HasPrefix(FallbackOutputDir, JavaDir+"/build/") {
-		t.Errorf("got %q, want it under the build directory", FallbackOutputDir)
+	// Output goes under the build directory, which is where OnBotJava's own
+	// jars live, rather than beside it.
+	if !strings.HasPrefix(OutputRoot, JavaDir+"/build/") {
+		t.Errorf("got %q, want it under the build directory", OutputRoot)
 	}
 
 	// The pointer and the trigger are different files doing different jobs.
 	if PointerFile == TriggerFile {
 		t.Error("the pointer and the trigger are the same file")
+	}
+}
+
+// Overwriting the dex in place breaks the mapping the running app holds on it,
+// and the reload then finds nothing loadable, so the OpMode vanishes instead of
+// changing. Rotating the directory is what OnBotJava itself does, and is why
+// currentOnBotJavaDir.txt is an indirection rather than a fixed path.
+func TestEachAttemptGetsItsOwnDirectory(t *testing.T) {
+	seen := map[string]bool{}
+
+	for _, marker := range []string{"11:02:03", "11:02:04", "12:00:00"} {
+		dir := OutputRoot + "/" + DirPrefix + strings.NewReplacer(":", "", " ", "-").Replace(marker)
+
+		if seen[dir] {
+			t.Errorf("%q reuses a directory", marker)
+		}
+		seen[dir] = true
+
+		if !strings.HasPrefix(dir, OutputRoot+"/"+DirPrefix) {
+			t.Errorf("got %q, which cleanup would not recognise as ours", dir)
+		}
+		if strings.ContainsAny(strings.TrimPrefix(dir, OutputRoot+"/"), ": ") {
+			t.Errorf("%q has characters that need quoting on the far side", dir)
+		}
 	}
 }
