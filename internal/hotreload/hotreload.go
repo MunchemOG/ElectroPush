@@ -420,9 +420,32 @@ func writePointer(serial, dir string) error {
 	if _, err := adb.Shell(serial, "mkdir", "-p", JavaDir+"/status"); err != nil {
 		return fmt.Errorf("cannot create the status directory: %w", err)
 	}
-	if _, err := adb.Shell(serial, "sh", "-c",
-		fmt.Sprintf("'printf %%s %s > %s'", shellQuote(dir), PointerFile)); err != nil {
-		return fmt.Errorf("cannot write %s: %w", PointerFile, err)
+	return pushText(serial, dir, PointerFile)
+}
+
+// pushText writes exact bytes to a path on the hub.
+//
+// Not a shell redirect. Those need the content quoted through the host shell,
+// adb's argument joining and the device shell, and a path with a slash in it
+// comes out differently at each layer. Pushing a file is the same route the jar
+// and the dex take, and that one demonstrably arrives intact.
+func pushText(serial, content, remote string) error {
+	local, err := os.CreateTemp("", "pusher-write-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(local.Name())
+
+	if _, err := local.WriteString(content); err != nil {
+		local.Close()
+		return err
+	}
+	if err := local.Close(); err != nil {
+		return err
+	}
+
+	if err := adb.Push(serial, local.Name(), remote); err != nil {
+		return fmt.Errorf("cannot write %s: %w", remote, err)
 	}
 	return nil
 }
@@ -444,11 +467,7 @@ func trigger(serial string) error {
 	if _, err := adb.Shell(serial, "mkdir", "-p", JavaDir+"/status"); err != nil {
 		return fmt.Errorf("cannot create the status directory: %w", err)
 	}
-	if _, err := adb.Shell(serial, "sh", "-c",
-		fmt.Sprintf("'date > %s'", TriggerFile)); err != nil {
-		return fmt.Errorf("cannot touch %s: %w", TriggerFile, err)
-	}
-	return nil
+	return pushText(serial, time.Now().Format(time.RFC3339)+"\n", TriggerFile)
 }
 
 // Clean removes what the experiment left on the robot.

@@ -14,9 +14,11 @@ import (
 type Diagnosis struct {
 	Package   string
 	OutputDir string
-	OnHub     []string
-	Findings  []string
-	Crash     string
+	// Pointer is what the pointer file actually contains, read back.
+	Pointer  string
+	OnHub    []string
+	Findings []string
+	Crash    string
 	// Exception is the one line worth reading: the type and message. The
 	// frames under it only say the event loop called it, which is already
 	// known.
@@ -124,9 +126,18 @@ func Diagnose(serial string) Diagnosis {
 		return d
 	}
 
+	// Read the pointer back rather than trusting the write. The SDK logs
+	// "getCurrentOutputDir() unavailable" and carries on when this is wrong,
+	// so a bad write looks exactly like everything working.
+	d.Pointer = readPointer(serial)
+
 	dir := currentOutputDir(serial)
 	if dir == "" {
-		d.find("%s names no directory, so the SDK has nowhere to read classes from", PointerFile)
+		if d.Pointer == "" {
+			d.find("%s is empty or missing, so the SDK has nowhere to read classes from", PointerFile)
+		} else {
+			d.find("%s says %q, which is not a directory on the hub", PointerFile, d.Pointer)
+		}
 	}
 	d.OutputDir = dir
 
@@ -230,4 +241,13 @@ func onBotJavaCrash(serial string) string {
 	}
 
 	return "the service is restarting repeatedly, but no exception is in the recent log"
+}
+
+// readPointer returns the pointer file's contents exactly as they are on disk.
+func readPointer(serial string) string {
+	out, err := adb.Shell(serial, "cat", PointerFile, "2>/dev/null")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimRight(out, "\r\n")
 }

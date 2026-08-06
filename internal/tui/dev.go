@@ -489,6 +489,9 @@ func (m *devModel) viewDevReload() string {
 		for _, finding := range d.Findings {
 			fmt.Fprintf(&b, "    %s\n", errStyle.Render(finding))
 		}
+		if d.Pointer != "" {
+			fmt.Fprintf(&b, "\n  %s\n", helpStyle.Render("pointer file says: "+d.Pointer))
+		}
 		if d.OutputDir != "" {
 			fmt.Fprintf(&b, "\n  %s\n", helpStyle.Render("directory the SDK reads: "+d.OutputDir))
 			for _, line := range d.OnHub {
