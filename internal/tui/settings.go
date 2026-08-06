@@ -810,6 +810,30 @@ func (m *SettingsModel) viewThreads() string {
 	return b.String()
 }
 
+// helpBlock renders the note for the selected row at a fixed height.
+//
+// A screen whose height changes as the cursor moves leaves the taller frame's
+// leftovers behind, which reads as the menu being broken while scrolling. Every
+// note is padded to the same number of lines instead.
+func helpBlock(notes []string, index, lines int) string {
+	var b strings.Builder
+	b.WriteString("\n")
+
+	shown := 0
+	if index >= 0 && index < len(notes) && notes[index] != "" {
+		for _, line := range strings.Split(notes[index], "\n") {
+			b.WriteString("  " + helpStyle.Render(line) + "\n")
+			shown++
+		}
+	}
+
+	for ; shown < lines; shown++ {
+		b.WriteString("\n")
+	}
+
+	return b.String()
+}
+
 func (m *SettingsModel) renderList(total int, row func(int) string) string {
 	visible := m.visibleRows()
 

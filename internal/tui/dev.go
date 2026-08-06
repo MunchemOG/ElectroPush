@@ -35,6 +35,9 @@ var devItems = []string{
 	"Exit",
 }
 
+// devHelpLines keeps the screen a fixed height as the cursor moves.
+const devHelpLines = 4
+
 var devHelp = []string{
 	"Deploys the current build with different settings and times each one,\n" +
 		"three times over so a difference can be told from noise.\n" +
@@ -362,12 +365,7 @@ func (m *devModel) viewDevMain() string {
 		fmt.Fprintf(&b, "%s%s\n", cursor, item)
 	}
 
-	if m.cursor < len(devHelp) && devHelp[m.cursor] != "" {
-		b.WriteString("\n")
-		for _, line := range strings.Split(devHelp[m.cursor], "\n") {
-			b.WriteString("  " + helpStyle.Render(line) + "\n")
-		}
-	}
+	b.WriteString(helpBlock(devHelp, m.cursor, devHelpLines))
 
 	b.WriteString("\n" + helpStyle.Render("  enter run · up/down move · q quit") + "\n")
 	return b.String()

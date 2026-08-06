@@ -22,19 +22,20 @@ var extremeItems = []string{
 	"Back",
 }
 
+// Every entry is the same number of lines. A view that changes height between
+// frames leaves the taller one's leftovers on screen, which is what "the menu
+// is broken when scrolling" looks like.
 var extremeHelp = []string{
-	"Stops team code being packaged into the APK, so it can be reloaded onto\n" +
-		"a running robot instead of installed. One marked block is added to\n" +
-		"TeamCode/build.gradle and nothing else in the project is touched.",
+	"Adds one marked block to TeamCode/build.gradle so team code is\n" +
+		"reloaded rather than packaged. Nothing else is touched.",
 
-	"Puts team code back in the APK and removes the block. Deploy once\n" +
-		"afterwards, or the robot keeps running whatever was last reloaded.",
+	"Puts team code back in the APK and removes the block.\n" +
+		"Deploy once afterwards.",
 
-	"When on, a deploy compiles team code and reloads it instead of\n" +
-		"installing, but only when that is equivalent. Anything else changing\n" +
-		"falls back to a normal install.",
+	"Reloads instead of installing when that is equivalent,\n" +
+		"and installs normally when it is not.",
 
-	"",
+	"\n",
 }
 
 type extremeState struct {
@@ -157,10 +158,8 @@ func (m *SettingsModel) undoExtreme() {
 func (m *SettingsModel) viewExtreme() string {
 	var b strings.Builder
 
-	b.WriteString(helpStyle.Render("  Pusher Extreme") + "\n\n")
-
-	b.WriteString("  " + helpStyle.Render("Reloads your OpModes onto a running robot instead of installing an") + "\n")
-	b.WriteString("  " + helpStyle.Render("APK. Under a second rather than around forty.") + "\n\n")
+	b.WriteString(helpStyle.Render("  Pusher Extreme") + "  " +
+		helpStyle.Render("reload OpModes instead of installing an APK") + "\n\n")
 
 	b.WriteString(m.extremeStatusLines())
 
@@ -175,16 +174,15 @@ func (m *SettingsModel) viewExtreme() string {
 		return renderRow(i == m.cursor, extremeItems[i], values[i], 24)
 	}))
 
-	if m.cursor < len(extremeHelp) && extremeHelp[m.cursor] != "" {
-		b.WriteString("\n")
+	b.WriteString("\n")
+	if m.cursor < len(extremeHelp) {
 		for _, line := range strings.Split(extremeHelp[m.cursor], "\n") {
 			b.WriteString("  " + helpStyle.Render(line) + "\n")
 		}
 	}
 
-	b.WriteString("\n" + errStyle.Render("  Team code stops being part of the APK while this is set up.") + "\n")
-	b.WriteString("  " + helpStyle.Render("Anyone deploying this project from Android Studio gets a robot with") + "\n")
-	b.WriteString("  " + helpStyle.Render("no OpModes until pusher reloads them. Undo above puts it back.") + "\n")
+	b.WriteString("\n" + errStyle.Render("  While set up, team code is not in the APK: a teammate deploying") + "\n")
+	b.WriteString("  " + errStyle.Render("from Android Studio gets a robot with no OpModes.") + "\n")
 
 	b.WriteString("\n" + helpStyle.Render("  enter choose · esc back") + "\n")
 	return b.String()
@@ -195,49 +193,41 @@ func (m *SettingsModel) viewExtreme() string {
 func (m *SettingsModel) extremeStatusLines() string {
 	var b strings.Builder
 
+	// Two lines, always. The list below must not move when this changes.
 	if !m.extreme.haveRoot {
 		b.WriteString("  " + unsetStyle.Render("No FTC project here, so there is nothing to set up.") + "\n\n")
 		return b.String()
 	}
 
-	fmt.Fprintf(&b, "  %s\n", helpStyle.Render(m.extreme.root))
-
 	switch {
 	case !m.extreme.set:
 		b.WriteString("  " + unsetStyle.Render("Not set up: team code is packaged in the APK as usual.") + "\n")
 	case m.extreme.status.Usable():
-		b.WriteString("  " + okStyle.Render("Ready: the next deploy will reload instead of installing.") + "\n")
+		b.WriteString("  " + okStyle.Render("Ready: the next deploy reloads instead of installing.") + "\n")
 	default:
-		fmt.Fprintf(&b, "  %s\n", scrollStyle.Render("Set up, but the next deploy will install: "+m.extreme.status.Reason))
+		fmt.Fprintf(&b, "  %s\n", scrollStyle.Render(trimTo("Next deploy installs: "+m.extreme.status.Reason, 70)))
 	}
 
+	extras := ""
+	if n := len(m.extreme.reflected.Classes); n > 0 {
+		extras = fmt.Sprintf("%d @Config classes bridged to FtcDashboard", n)
+	}
 	if len(m.extreme.kept) > 0 {
-		fmt.Fprintf(&b, "  %s\n", helpStyle.Render("kept in the APK: "+strings.Join(m.extreme.kept, ", ")))
-	}
-
-	if m.extreme.reflected.Any() {
-		for _, line := range wrap(m.extreme.reflected.Summary(), 68) {
-			fmt.Fprintf(&b, "  %s\n", helpStyle.Render(line))
+		if extras != "" {
+			extras += "; "
 		}
+		extras += fmt.Sprintf("%d packages kept in the APK", len(m.extreme.kept))
 	}
+	fmt.Fprintf(&b, "  %s\n\n", helpStyle.Render(trimTo(extras, 70)))
 
-	b.WriteString("\n")
 	return b.String()
 }
 
-// wrap breaks a line so a narrow terminal does not lose the start of it.
-func wrap(s string, width int) []string {
-	var out []string
-	for len(s) > width {
-		cut := strings.LastIndex(s[:width], " ")
-		if cut <= 0 {
-			cut = width
-		}
-		out = append(out, s[:cut])
-		s = strings.TrimSpace(s[cut:])
+// trimTo keeps a line to one line, since the screen's height is fixed and a
+// wrapped line would push the rest of it down.
+func trimTo(s string, width int) string {
+	if len(s) <= width {
+		return s
 	}
-	if s != "" {
-		out = append(out, s)
-	}
-	return out
+	return s[:width-1] + "…"
 }
