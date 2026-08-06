@@ -119,3 +119,24 @@ func TestTheOpModeCompilesToADex(t *testing.T) {
 		t.Error("the OpMode name is not in the dex")
 	}
 }
+
+// The output directory is not a fixed path. getCurrentOutputDir() reads an
+// absolute path out of currentOnBotJavaDir.txt and uses that, so writing to any
+// other directory is invisible to the SDK no matter how correct it looks. Two
+// attempts were lost to assuming a layout here.
+func TestThePointerFileIsWhereTheSDKLooks(t *testing.T) {
+	if PointerFile != "/sdcard/FIRST/java/status/currentOnBotJavaDir.txt" {
+		t.Errorf("got %q", PointerFile)
+	}
+
+	// The fallback has to be somewhere OnBotJava would plausibly own, under
+	// the build directory rather than beside it.
+	if !strings.HasPrefix(FallbackOutputDir, JavaDir+"/build/") {
+		t.Errorf("got %q, want it under the build directory", FallbackOutputDir)
+	}
+
+	// The pointer and the trigger are different files doing different jobs.
+	if PointerFile == TriggerFile {
+		t.Error("the pointer and the trigger are the same file")
+	}
+}

@@ -479,6 +479,12 @@ func (m *devModel) viewDevReload() string {
 		for _, finding := range d.Findings {
 			fmt.Fprintf(&b, "    %s\n", errStyle.Render(finding))
 		}
+		if d.OutputDir != "" {
+			fmt.Fprintf(&b, "\n  %s\n", helpStyle.Render("directory the SDK reads: "+d.OutputDir))
+			for _, line := range d.OnHub {
+				fmt.Fprintf(&b, "    %s\n", helpStyle.Render(trim(line, 96)))
+			}
+		}
 		if d.Crash != "" {
 			b.WriteString("\n  " + helpStyle.Render("Most recent crash:") + "\n")
 			for _, line := range strings.Split(d.Crash, "\n") {

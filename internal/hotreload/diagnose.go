@@ -11,10 +11,11 @@ import (
 // way. Pushing the files is the easy half; this is the half that explains a
 // silent failure.
 type Diagnosis struct {
-	Package  string
-	OnHub    []string
-	Findings []string
-	Crash    string
+	Package   string
+	OutputDir string
+	OnHub     []string
+	Findings  []string
+	Crash     string
 }
 
 // OK reports whether anything looked wrong.
@@ -37,7 +38,14 @@ func Diagnose(serial string) Diagnosis {
 		return d
 	}
 
-	if out, err := adb.Shell(serial, "ls", "-l", JavaDir+"/jars", "2>/dev/null"); err == nil {
+	dir := currentOutputDir(serial)
+	if dir == "" {
+		d.find("%s names no directory, so the SDK has nowhere to read classes from", PointerFile)
+		dir = FallbackOutputDir
+	}
+	d.OutputDir = dir
+
+	if out, err := adb.Shell(serial, "ls", "-l", shellQuote(dir), "2>/dev/null"); err == nil {
 		for _, line := range strings.Split(out, "\n") {
 			if line = strings.TrimSpace(strings.TrimRight(line, "\r")); line != "" {
 				d.OnHub = append(d.OnHub, line)
@@ -45,10 +53,10 @@ func Diagnose(serial string) Diagnosis {
 		}
 	}
 
-	if !hasFile(serial, JavaDir+"/jars/"+ProofName+".jar") {
+	if !hasFile(serial, dir+"/"+ProofName+".jar") {
 		d.find("the jar is not on the hub; the class name cannot be discovered without it")
 	}
-	if !hasFile(serial, JavaDir+"/jars/"+ProofName+".dex") {
+	if !hasFile(serial, dir+"/"+ProofName+".dex") {
 		d.find("the dex is not on the hub; the class cannot be loaded without it")
 	}
 	if !hasFile(serial, TriggerFile) {
@@ -67,8 +75,8 @@ func Diagnose(serial string) Diagnosis {
 }
 
 func hasFile(serial, path string) bool {
-	out, err := adb.Shell(serial, "ls", shellQuote(path), "2>/dev/null")
-	return err == nil && strings.Contains(out, strings.TrimPrefix(path, JavaDir+"/"))
+	_, err := adb.Shell(serial, "ls", shellQuote(path), "2>/dev/null")
+	return err == nil
 }
 
 func shellQuote(path string) string {
