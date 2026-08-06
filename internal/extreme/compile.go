@@ -31,6 +31,11 @@ type Build struct {
 	Dex     string
 	Sources int
 	Classes int
+	// Kept is how many classes stayed in the APK.
+	Kept int
+	// Bridged is how many classes were handed to a library that could not
+	// otherwise see them.
+	Bridged int
 }
 
 // FindProject locates the FTC project around the working directory.
@@ -78,7 +83,7 @@ func (p *Project) Sources() ([]string, error) {
 // classloader, so a partial dex would leave the classes it did not contain
 // unresolvable, and the SDK's re-registration abandons everything on the first
 // failure rather than skipping one class.
-func Compile(p *Project, cp Classpath, work string) (Build, error) {
+func Compile(p *Project, cp Classpath, work string, keep []string) (Build, error) {
 	var out Build
 
 	tc, err := hotreload.FindToolchain()
@@ -92,6 +97,19 @@ func Compile(p *Project, cp Classpath, work string) (Build, error) {
 		return out, err
 	}
 	out.Sources = len(sources)
+
+	// The bridge is compiled alongside, so it holds real class references
+	// rather than names looked up at runtime, which is the whole reason it can
+	// hand reloaded classes to something that cannot see them.
+	configs := ConfigClasses(p.Root, keep)
+	bridge, err := GenerateBridge(work, configs, cp)
+	if err != nil {
+		return out, err
+	}
+	if bridge != "" {
+		sources = append(sources, bridge)
+		out.Bridged = len(configs)
+	}
 
 	classes := filepath.Join(work, "classes")
 	if err := os.MkdirAll(classes, 0o755); err != nil {
@@ -126,7 +144,17 @@ func Compile(p *Project, cp Classpath, work string) (Build, error) {
 	if err != nil {
 		return out, err
 	}
+
+	// Everything is compiled, because the reloaded classes reference the kept
+	// ones, but only the reloaded ones are packaged. A class in both would
+	// resolve from the APK anyway, so shipping it twice is dead weight that
+	// reads like a bug when the APK copy is the one that runs.
+	compiled, out.Kept = split(compiled, keep)
 	out.Classes = len(compiled)
+
+	if len(compiled) == 0 {
+		return out, fmt.Errorf("everything is kept in the APK, so there is nothing to reload")
+	}
 
 	out.Jar = filepath.Join(work, "teamcode.jar")
 	if err := writeJar(out.Jar, classes, compiled); err != nil {
@@ -247,4 +275,26 @@ func classNames(jarPath string) ([]string, error) {
 		}
 	}
 	return names, nil
+}
+
+// split separates the classes that get reloaded from the ones staying in the
+// APK.
+func split(entries []string, keep []string) (reload []string, kept int) {
+	for _, entry := range entries {
+		if inAny(entry, keep) {
+			kept++
+			continue
+		}
+		reload = append(reload, entry)
+	}
+	return reload, kept
+}
+
+func inAny(entry string, prefixes []string) bool {
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(entry, strings.TrimSuffix(prefix, "/")+"/") {
+			return true
+		}
+	}
+	return false
 }

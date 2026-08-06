@@ -86,7 +86,7 @@ type Result struct {
 
 // Reload compiles the team's code and puts it on the robot, without installing
 // anything.
-func Reload(p *Project, serial string, cp Classpath) (*Result, error) {
+func Reload(p *Project, serial string, cp Classpath, keep []string) (*Result, error) {
 	out := &Result{}
 	started := time.Now()
 
@@ -97,15 +97,22 @@ func Reload(p *Project, serial string, cp Classpath) (*Result, error) {
 	defer os.RemoveAll(work)
 
 	start := time.Now()
-	build, err := Compile(p, cp, work)
+	build, err := Compile(p, cp, work, keep)
 	if err != nil {
 		return out, err
 	}
 	out.Compile = time.Since(start)
 	out.Sources, out.Classes = build.Sources, build.Classes
+	kept := ""
+	if build.Kept > 0 {
+		kept = fmt.Sprintf(", %d kept in the APK", build.Kept)
+	}
+	if build.Bridged > 0 {
+		kept += fmt.Sprintf(", %d @Config classes bridged to FtcDashboard", build.Bridged)
+	}
 	out.Steps = append(out.Steps,
-		fmt.Sprintf("compiled %d sources into %d classes in %s",
-			build.Sources, build.Classes, out.Compile.Round(time.Millisecond)))
+		fmt.Sprintf("compiled %d sources into %d reloadable classes%s in %s",
+			build.Sources, build.Classes, kept, out.Compile.Round(time.Millisecond)))
 
 	if err := checkOpModes(build.Jar); err != nil {
 		out.Warnings = append(out.Warnings, err.Error())

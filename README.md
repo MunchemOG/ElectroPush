@@ -260,11 +260,21 @@ found; the next deploy points it back. Pick one.
 replaces whatever is currently loaded, including your team code. Deploy again
 afterwards.
 
-**Libraries that call back into your code.** Your OpModes can use pedro,
+**Libraries that go looking for your classes.** Your OpModes can use pedro,
 dashboard, ftclib and the rest normally, because those live in the APK and a
-reloaded class can see them. The reverse does not hold: a library cannot resolve
-your classes, so anything that takes a callback typed on one of your types, or
-reflects over them, fails at runtime rather than at compile time.
+reloaded class can see them. The reverse does not hold on its own: a library in
+the APK cannot resolve your classes.
+
+Pusher generates a small bridge into the reload, which the SDK runs on every
+reload through the same mechanism that finds your OpModes. It sets the thread
+context classloader, which is enough for any library that resolves classes that
+way, and hands your `@Config` classes to FtcDashboard directly, since dashboard
+scans the APK itself and would never find them. Live tuning keeps working.
+
+Checked against pedro, Panels, EasyOpenCV and blob: none of them go looking for
+classes on their own, so none of them need anything. A library that does, and
+that the bridge does not know about, can have its package kept in the APK
+instead.
 
 **`pusher slim --undo`** restores whole gradle files from backups, one of which
 holds the Pusher Extreme block. Pusher puts the block back and says so, but if

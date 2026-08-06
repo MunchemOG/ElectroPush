@@ -41,7 +41,7 @@ func tryExtreme(gradlePath, serial, apkPath string) (bool, error) {
 		return false, nil
 	}
 
-	result, err := extreme.Reload(project, serial, classpath)
+	result, err := extreme.Reload(project, serial, classpath, extreme.Kept(project.Root))
 	for _, step := range result.Steps {
 		fmt.Printf("    %s\n", step)
 	}

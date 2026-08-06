@@ -38,10 +38,12 @@ var extremeHelp = []string{
 }
 
 type extremeState struct {
-	root     string
-	set      bool
-	status   extreme.State
-	haveRoot bool
+	root      string
+	set       bool
+	status    extreme.State
+	haveRoot  bool
+	kept      []string
+	reflected extreme.Reflection
 }
 
 func (m *SettingsModel) refreshExtreme() {
@@ -55,6 +57,8 @@ func (m *SettingsModel) refreshExtreme() {
 	m.extreme.haveRoot = true
 	m.extreme.root = project.Root
 	m.extreme.set = extreme.Excluded(project.Root)
+	m.extreme.kept = extreme.Kept(project.Root)
+	m.extreme.reflected = extreme.FindReflected(project.Root)
 
 	serial := ""
 	if s, err := adb.Target(); err == nil {
@@ -115,6 +119,9 @@ func (m *SettingsModel) setUpExtreme() {
 		return
 	}
 
+	// Nothing is kept by default. @Config turns out to be common enough, and
+	// often on the OpModes themselves, that keeping everything it touches
+	// would leave most of the project unreloadable.
 	if err := extreme.Exclude(m.extreme.root); err != nil {
 		m.err = err
 		return
@@ -204,6 +211,33 @@ func (m *SettingsModel) extremeStatusLines() string {
 		fmt.Fprintf(&b, "  %s\n", scrollStyle.Render("Set up, but the next deploy will install: "+m.extreme.status.Reason))
 	}
 
+	if len(m.extreme.kept) > 0 {
+		fmt.Fprintf(&b, "  %s\n", helpStyle.Render("kept in the APK: "+strings.Join(m.extreme.kept, ", ")))
+	}
+
+	if m.extreme.reflected.Any() {
+		for _, line := range wrap(m.extreme.reflected.Summary(), 68) {
+			fmt.Fprintf(&b, "  %s\n", helpStyle.Render(line))
+		}
+	}
+
 	b.WriteString("\n")
 	return b.String()
+}
+
+// wrap breaks a line so a narrow terminal does not lose the start of it.
+func wrap(s string, width int) []string {
+	var out []string
+	for len(s) > width {
+		cut := strings.LastIndex(s[:width], " ")
+		if cut <= 0 {
+			cut = width
+		}
+		out = append(out, s[:cut])
+		s = strings.TrimSpace(s[cut:])
+	}
+	if s != "" {
+		out = append(out, s)
+	}
+	return out
 }
