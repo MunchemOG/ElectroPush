@@ -43,7 +43,7 @@ func TestBothTheJarAndTheDexAreBuilt(t *testing.T) {
 	}
 	defer tc.Cleanup()
 
-	files, err := buildAll(tc, t.TempDir(), "Pusher Reload test")
+	files, err := buildAll(tc, t.TempDir(), "Pusher Reload test", "m1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestTheOpModeCompilesToADex(t *testing.T) {
 
 	work := t.TempDir()
 
-	dex, err := buildDex(tc, work, "Pusher Reload test")
+	dex, err := buildDex(tc, work, "Pusher Reload test", "m1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,5 +203,46 @@ func TestFramesAreNotMistakenForMessages(t *testing.T) {
 
 	if isFrame("E/OnBotJavaHelperImpl( 1): java.lang.RuntimeException: boom") {
 		t.Error("the message was mistaken for a frame")
+	}
+}
+
+// The two attempts have to bind different motors, or a reload that quietly did
+// nothing would look identical to one that worked.
+func TestMotorsAlternate(t *testing.T) {
+	if len(Motors) < 2 {
+		t.Fatal("there is nothing to alternate between")
+	}
+
+	seen := map[string]bool{}
+	for _, m := range Motors {
+		if seen[m] {
+			t.Errorf("%q appears twice", m)
+		}
+		seen[m] = true
+	}
+}
+
+// The motor has to reach the compiled OpMode, or every attempt binds the same
+// one and the test proves nothing.
+func TestTheMotorNameEndsUpInTheDex(t *testing.T) {
+	tc, err := FindToolchain()
+	if err != nil {
+		t.Skip(err)
+	}
+	defer tc.Cleanup()
+
+	for _, motor := range Motors {
+		files, err := buildAll(tc, t.TempDir(), "Pusher Reload test", motor)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		data, err := os.ReadFile(files.Dex)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(data), motor) {
+			t.Errorf("%q is not in the dex", motor)
+		}
 	}
 }

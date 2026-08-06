@@ -19,15 +19,44 @@ const source = `package ` + Package + `;
 
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import com.qualcomm.robotcore.hardware.DcMotor;
 
 @TeleOp(name = "%s", group = "pusher")
 public class ` + ClassName + ` extends LinearOpMode {
+
+    private static final String MOTOR = "%s";
+
     @Override
     public void runOpMode() {
+        // Binding is the point, so a missing motor has to be reported rather
+        // than thrown: the question is whether a reloaded class can reach
+        // hardwareMap at all, which a crash on init would not answer.
+        DcMotor motor = null;
+        String status;
+        try {
+            motor = hardwareMap.get(DcMotor.class, MOTOR);
+            status = "bound";
+        } catch (Throwable t) {
+            status = t.getClass().getSimpleName() + ": " + t.getMessage();
+        }
+
+        telemetry.addData("motor", MOTOR);
+        telemetry.addData("binding", status);
+        if (motor != null) {
+            telemetry.addData("encoder", motor.getCurrentPosition());
+        }
         telemetry.addLine("Loaded from a pushed dex, without installing an APK.");
         telemetry.update();
+
         waitForStart();
+
         while (opModeIsActive()) {
+            telemetry.addData("motor", MOTOR);
+            telemetry.addData("binding", status);
+            if (motor != null) {
+                telemetry.addData("encoder", motor.getCurrentPosition());
+            }
+            telemetry.update();
             idle();
         }
     }
@@ -44,14 +73,14 @@ type built struct {
 }
 
 // buildDex compiles the OpMode and turns it into a dex.
-func buildDex(tc Toolchain, work, opModeName string) (string, error) {
+func buildDex(tc Toolchain, work, opModeName, motor string) (string, error) {
 	srcDir := filepath.Join(work, "src", filepath.FromSlash(strings.ReplaceAll(Package, ".", "/")))
 	if err := os.MkdirAll(srcDir, 0o755); err != nil {
 		return "", err
 	}
 
 	srcFile := filepath.Join(srcDir, ClassName+".java")
-	if err := os.WriteFile(srcFile, []byte(fmt.Sprintf(source, opModeName)), 0o644); err != nil {
+	if err := os.WriteFile(srcFile, []byte(fmt.Sprintf(source, opModeName, motor)), 0o644); err != nil {
 		return "", err
 	}
 
@@ -101,8 +130,8 @@ func buildDex(tc Toolchain, work, opModeName string) (string, error) {
 }
 
 // buildAll produces the jar and the dex the robot controller needs.
-func buildAll(tc Toolchain, work, opModeName string) (built, error) {
-	dex, err := buildDex(tc, work, opModeName)
+func buildAll(tc Toolchain, work, opModeName, motor string) (built, error) {
+	dex, err := buildDex(tc, work, opModeName, motor)
 	if err != nil {
 		return built{}, err
 	}

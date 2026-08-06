@@ -30,7 +30,7 @@ var devItems = []string{
 	"Benchmark the deploy",
 	"Hot reload feasibility",
 	"Both, with a full report",
-	"Try a real hot reload",
+	"Hot reload an OpMode",
 	"Remove the hot reload proof",
 	"Exit",
 }
@@ -46,9 +46,10 @@ var devHelp = []string{
 	"Runs both and writes a report covering what each setting does, plus\n" +
 		"Sloth's published figures for context.",
 
-	"Compiles one OpMode here, pushes the dex to the hub and touches the\n" +
-		"file the robot controller watches. If it appears on the Driver\n" +
-		"Station, an OpMode reached the robot without installing an APK.",
+	"Compiles an OpMode here, pushes it to the hub and tells the robot\n" +
+		"controller to rescan. The OpMode binds a motor by name and shows its\n" +
+		"encoder, and each run alternates between m1 and m2, so a reload is\n" +
+		"proved by the binding changing rather than by the code merely running.",
 
 	"Deletes the pushed dex and tells the robot controller to rescan.",
 
@@ -428,10 +429,11 @@ func (m *devModel) tryReload() tea.Cmd {
 	// every launch, so a counter restarts at one and two runs look identical
 	// on the Driver Station.
 	serial, marker := m.serial, time.Now().Format("15:04:05")
+	motor := hotreload.NextMotor(serial)
 
 	work := func() tea.Msg {
-		post("compiling an OpMode")
-		result := hotreload.Run(serial, marker)
+		post("compiling an OpMode that binds " + motor)
+		result := hotreload.Run(serial, marker, motor)
 		if result.Err != nil {
 			return reloadDoneMsg{result: result, err: result.Err}
 		}
@@ -511,6 +513,8 @@ func (m *devModel) viewDevReload() string {
 	b.WriteString("\n  " + okStyle.Render("Now look at the Driver Station.") + "\n\n")
 	fmt.Fprintf(&b, "  Look for an OpMode called %s in the TeleOp list.\n",
 		valueStyle.Render(`"`+r.OpModeName+`"`))
+	fmt.Fprintf(&b, "  Run it: it binds the motor named %s and shows its encoder.\n",
+		valueStyle.Render(r.Motor))
 
 	if r.ColdStart {
 		b.WriteString("\n  " + scrollStyle.Render("First run on this hub, so a restart is needed once.") + "\n")
@@ -525,6 +529,8 @@ func (m *devModel) viewDevReload() string {
 	b.WriteString("\n  " + helpStyle.Render("Changed: a live reload, no install and no restart.") + "\n")
 	b.WriteString("  " + helpStyle.Render("Only after a restart: the files are found but the watch is not firing.") + "\n")
 	b.WriteString("  " + helpStyle.Render("Never: the files are not where the SDK reads them.") + "\n")
+	b.WriteString("\n  " + helpStyle.Render("Run this again and it switches to the other motor, so the binding") + "\n")
+	b.WriteString("  " + helpStyle.Render("changing is what proves the class was replaced.") + "\n")
 
 	b.WriteString("\n" + helpStyle.Render("  esc back") + "\n")
 	return b.String()

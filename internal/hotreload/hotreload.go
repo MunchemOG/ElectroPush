@@ -70,9 +70,44 @@ const ClassName = "PusherReloadProof"
 // ProofName is what the pushed files are called on the hub.
 const ProofName = "pusher-reload-proof"
 
+// MotorFile records which motor the deployed build binds, so the next attempt
+// can pick the other one. It lives beside the files it describes.
+const MotorFile = "motor.txt"
+
+// Motors are alternated between attempts. Binding a different motor after a
+// reload is what proves the class is genuinely new rather than a cached one
+// that happens to still work.
+var Motors = []string{"m1", "m2"}
+
+// NextMotor returns the motor the next attempt should bind.
+func NextMotor(serial string) string {
+	current := deployedMotor(serial)
+	for i, m := range Motors {
+		if m == current {
+			return Motors[(i+1)%len(Motors)]
+		}
+	}
+	return Motors[0]
+}
+
+// deployedMotor reads what the build currently on the hub binds.
+func deployedMotor(serial string) string {
+	dir := currentOutputDir(serial)
+	if dir == "" {
+		return ""
+	}
+
+	out, err := adb.Shell(serial, "cat", shellQuote(dir+"/"+MotorFile), "2>/dev/null")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimRight(out, "\r\n"))
+}
+
 // Result is what the experiment did.
 type Result struct {
 	OpModeName string
+	Motor      string
 	DexBytes   int64
 	JarBytes   int64
 	RemoteDir  string
@@ -265,8 +300,11 @@ func exeName(name string) string {
 // marker distinguishes one attempt from the next: it goes into the OpMode's
 // displayed name, so seeing it change on the Driver Station is what proves a
 // reload rather than a first load.
-func Run(serial, marker string) *Result {
-	out := &Result{OpModeName: "Pusher Reload " + marker}
+func Run(serial, marker, motor string) *Result {
+	out := &Result{
+		OpModeName: "Pusher Reload " + marker + " " + motor,
+		Motor:      motor,
+	}
 
 	tc, err := FindToolchain()
 	if err != nil {
@@ -290,7 +328,7 @@ func Run(serial, marker string) *Result {
 	defer os.RemoveAll(work)
 
 	start := time.Now()
-	files, err := buildAll(tc, work, out.OpModeName)
+	files, err := buildAll(tc, work, out.OpModeName, motor)
 	if err != nil {
 		out.Err = err
 		return out
@@ -332,6 +370,15 @@ func Run(serial, marker string) *Result {
 	}
 	out.Push = time.Since(start)
 	out.step("pushed the jar and the dex in %s", out.Push.Round(time.Millisecond))
+
+	// Recorded beside the files so the next attempt knows which motor this
+	// build binds. `pusher dev` is a fresh process each time and cannot
+	// remember on its own.
+	if err := pushTextAtomic(serial, motor, dir+"/"+MotorFile); err != nil {
+		out.Err = err
+		return out
+	}
+	out.step("this build binds the motor named %s", motor)
 
 	// Point the SDK at the new directory only once both files are there, or a
 	// reload could fire against a directory that is half written.
