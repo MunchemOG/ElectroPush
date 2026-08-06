@@ -164,3 +164,24 @@ func TestEachAttemptGetsItsOwnDirectory(t *testing.T) {
 		}
 	}
 }
+
+// A stack trace leads with the exception and its message; the frames under it
+// only say where it was called from. Keeping the tail keeps the useless half,
+// which is what happened the first time a real failure was captured.
+func TestTheLogKeepsTheExceptionNotTheFrames(t *testing.T) {
+	lines := []string{
+		"I/OnBotJava( 1): starting",
+		"E/OnBotJavaHelperImpl( 1): java.io.FileNotFoundException: something.jar",
+		"E/OnBotJavaHelperImpl( 1):     at java.util.jar.JarFile.<init>",
+		"E/OnBotJavaHelperImpl( 1):     at org.firstinspires.ftc.onbotjava.OnBotJavaHelperImpl",
+	}
+
+	kept := headOfError(lines)
+
+	if len(kept) == 0 {
+		t.Fatal("nothing kept")
+	}
+	if !strings.Contains(kept[0], "FileNotFoundException") {
+		t.Errorf("the exception is not first, got %q", kept[0])
+	}
+}

@@ -477,7 +477,7 @@ func (m *devModel) viewDevReload() string {
 	if log := r.Diagnosis.Log; len(log) > 0 {
 		b.WriteString("\n  " + helpStyle.Render("What the robot said while reloading:") + "\n")
 		for _, line := range log {
-			fmt.Fprintf(&b, "    %s\n", helpStyle.Render(trim(line, 100)))
+			fmt.Fprintf(&b, "    %s\n", helpStyle.Render(trim(line, 160)))
 		}
 	}
 

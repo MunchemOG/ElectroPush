@@ -40,8 +40,14 @@ var interesting = []string{
 }
 
 // CaptureLog returns the lines from the app that bear on the reload.
+//
+// The head, not the tail. A stack trace puts the exception type and message on
+// its first line and the call chain under it, so keeping the last N lines keeps
+// only the part that says where it was called from and throws away the part
+// that says what went wrong. The log is cleared before the attempt, so the
+// first matching lines are the right ones.
 func CaptureLog(serial string) []string {
-	out, err := adb.Shell(serial, "logcat", "-d", "-v", "brief", "-t", "400", "2>/dev/null")
+	out, err := adb.Shell(serial, "logcat", "-d", "-v", "brief", "-t", "600", "2>/dev/null")
 	if err != nil {
 		return nil
 	}
@@ -60,11 +66,28 @@ func CaptureLog(serial string) []string {
 		}
 	}
 
-	// Only the tail matters; the reload is the last thing that happened.
-	if len(kept) > 40 {
-		kept = kept[len(kept)-40:]
+	return headOfError(kept)
+}
+
+// headOfError starts the capture at the first line that is not a stack frame,
+// so the exception and its message lead rather than being trimmed away.
+func headOfError(lines []string) []string {
+	for i, line := range lines {
+		if !strings.Contains(line, "E/") {
+			continue
+		}
+		if trimmed := strings.TrimSpace(line); strings.Contains(trimmed, ") at ") ||
+			strings.Contains(line, ":     at ") || strings.Contains(line, ": \tat ") {
+			continue
+		}
+		lines = lines[i:]
+		break
 	}
-	return kept
+
+	if len(lines) > 30 {
+		lines = lines[:30]
+	}
+	return lines
 }
 
 func (d *Diagnosis) find(format string, args ...any) {
