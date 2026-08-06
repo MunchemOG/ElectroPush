@@ -2,6 +2,7 @@ package hotreload
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/andreibanu/pusher/internal/adb"
@@ -16,10 +17,13 @@ type Diagnosis struct {
 	OnHub     []string
 	Findings  []string
 	Crash     string
-	// Log is what the app said while it was reloading. Guessing at why a
-	// re-registration produced nothing is a good way to be wrong twice; the
-	// app writes the reason down.
-	Log []string
+	// Exception is the one line worth reading: the type and message. The
+	// frames under it only say the event loop called it, which is already
+	// known.
+	Exception string
+	// LogPath is the whole log, unfiltered, written where it can be read
+	// without a terminal scrolling it away.
+	LogPath string
 }
 
 // OK reports whether anything looked wrong.
@@ -39,55 +43,68 @@ var interesting = []string{
 	"rejecting", "Rejecting", "dex", "Dex",
 }
 
-// CaptureLog returns the lines from the app that bear on the reload.
+// CaptureLog saves the whole log and picks out the one line worth reading.
 //
-// The head, not the tail. A stack trace puts the exception type and message on
-// its first line and the call chain under it, so keeping the last N lines keeps
-// only the part that says where it was called from and throws away the part
-// that says what went wrong. The log is cleared before the attempt, so the
-// first matching lines are the right ones.
-func CaptureLog(serial string) []string {
-	out, err := adb.Shell(serial, "logcat", "-d", "-v", "brief", "-t", "600", "2>/dev/null")
+// The whole trace goes to a file rather than the screen. A menu that does not
+// scroll turns thirty lines of stack frames into "the bottom of a stack trace",
+// which is the half that says the event loop called it.
+func CaptureLog(serial string) (exception, path string) {
+	out, err := adb.Shell(serial, "logcat", "-d", "-v", "brief", "-t", "800", "2>/dev/null")
 	if err != nil {
-		return nil
+		return "", ""
 	}
 
-	var kept []string
-	for _, line := range strings.Split(out, "\n") {
-		line = strings.TrimSpace(strings.TrimRight(line, "\r"))
-		if line == "" {
-			continue
-		}
-		for _, want := range interesting {
-			if strings.Contains(line, want) {
-				kept = append(kept, line)
-				break
-			}
-		}
-	}
+	path = saveLog(out)
 
-	return headOfError(kept)
+	return firstException(strings.Split(out, "\n")), path
 }
 
-// headOfError starts the capture at the first line that is not a stack frame,
-// so the exception and its message lead rather than being trimmed away.
-func headOfError(lines []string) []string {
-	for i, line := range lines {
-		if !strings.Contains(line, "E/") {
-			continue
-		}
-		if trimmed := strings.TrimSpace(line); strings.Contains(trimmed, ") at ") ||
-			strings.Contains(line, ":     at ") || strings.Contains(line, ": \tat ") {
-			continue
-		}
-		lines = lines[i:]
-		break
+// isFrame reports whether a log line is a stack frame rather than the message
+// above it.
+func isFrame(line string) bool {
+	rest := line
+	if i := strings.Index(line, "): "); i >= 0 {
+		rest = line[i+3:]
 	}
+	return strings.HasPrefix(strings.TrimSpace(rest), "at ") ||
+		strings.HasPrefix(strings.TrimSpace(rest), "... ")
+}
 
-	if len(lines) > 30 {
-		lines = lines[:30]
+// firstException finds the exception a trace leads with.
+func firstException(lines []string) string {
+	for _, line := range lines {
+		line = strings.TrimSpace(strings.TrimRight(line, "\r"))
+		if line == "" || isFrame(line) {
+			continue
+		}
+		if !strings.Contains(line, "E/") && !strings.Contains(line, "W/") {
+			continue
+		}
+
+		// A message with an exception in it is what is being looked for; a
+		// plain error line without one is not the trace header.
+		if strings.Contains(line, "Exception") || strings.Contains(line, "Error") ||
+			strings.Contains(line, "Caused by") {
+			if i := strings.Index(line, "): "); i >= 0 {
+				return strings.TrimSpace(line[i+3:])
+			}
+			return line
+		}
 	}
-	return lines
+	return ""
+}
+
+func saveLog(out string) string {
+	file, err := os.CreateTemp("", "pusher-reload-log-*.txt")
+	if err != nil {
+		return ""
+	}
+	defer file.Close()
+
+	if _, err := file.WriteString(out); err != nil {
+		return ""
+	}
+	return file.Name()
 }
 
 func (d *Diagnosis) find(format string, args ...any) {

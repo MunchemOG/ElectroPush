@@ -474,11 +474,14 @@ func (m *devModel) viewDevReload() string {
 		fmt.Fprintf(&b, "  %s\n", helpStyle.Render(step))
 	}
 
-	if log := r.Diagnosis.Log; len(log) > 0 {
-		b.WriteString("\n  " + helpStyle.Render("What the robot said while reloading:") + "\n")
-		for _, line := range log {
-			fmt.Fprintf(&b, "    %s\n", helpStyle.Render(trim(line, 160)))
+	if e := r.Diagnosis.Exception; e != "" {
+		b.WriteString("\n  " + errStyle.Render("The robot threw while reloading:") + "\n")
+		for _, line := range wrapAt(e, 92) {
+			fmt.Fprintf(&b, "    %s\n", errStyle.Render(line))
 		}
+	}
+	if p := r.Diagnosis.LogPath; p != "" {
+		fmt.Fprintf(&b, "  %s\n", helpStyle.Render("full log: "+p))
 	}
 
 	if d := r.Diagnosis; !d.OK() {
@@ -529,4 +532,22 @@ func trim(s string, n int) string {
 		return s
 	}
 	return s[:n] + "..."
+}
+
+// wrapAt breaks a long message so a narrow terminal does not scroll the start
+// of it away.
+func wrapAt(s string, width int) []string {
+	var out []string
+	for len(s) > width {
+		cut := strings.LastIndex(s[:width], " ")
+		if cut <= 0 {
+			cut = width
+		}
+		out = append(out, s[:cut])
+		s = strings.TrimSpace(s[cut:])
+	}
+	if s != "" {
+		out = append(out, s)
+	}
+	return out
 }

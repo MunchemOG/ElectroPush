@@ -355,7 +355,7 @@ func Run(serial, marker string) *Result {
 	time.Sleep(3 * time.Second)
 
 	out.Diagnosis = Diagnose(serial)
-	out.Diagnosis.Log = CaptureLog(serial)
+	out.Diagnosis.Exception, out.Diagnosis.LogPath = CaptureLog(serial)
 	if out.Diagnosis.Package != "" {
 		out.step("robot controller: %s", out.Diagnosis.Package)
 	}

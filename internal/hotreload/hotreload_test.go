@@ -166,22 +166,42 @@ func TestEachAttemptGetsItsOwnDirectory(t *testing.T) {
 }
 
 // A stack trace leads with the exception and its message; the frames under it
-// only say where it was called from. Keeping the tail keeps the useless half,
-// which is what happened the first time a real failure was captured.
-func TestTheLogKeepsTheExceptionNotTheFrames(t *testing.T) {
+// only say the event loop called it, which is already known. Two attempts at
+// reading a real failure returned nothing but frames.
+func TestTheExceptionIsPickedOutOfTheFrames(t *testing.T) {
 	lines := []string{
 		"I/OnBotJava( 1): starting",
-		"E/OnBotJavaHelperImpl( 1): java.io.FileNotFoundException: something.jar",
-		"E/OnBotJavaHelperImpl( 1):     at java.util.jar.JarFile.<init>",
-		"E/OnBotJavaHelperImpl( 1):     at org.firstinspires.ftc.onbotjava.OnBotJavaHelperImpl",
+		"E/OnBotJavaHelperImpl( 1): java.io.FileNotFoundException: something.jar (No such file)",
+		"E/OnBotJavaHelperImpl( 1):     at java.util.jar.JarFile.<init>(JarFile.java:1)",
+		"E/OnBotJavaHelperImpl( 1):     at org.firstinspires.ftc.onbotjava.OnBotJavaHelperImpl.x(Y.java:2)",
+		"V/RegisteredOpModes( 1): noting that OnBotJava changed",
 	}
 
-	kept := headOfError(lines)
+	got := firstException(lines)
 
-	if len(kept) == 0 {
-		t.Fatal("nothing kept")
+	if !strings.Contains(got, "FileNotFoundException") {
+		t.Errorf("got %q", got)
 	}
-	if !strings.Contains(kept[0], "FileNotFoundException") {
-		t.Errorf("the exception is not first, got %q", kept[0])
+	// The tag and pid are noise once the message is isolated.
+	if strings.Contains(got, "E/OnBotJavaHelperImpl") {
+		t.Errorf("the tag was not stripped: %q", got)
+	}
+}
+
+// Every line of a trace matches the tag filter, so frames have to be told from
+// the message by shape rather than by tag.
+func TestFramesAreNotMistakenForMessages(t *testing.T) {
+	for _, frame := range []string{
+		"E/OnBotJavaHelperImpl( 1798):     at java.lang.Thread.run(Thread.java:761)",
+		"E/X( 1): \tat com.example.Thing.method(Thing.java:1)",
+		"E/X( 1):     ... 3 more",
+	} {
+		if !isFrame(frame) {
+			t.Errorf("%q was not recognised as a stack frame", frame)
+		}
+	}
+
+	if isFrame("E/OnBotJavaHelperImpl( 1): java.lang.RuntimeException: boom") {
+		t.Error("the message was mistaken for a frame")
 	}
 }
