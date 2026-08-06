@@ -335,6 +335,11 @@ func Run(serial, marker, motor string) *Result {
 	}
 	out.Compile = time.Since(start)
 
+	if err := verifyLocal(files); err != nil {
+		out.Err = err
+		return out
+	}
+
 	if info, err := os.Stat(files.Dex); err == nil {
 		out.DexBytes = info.Size()
 	}
@@ -380,6 +385,14 @@ func Run(serial, marker, motor string) *Result {
 	}
 	out.step("this build binds the motor named %s", motor)
 
+	// Nothing is triggered until both files are known to have arrived whole.
+	// One short file empties the OpMode list rather than being skipped.
+	if err := verifyOnHub(serial, dir, files); err != nil {
+		out.Err = err
+		return out
+	}
+	out.step("both files verified on the hub")
+
 	// Point the SDK at the new directory only once both files are there, or a
 	// reload could fire against a directory that is half written.
 	if err := writePointer(serial, dir); err != nil {
@@ -389,6 +402,11 @@ func Run(serial, marker, motor string) *Result {
 	out.step("pointed %s at it", PointerFile)
 
 	clearOldDirs(serial, dir)
+
+	if err := noEmptyFiles(serial); err != nil {
+		out.Err = err
+		return out
+	}
 
 	if err := trigger(serial); err != nil {
 		out.Err = err
