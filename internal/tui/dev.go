@@ -494,9 +494,9 @@ func (m *devModel) viewDevReload() string {
 		}
 		if d.OutputDir != "" {
 			fmt.Fprintf(&b, "\n  %s\n", helpStyle.Render("directory the SDK reads: "+d.OutputDir))
-			for _, line := range d.OnHub {
-				fmt.Fprintf(&b, "    %s\n", helpStyle.Render(trim(line, 96)))
-			}
+		}
+		for _, line := range d.Tree {
+			fmt.Fprintf(&b, "    %s\n", helpStyle.Render(trim(line, 96)))
 		}
 		if d.Crash != "" {
 			b.WriteString("\n  " + helpStyle.Render("Most recent crash:") + "\n")

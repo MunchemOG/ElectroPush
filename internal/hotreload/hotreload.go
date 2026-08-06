@@ -306,6 +306,8 @@ func Run(serial, marker string) *Result {
 	out.step("built a %d byte jar and a %d byte dex in %s",
 		out.JarBytes, out.DexBytes, out.Compile.Round(time.Millisecond))
 
+	clearEmpty(serial)
+
 	dir, err := newOutputDir(serial, marker)
 	if err != nil {
 		out.Err = err
@@ -320,11 +322,11 @@ func Run(serial, marker string) *Result {
 	// The jar is what gets the class name discovered, the dex is what loads it.
 	// Both, or nothing happens.
 	start = time.Now()
-	if err := adb.Push(serial, files.Jar, out.RemoteJar); err != nil {
+	if err := pushAtomic(serial, files.Jar, out.RemoteJar); err != nil {
 		out.Err = fmt.Errorf("cannot push the jar: %w", err)
 		return out
 	}
-	if err := adb.Push(serial, files.Dex, out.RemoteDex); err != nil {
+	if err := pushAtomic(serial, files.Dex, out.RemoteDex); err != nil {
 		out.Err = fmt.Errorf("cannot push the dex: %w", err)
 		return out
 	}
@@ -376,6 +378,14 @@ func newOutputDir(serial, marker string) (string, error) {
 	return dir, nil
 }
 
+// clearEmpty removes zero-length files under the output root.
+//
+// A half-finished transfer leaves one, and the SDK opens everything in there as
+// a zip, so one empty file stops the whole reload rather than being skipped.
+func clearEmpty(serial string) {
+	_, _ = adb.Shell(serial, "find", OutputRoot, "-type", "f", "-size", "0", "-delete", "2>/dev/null")
+}
+
 // clearOldDirs removes previous attempts, leaving the current one and anything
 // this tool did not create.
 func clearOldDirs(serial, keep string) {
@@ -420,7 +430,29 @@ func writePointer(serial, dir string) error {
 	if _, err := adb.Shell(serial, "mkdir", "-p", JavaDir+"/status"); err != nil {
 		return fmt.Errorf("cannot create the status directory: %w", err)
 	}
-	return pushText(serial, dir, PointerFile)
+	return pushTextAtomic(serial, dir, PointerFile)
+}
+
+// pushAtomic puts a file in place under a name the SDK scans only once it is
+// complete.
+//
+// adb push creates the destination at zero length and streams into it, so for
+// as long as the transfer lasts there is a file with the right name and no
+// contents. A reload landing in that window opens it and throws
+// "File too short to be a zip file: 0". Writing under a temporary name and
+// renaming closes the window, since a rename within one filesystem is atomic.
+func pushAtomic(serial, local, remote string) error {
+	staging := remote + ".incoming"
+
+	if err := adb.Push(serial, local, staging); err != nil {
+		return err
+	}
+
+	if _, err := adb.Shell(serial, "mv", "-f", shellQuote(staging), shellQuote(remote)); err != nil {
+		_, _ = adb.Shell(serial, "rm", "-f", shellQuote(staging))
+		return fmt.Errorf("cannot move %s into place: %w", remote, err)
+	}
+	return nil
 }
 
 // pushText writes exact bytes to a path on the hub.
@@ -429,7 +461,7 @@ func writePointer(serial, dir string) error {
 // adb's argument joining and the device shell, and a path with a slash in it
 // comes out differently at each layer. Pushing a file is the same route the jar
 // and the dex take, and that one demonstrably arrives intact.
-func pushText(serial, content, remote string) error {
+func pushTextAtomic(serial, content, remote string) error {
 	local, err := os.CreateTemp("", "pusher-write-*")
 	if err != nil {
 		return err
@@ -444,7 +476,7 @@ func pushText(serial, content, remote string) error {
 		return err
 	}
 
-	if err := adb.Push(serial, local.Name(), remote); err != nil {
+	if err := pushAtomic(serial, local.Name(), remote); err != nil {
 		return fmt.Errorf("cannot write %s: %w", remote, err)
 	}
 	return nil
@@ -467,7 +499,7 @@ func trigger(serial string) error {
 	if _, err := adb.Shell(serial, "mkdir", "-p", JavaDir+"/status"); err != nil {
 		return fmt.Errorf("cannot create the status directory: %w", err)
 	}
-	return pushText(serial, time.Now().Format(time.RFC3339)+"\n", TriggerFile)
+	return pushTextAtomic(serial, time.Now().Format(time.RFC3339)+"\n", TriggerFile)
 }
 
 // Clean removes what the experiment left on the robot.

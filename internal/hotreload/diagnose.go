@@ -15,7 +15,9 @@ type Diagnosis struct {
 	Package   string
 	OutputDir string
 	// Pointer is what the pointer file actually contains, read back.
-	Pointer  string
+	Pointer string
+	// Tree is everything under the output root with sizes.
+	Tree     []string
 	OnHub    []string
 	Findings []string
 	Crash    string
@@ -140,6 +142,16 @@ func Diagnose(serial string) Diagnosis {
 		}
 	}
 	d.OutputDir = dir
+
+	// The whole tree, with sizes: a zero-length file anywhere under here stops
+	// the reload, and it will not be in the directory just written.
+	if out, err := adb.Shell(serial, "ls", "-lR", OutputRoot, "2>/dev/null"); err == nil {
+		for _, line := range strings.Split(out, "\n") {
+			if line = strings.TrimSpace(strings.TrimRight(line, "\r")); line != "" {
+				d.Tree = append(d.Tree, line)
+			}
+		}
+	}
 
 	if out, err := adb.Shell(serial, "ls", "-l", shellQuote(dir), "2>/dev/null"); err == nil {
 		for _, line := range strings.Split(out, "\n") {
