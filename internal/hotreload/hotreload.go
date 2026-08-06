@@ -278,6 +278,10 @@ func Run(serial, marker string) *Result {
 
 	out.ColdStart = !statusDirExists(serial)
 
+	// Clear the log before anything happens, so what comes back afterwards is
+	// the reload and nothing else.
+	ClearLog(serial)
+
 	work, err := os.MkdirTemp("", "pusher-reload-*")
 	if err != nil {
 		out.Err = err
@@ -347,7 +351,11 @@ func Run(serial, marker string) *Result {
 		out.step("%s did not exist, so the app is not watching it yet", JavaDir+"/status")
 	}
 
+	// The event loop picks the change up on its next tick, so give it one.
+	time.Sleep(3 * time.Second)
+
 	out.Diagnosis = Diagnose(serial)
+	out.Diagnosis.Log = CaptureLog(serial)
 	if out.Diagnosis.Package != "" {
 		out.step("robot controller: %s", out.Diagnosis.Package)
 	}

@@ -16,10 +16,56 @@ type Diagnosis struct {
 	OnHub     []string
 	Findings  []string
 	Crash     string
+	// Log is what the app said while it was reloading. Guessing at why a
+	// re-registration produced nothing is a good way to be wrong twice; the
+	// app writes the reason down.
+	Log []string
 }
 
 // OK reports whether anything looked wrong.
 func (d Diagnosis) OK() bool { return len(d.Findings) == 0 && d.Crash == "" }
+
+// ClearLog drops what is already in the log, so what is captured afterwards is
+// only the reload.
+func ClearLog(serial string) {
+	_, _ = adb.Shell(serial, "logcat", "-c", "2>/dev/null")
+}
+
+// interesting are the tags and messages that explain a reload finding nothing.
+var interesting = []string{
+	"pusherproof", ClassName,
+	"OnBotJava", "ClassManager", "RegisteredOpModes", "OpModeMeta",
+	"NoClassDefFound", "ClassNotFound", "UnsupportedClassVersion",
+	"rejecting", "Rejecting", "dex", "Dex",
+}
+
+// CaptureLog returns the lines from the app that bear on the reload.
+func CaptureLog(serial string) []string {
+	out, err := adb.Shell(serial, "logcat", "-d", "-v", "brief", "-t", "400", "2>/dev/null")
+	if err != nil {
+		return nil
+	}
+
+	var kept []string
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(strings.TrimRight(line, "\r"))
+		if line == "" {
+			continue
+		}
+		for _, want := range interesting {
+			if strings.Contains(line, want) {
+				kept = append(kept, line)
+				break
+			}
+		}
+	}
+
+	// Only the tail matters; the reload is the last thing that happened.
+	if len(kept) > 40 {
+		kept = kept[len(kept)-40:]
+	}
+	return kept
+}
 
 func (d *Diagnosis) find(format string, args ...any) {
 	d.Findings = append(d.Findings, fmt.Sprintf(format, args...))
