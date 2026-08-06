@@ -52,7 +52,12 @@ var interesting = []string{
 // The whole trace goes to a file rather than the screen. A menu that does not
 // scroll turns thirty lines of stack frames into "the bottom of a stack trace",
 // which is the half that says the event loop called it.
-func CaptureLog(serial string) (exception, path string) {
+//
+// Only the robot controller's own process is considered. The commands this
+// tool runs over adb are processes of their own and log their own noise as
+// they exit, and reporting that as "the robot threw" is worse than reporting
+// nothing.
+func CaptureLog(serial, pkg string) (exception, path string) {
 	out, err := adb.Shell(serial, "logcat", "-d", "-v", "brief", "-t", "800", "2>/dev/null")
 	if err != nil {
 		return "", ""
@@ -60,7 +65,60 @@ func CaptureLog(serial string) (exception, path string) {
 
 	path = saveLog(out)
 
-	return firstException(strings.Split(out, "\n")), path
+	lines := strings.Split(out, "\n")
+	if pid := processID(serial, pkg); pid != "" {
+		lines = onlyFrom(lines, pid)
+	}
+
+	return firstException(lines), path
+}
+
+// processID is the robot controller's pid, empty when it cannot be found.
+func processID(serial, pkg string) string {
+	if pkg == "" {
+		return ""
+	}
+
+	out, err := adb.Shell(serial, "pidof", pkg, "2>/dev/null")
+	if err != nil {
+		return ""
+	}
+
+	// pidof can return several; the first is the one that matters.
+	fields := strings.Fields(strings.TrimSpace(out))
+	if len(fields) == 0 {
+		return ""
+	}
+	return fields[0]
+}
+
+// onlyFrom keeps the lines logged by one process.
+//
+// The brief format is "T/Tag( 1234): message" with the pid padded to a fixed
+// width, so the number is read out rather than matched against a fixed shape.
+func onlyFrom(lines []string, pid string) []string {
+	var kept []string
+	for _, line := range lines {
+		if pidOf(line) == pid {
+			kept = append(kept, line)
+		}
+	}
+	return kept
+}
+
+// pidOf reads the process id out of a log line, empty when there is not one.
+func pidOf(line string) string {
+	open := strings.IndexByte(line, '(')
+	if open < 0 {
+		return ""
+	}
+
+	closing := strings.IndexByte(line[open:], ')')
+	if closing < 0 {
+		return ""
+	}
+
+	return strings.TrimSpace(line[open+1 : open+closing])
 }
 
 // isFrame reports whether a log line is a stack frame rather than the message
@@ -81,7 +139,7 @@ func firstException(lines []string) string {
 		if line == "" || isFrame(line) {
 			continue
 		}
-		if !strings.Contains(line, "E/") && !strings.Contains(line, "W/") {
+		if !strings.Contains(line, "E/") {
 			continue
 		}
 

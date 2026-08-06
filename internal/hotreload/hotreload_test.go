@@ -246,3 +246,38 @@ func TestTheMotorNameEndsUpInTheDex(t *testing.T) {
 		}
 	}
 }
+
+// Every adb command is a process of its own and logs its own noise as it exits.
+// A warning from `pm list packages` shutting down was reported as "the robot
+// threw while reloading", which sends the next hour in the wrong direction.
+func TestOnlyTheRobotControllersProcessIsRead(t *testing.T) {
+	lines := []string{
+		"D/AndroidRuntime( 2713): Calling main entry com.android.commands.pm.Pm",
+		"W/MessageQueue( 2713): java.lang.IllegalStateException: dead thread",
+		"E/OnBotJavaHelperImpl(  976): java.util.zip.ZipException: the real one",
+	}
+
+	kept := onlyFrom(lines, "976")
+
+	if len(kept) != 1 {
+		t.Fatalf("got %d lines, want only the app's: %v", len(kept), kept)
+	}
+	if !strings.Contains(firstException(kept), "ZipException") {
+		t.Errorf("got %q", firstException(kept))
+	}
+
+	// And a warning is not an exception even inside the right process.
+	if got := firstException([]string{"W/X(  976): java.lang.IllegalStateException: noise"}); got != "" {
+		t.Errorf("a warning was reported as a throw: %q", got)
+	}
+
+	// The pid is padded to a fixed width, so it has to be read rather than
+	// matched against one shape.
+	for _, line := range []string{
+		"E/Tag(  976): x", "E/Tag( 976): x", "E/Tag(976): x", "E/Tag(    976): x",
+	} {
+		if got := pidOf(line); got != "976" {
+			t.Errorf("pidOf(%q) = %q", line, got)
+		}
+	}
+}

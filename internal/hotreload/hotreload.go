@@ -404,7 +404,7 @@ func Run(serial, marker, motor string) *Result {
 	time.Sleep(3 * time.Second)
 
 	out.Diagnosis = Diagnose(serial)
-	out.Diagnosis.Exception, out.Diagnosis.LogPath = CaptureLog(serial)
+	out.Diagnosis.Exception, out.Diagnosis.LogPath = CaptureLog(serial, out.Diagnosis.Package)
 	if out.Diagnosis.Package != "" {
 		out.step("robot controller: %s", out.Diagnosis.Package)
 	}
