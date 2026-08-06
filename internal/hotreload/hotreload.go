@@ -62,6 +62,9 @@ type Result struct {
 
 	Steps []string
 	Err   error
+
+	// Diagnosis is why nothing appeared, when nothing appears.
+	Diagnosis Diagnosis
 }
 
 func (r *Result) step(format string, args ...any) {
@@ -297,6 +300,11 @@ func Run(serial, marker string) *Result {
 		return out
 	}
 	out.step("touched %s", TriggerFile)
+
+	out.Diagnosis = Diagnose(serial)
+	if out.Diagnosis.Package != "" {
+		out.step("robot controller: %s", out.Diagnosis.Package)
+	}
 
 	return out
 }

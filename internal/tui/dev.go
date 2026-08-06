@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -68,7 +67,6 @@ type devModel struct {
 
 	busy    string
 	reload  *hotreload.Result
-	attempt int
 	started time.Time
 	elapsed time.Duration
 	report  string
@@ -422,12 +420,14 @@ func (m *devModel) tryReload() tea.Cmd {
 		return nil
 	}
 
-	m.attempt++
 	m.busy = "compiling an OpMode"
 	m.started = time.Now()
 	m.elapsed = 0
 
-	serial, marker := m.serial, strconv.Itoa(m.attempt)
+	// The marker is the clock, not a counter: `pusher dev` is a fresh process
+	// every launch, so a counter restarts at one and two runs look identical
+	// on the Driver Station.
+	serial, marker := m.serial, time.Now().Format("15:04:05")
 
 	work := func() tea.Msg {
 		post("compiling an OpMode")
@@ -474,6 +474,21 @@ func (m *devModel) viewDevReload() string {
 		fmt.Fprintf(&b, "  %s\n", helpStyle.Render(step))
 	}
 
+	if d := r.Diagnosis; !d.OK() {
+		b.WriteString("\n  " + errStyle.Render("Something is wrong on the robot:") + "\n")
+		for _, finding := range d.Findings {
+			fmt.Fprintf(&b, "    %s\n", errStyle.Render(finding))
+		}
+		if d.Crash != "" {
+			b.WriteString("\n  " + helpStyle.Render("Most recent crash:") + "\n")
+			for _, line := range strings.Split(d.Crash, "\n") {
+				fmt.Fprintf(&b, "    %s\n", helpStyle.Render(trim(line, 96)))
+			}
+		}
+		b.WriteString("\n" + helpStyle.Render("  esc back") + "\n")
+		return b.String()
+	}
+
 	b.WriteString("\n  " + okStyle.Render("Now look at the Driver Station.") + "\n\n")
 	fmt.Fprintf(&b, "  Look for an OpMode called %s in the TeleOp list.\n",
 		valueStyle.Render(`"`+r.OpModeName+`"`))
@@ -485,4 +500,11 @@ func (m *devModel) viewDevReload() string {
 
 	b.WriteString("\n" + helpStyle.Render("  esc back") + "\n")
 	return b.String()
+}
+
+func trim(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "..."
 }
