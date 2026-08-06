@@ -45,12 +45,17 @@ const Package = "org.firstinspires.ftc.pusherproof"
 // ClassName is the OpMode that gets built.
 const ClassName = "PusherReloadProof"
 
+// ProofName is what the pushed files are called on the hub.
+const ProofName = "pusher-reload-proof"
+
 // Result is what the experiment did.
 type Result struct {
 	OpModeName string
 	DexBytes   int64
+	JarBytes   int64
 	RemoteDir  string
-	RemotePath string
+	RemoteDex  string
+	RemoteJar  string
 
 	Compile time.Duration
 	Push    time.Duration
@@ -247,17 +252,21 @@ func Run(serial, marker string) *Result {
 	defer os.RemoveAll(work)
 
 	start := time.Now()
-	dex, err := buildDex(tc, work, out.OpModeName)
+	files, err := buildAll(tc, work, out.OpModeName)
 	if err != nil {
 		out.Err = err
 		return out
 	}
 	out.Compile = time.Since(start)
 
-	if info, err := os.Stat(dex); err == nil {
+	if info, err := os.Stat(files.Dex); err == nil {
 		out.DexBytes = info.Size()
 	}
-	out.step("built %s (%d bytes) in %s", filepath.Base(dex), out.DexBytes, out.Compile.Round(time.Millisecond))
+	if info, err := os.Stat(files.Jar); err == nil {
+		out.JarBytes = info.Size()
+	}
+	out.step("built a %d byte jar and a %d byte dex in %s",
+		out.JarBytes, out.DexBytes, out.Compile.Round(time.Millisecond))
 
 	dir, err := outputDir(serial)
 	if err != nil {
@@ -265,16 +274,23 @@ func Run(serial, marker string) *Result {
 		return out
 	}
 	out.RemoteDir = dir
-	out.RemotePath = dir + "/pusher-reload-proof.dex"
+	out.RemoteDex = dir + "/" + ProofName + ".dex"
+	out.RemoteJar = dir + "/" + ProofName + ".jar"
 	out.step("output directory on the hub: %s", dir)
 
+	// The jar is what gets the class name discovered, the dex is what loads it.
+	// Both, or nothing happens.
 	start = time.Now()
-	if err := adb.Push(serial, dex, out.RemotePath); err != nil {
+	if err := adb.Push(serial, files.Jar, out.RemoteJar); err != nil {
+		out.Err = fmt.Errorf("cannot push the jar: %w", err)
+		return out
+	}
+	if err := adb.Push(serial, files.Dex, out.RemoteDex); err != nil {
 		out.Err = fmt.Errorf("cannot push the dex: %w", err)
 		return out
 	}
 	out.Push = time.Since(start)
-	out.step("pushed to %s in %s", out.RemotePath, out.Push.Round(time.Millisecond))
+	out.step("pushed the jar and the dex in %s", out.Push.Round(time.Millisecond))
 
 	if err := trigger(serial); err != nil {
 		out.Err = err
@@ -322,7 +338,8 @@ func trigger(serial string) error {
 
 // Clean removes what the experiment left on the robot.
 func Clean(serial string) error {
-	if _, err := adb.Shell(serial, "rm", "-f", JavaDir+"/jars/pusher-reload-proof.dex"); err != nil {
+	if _, err := adb.Shell(serial, "rm", "-f",
+		JavaDir+"/jars/"+ProofName+".dex", JavaDir+"/jars/"+ProofName+".jar"); err != nil {
 		return err
 	}
 	return trigger(serial)

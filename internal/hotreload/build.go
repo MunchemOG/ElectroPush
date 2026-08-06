@@ -34,6 +34,15 @@ public class ` + ClassName + ` extends LinearOpMode {
 }
 `
 
+// built is what the robot needs. Two files, not one: the SDK discovers class
+// names by opening the .jar files and listing .class entries, and loads the
+// classes from the .dex. Push only the dex and the class loads fine but is
+// never named, so no OpMode appears.
+type built struct {
+	Jar string
+	Dex string
+}
+
 // buildDex compiles the OpMode and turns it into a dex.
 func buildDex(tc Toolchain, work, opModeName string) (string, error) {
 	srcDir := filepath.Join(work, "src", filepath.FromSlash(strings.ReplaceAll(Package, ".", "/")))
@@ -89,6 +98,51 @@ func buildDex(tc Toolchain, work, opModeName string) (string, error) {
 	}
 
 	return dex, nil
+}
+
+// buildAll produces the jar and the dex the robot controller needs.
+func buildAll(tc Toolchain, work, opModeName string) (built, error) {
+	dex, err := buildDex(tc, work, opModeName)
+	if err != nil {
+		return built{}, err
+	}
+
+	entry := strings.ReplaceAll(Package, ".", "/") + "/" + ClassName + ".class"
+	classFile := filepath.Join(work, "classes", filepath.FromSlash(entry))
+
+	jar := filepath.Join(work, "pusher-reload-proof.jar")
+	if err := writeJar(jar, entry, classFile); err != nil {
+		return built{}, err
+	}
+
+	return built{Jar: jar, Dex: dex}, nil
+}
+
+// writeJar packs the compiled class under its package path. Only the entry
+// names are read, but the real class goes in so the jar is not a lie.
+func writeJar(jarPath, entry, classFile string) error {
+	class, err := os.ReadFile(classFile)
+	if err != nil {
+		return fmt.Errorf("cannot read the compiled class: %w", err)
+	}
+
+	out, err := os.Create(jarPath)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	archive := zip.NewWriter(out)
+
+	w, err := archive.Create(entry)
+	if err != nil {
+		return err
+	}
+	if _, err := w.Write(class); err != nil {
+		return err
+	}
+
+	return archive.Close()
 }
 
 // classesJar pulls classes.jar out of an AAR into a temporary file, because

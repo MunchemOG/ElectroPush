@@ -1,6 +1,7 @@
 package hotreload
 
 import (
+	"archive/zip"
 	"os"
 	"strings"
 	"testing"
@@ -31,6 +32,56 @@ func TestTriggerMatchesWhatTheSDKWatches(t *testing.T) {
 
 // Compiling needs a JDK, the Android build-tools and the FTC jars. Skipped
 // where those are missing rather than failing, since CI has none of them.
+// The class name is discovered by listing .class entries inside the .jar, and
+// the class is loaded from the .dex. Pushing only the dex loads nothing,
+// because the name is never enumerated, which is exactly what went wrong the
+// first time this was tried on a robot.
+func TestBothTheJarAndTheDexAreBuilt(t *testing.T) {
+	tc, err := FindToolchain()
+	if err != nil {
+		t.Skip(err)
+	}
+	defer tc.Cleanup()
+
+	files, err := buildAll(tc, t.TempDir(), "Pusher Reload test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, path := range []string{files.Jar, files.Dex} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("%s: %v", path, err)
+		}
+		if info.Size() == 0 {
+			t.Errorf("%s is empty", path)
+		}
+	}
+
+	// The jar has to hold the class under its package path, or the SDK builds
+	// a name the classloader cannot resolve.
+	archive, err := zip.OpenReader(files.Jar)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer archive.Close()
+
+	want := strings.ReplaceAll(Package, ".", "/") + "/" + ClassName + ".class"
+	found := false
+	for _, entry := range archive.File {
+		if entry.Name == want {
+			found = true
+		}
+	}
+	if !found {
+		var names []string
+		for _, entry := range archive.File {
+			names = append(names, entry.Name)
+		}
+		t.Errorf("the jar has no %s, only %v", want, names)
+	}
+}
+
 func TestTheOpModeCompilesToADex(t *testing.T) {
 	tc, err := FindToolchain()
 	if err != nil {
