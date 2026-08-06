@@ -69,6 +69,10 @@ type Result struct {
 	// Pointed records that the pointer file had to be written, meaning
 	// OnBotJava had never built anything here.
 	Pointed bool
+	// ColdStart records that the status directory did not exist. The app
+	// watches that directory for the reload signal and attaches the watch when
+	// it starts, so a directory created now is not being watched yet.
+	ColdStart bool
 
 	Compile time.Duration
 	Push    time.Duration
@@ -260,6 +264,8 @@ func Run(serial, marker string) *Result {
 	defer tc.Cleanup()
 	out.step("toolchain: %s, %s", filepath.Base(tc.Javac), filepath.Base(tc.D8))
 
+	out.ColdStart = !statusDirExists(serial)
+
 	work, err := os.MkdirTemp("", "pusher-reload-*")
 	if err != nil {
 		out.Err = err
@@ -317,7 +323,11 @@ func Run(serial, marker string) *Result {
 		out.Err = err
 		return out
 	}
-	out.step("touched %s", TriggerFile)
+	out.step("wrote %s", TriggerFile)
+
+	if out.ColdStart {
+		out.step("%s did not exist, so the app is not watching it yet", JavaDir+"/status")
+	}
 
 	out.Diagnosis = Diagnose(serial)
 	if out.Diagnosis.Package != "" {
@@ -383,9 +393,19 @@ func writePointer(serial, dir string) error {
 	return nil
 }
 
-// trigger touches the file RegisteredOpModes watches. Writing to it rather
-// than touching it, because toybox touch on an old hub is not guaranteed to
-// create a missing file.
+// statusDirExists reports whether the directory the app watches was already
+// there. FileModifyObserver watches the parent directory as well as the file,
+// but a watch on a directory that does not exist never fires, and the watch is
+// attached when the app starts. So a status directory created now only starts
+// being watched after the next restart.
+func statusDirExists(serial string) bool {
+	_, err := adb.Shell(serial, "ls", "-d", JavaDir+"/status", "2>/dev/null")
+	return err == nil
+}
+
+// trigger writes the file RegisteredOpModes watches. Writing rather than
+// touching, because toybox touch on an old hub is not guaranteed to create a
+// missing file.
 func trigger(serial string) error {
 	if _, err := adb.Shell(serial, "mkdir", "-p", JavaDir+"/status"); err != nil {
 		return fmt.Errorf("cannot create the status directory: %w", err)

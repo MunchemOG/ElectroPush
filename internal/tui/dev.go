@@ -498,11 +498,20 @@ func (m *devModel) viewDevReload() string {
 	b.WriteString("\n  " + okStyle.Render("Now look at the Driver Station.") + "\n\n")
 	fmt.Fprintf(&b, "  Look for an OpMode called %s in the TeleOp list.\n",
 		valueStyle.Render(`"`+r.OpModeName+`"`))
-	b.WriteString("  " + helpStyle.Render("It may take a moment, and the list sometimes needs reopening.") + "\n\n")
 
-	b.WriteString("  " + helpStyle.Render("There: an OpMode reached the robot with no APK install.") + "\n")
-	b.WriteString("  " + helpStyle.Render("Not there: the dex landed but nothing picked it up.") + "\n")
-	b.WriteString("  " + helpStyle.Render("Run it again; the number in the name has to change.") + "\n")
+	if r.ColdStart {
+		b.WriteString("\n  " + scrollStyle.Render("First run on this hub, so a restart is needed once.") + "\n")
+		b.WriteString("  " + helpStyle.Render("The app attaches its watch when it starts, and the directory") + "\n")
+		b.WriteString("  " + helpStyle.Render("it watches did not exist until just now. Restart the robot,") + "\n")
+		b.WriteString("  " + helpStyle.Render("then run this again: from then on it should be live.") + "\n")
+	} else {
+		b.WriteString("  " + helpStyle.Render("No restart needed. The time in the name should change within") + "\n")
+		b.WriteString("  " + helpStyle.Render("a second or two; reopen the list if it does not.") + "\n")
+	}
+
+	b.WriteString("\n  " + helpStyle.Render("Changed: a live reload, no install and no restart.") + "\n")
+	b.WriteString("  " + helpStyle.Render("Only after a restart: the files are found but the watch is not firing.") + "\n")
+	b.WriteString("  " + helpStyle.Render("Never: the files are not where the SDK reads them.") + "\n")
 
 	b.WriteString("\n" + helpStyle.Render("  esc back") + "\n")
 	return b.String()
