@@ -29,6 +29,7 @@ var rootCmd = &cobra.Command{
 	},
 }
 
+// Execute runs the CLI.
 func Execute(version string) {
 	appVersion = version
 	selfupdate.SetCurrent(version)
@@ -38,8 +39,6 @@ func Execute(version string) {
 		os.Exit(1)
 	}
 
-	// Config is only readable now, so the hidden commands cannot be settled in
-	// init(). Hidden keeps them out of help, completions and suggestions.
 	visualiseCmd.Hidden = !feature.Revealed()
 
 	if err := rootCmd.Execute(); err != nil {
@@ -60,6 +59,7 @@ func init() {
 	rootCmd.AddCommand(slimCmd)
 	rootCmd.AddCommand(hwconfigCmd)
 	rootCmd.AddCommand(doctorCmd)
+	rootCmd.AddCommand(devCmd)
 	rootCmd.AddCommand(visualiseCmd)
 	rootCmd.AddCommand(helpCmd)
 }

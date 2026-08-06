@@ -9,10 +9,9 @@ import (
 	"time"
 )
 
-// macOS reorders its saved-network list on every join, so the first entry is
-// the network in use.
 const tracksRecency = true
 
+// LocationHint explains the permission this platform needs to read the network name.
 const LocationHint = `macOS treats "which Wi-Fi am I on?" as a location lookup and hides the network
 name from command-line tools. The terminal cannot be added to Location Services
 by hand, because macOS only lists apps that have already asked, and command-line
@@ -25,14 +24,11 @@ entry. That needs no permission at all.
 If it ever guesses wrong, set the network to return to explicitly:
   pusher settings -> Home Wi-Fi network`
 
-// Wi-Fi is en0 on every Mac that ships with it.
 func (m *Manager) detectInterface() string {
 	return "en0"
 }
 
-// Returns ("", nil) when genuinely not associated, and ErrSSIDUnavailable when
-// associated but macOS is withholding the name. Both produce the same
-// "not associated" output, so the IPv4 lease is what tells them apart.
+// CurrentSSID is the network the machine is on.
 func (m *Manager) CurrentSSID() (string, error) {
 	ssid := m.ssidFromNetworksetup()
 	if ssid == "" {
@@ -62,8 +58,6 @@ func (m *Manager) ssidFromNetworksetup() string {
 	return parseNetworksetupSSID(string(out))
 }
 
-// A second opinion: these two commands are gated separately and have disagreed
-// across macOS releases.
 func (m *Manager) ssidFromIPConfig() string {
 	out, err := exec.Command("ipconfig", "getsummary", m.wifiInterface()).Output()
 	if err != nil {
@@ -83,6 +77,7 @@ func (m *Manager) ssidFromIPConfig() string {
 	return ""
 }
 
+// PreferredNetworks lists the saved networks, most recent first.
 func (m *Manager) PreferredNetworks() ([]string, error) {
 	out, err := exec.Command("networksetup", "-listpreferredwirelessnetworks", m.wifiInterface()).Output()
 	if err != nil {
@@ -91,6 +86,7 @@ func (m *Manager) PreferredNetworks() ([]string, error) {
 	return parseDarwinPreferred(string(out)), nil
 }
 
+// IsPoweredOn reports whether the Wi-Fi radio is on.
 func (m *Manager) IsPoweredOn() bool {
 	out, err := exec.Command("networksetup", "-getairportpower", m.wifiInterface()).Output()
 	if err != nil {
@@ -99,6 +95,7 @@ func (m *Manager) IsPoweredOn() bool {
 	return strings.Contains(strings.ToLower(string(out)), ": on")
 }
 
+// PowerOn turns the Wi-Fi radio on.
 func (m *Manager) PowerOn() error {
 	if m.IsPoweredOn() {
 		return nil
@@ -113,6 +110,7 @@ func (m *Manager) PowerOn() error {
 	return nil
 }
 
+// Join connects to a network.
 func (m *Manager) Join(ssid, password string) error {
 	if ssid == "" {
 		return fmt.Errorf("no SSID given")
@@ -133,8 +131,6 @@ func (m *Manager) Join(ssid, password string) error {
 		return fmt.Errorf("failed to join %q: %w (output: %s)", ssid, err, result)
 	}
 
-	// networksetup reports join failures on stdout with a zero exit status, so
-	// the output has to be inspected rather than trusting the exit code.
 	if result != "" {
 		lower := strings.ToLower(result)
 		if strings.Contains(lower, "could not find") ||
@@ -147,12 +143,8 @@ func (m *Manager) Join(ssid, password string) error {
 	return nil
 }
 
-// networksetup -setairportnetwork refuses to join without a password even for a
-// network macOS already has in the keychain, failing with -3900 and dropping the
-// association it already had. Auto-join does work, so the way back is to make
-// the networks we are leaving ineligible and let the OS pick the next preferred
-// one. Dropping the robot is safe: every push re-adds it with the profile
-// password, and its key is the one credential pusher actually holds.
+// networksetup refuses a credential-less join with -3900, so the robot's
+// networks are dropped from the preferred list and the radio power-cycled.
 func (m *Manager) rejoin(ssid string, leaving []string) error {
 	iface := m.wifiInterface()
 
@@ -160,13 +152,14 @@ func (m *Manager) rejoin(ssid string, leaving []string) error {
 		if network == "" || network == ssid {
 			continue
 		}
-		// Fails when the network was never saved, which is not worth reporting.
+
 		_ = exec.Command("networksetup", "-removepreferredwirelessnetwork", iface, network).Run()
 	}
 
 	return m.PowerCycle()
 }
 
+// PowerCycle turns the radio off and on again.
 func (m *Manager) PowerCycle() error {
 	iface := m.wifiInterface()
 

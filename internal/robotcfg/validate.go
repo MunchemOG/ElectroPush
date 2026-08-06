@@ -9,13 +9,14 @@ import (
 // Level separates what the robot will refuse from what merely looks wrong.
 type Level int
 
+// Warning is worth reading before a match; Error is what the robot rejects.
 const (
-	// Warning is worth reading before a match but does not stop a push.
 	Warning Level = iota
-	// Error is something the robot controller will reject or mis-handle.
+
 	Error
 )
 
+// String names the level for showing a person.
 func (l Level) String() string {
 	if l == Error {
 		return "error"
@@ -30,6 +31,7 @@ type Issue struct {
 	Msg   string
 }
 
+// String renders the issue with its line number.
 func (i Issue) String() string {
 	if i.Line > 0 {
 		return fmt.Sprintf("line %d: %s", i.Line, i.Msg)
@@ -40,7 +42,7 @@ func (i Issue) String() string {
 // Issues is what a check produced.
 type Issues []Issue
 
-// Errors reports whether anything here would stop the robot from using the file.
+// Errors reports whether anything here would stop the robot using the file.
 func (is Issues) Errors() bool {
 	for _, i := range is {
 		if i.Level == Error {
@@ -61,15 +63,7 @@ func (is Issues) Count(l Level) int {
 	return n
 }
 
-// Validate checks a configuration against the rules the robot controller
-// enforces at runtime.
-//
-// The errors are the ones that make a configuration fail on the robot rather
-// than on a laptop: a duplicate device name (the SDK refuses to save one and
-// the hardware map cannot resolve it), two devices on one port, an Expansion
-// Hub sitting on the Control Hub's reserved address. Everything else is a
-// warning, because configurations legitimately contain device types this tool
-// has never heard of.
+// Validate checks a configuration against the rules the robot controller enforces.
 func Validate(cfg *Config) Issues {
 	var issues Issues
 
@@ -86,8 +80,6 @@ func Validate(cfg *Config) Issues {
 	return issues
 }
 
-// duplicateNames finds names used twice anywhere in the file. The hardware map
-// is flat: two devices called "arm" on different hubs still collide.
 func duplicateNames(cfg *Config) Issues {
 	first := map[string]Device{}
 	var issues Issues
@@ -152,13 +144,9 @@ func checkPortal(p Portal) Issues {
 	return issues
 }
 
-// checkAddress covers the two address mistakes the SDK calls out by name.
 func checkAddress(m Module, p Portal) Issues {
 	var issues Issues
 
-	// The Control Hub's own module answers on 173. A second hub set to that
-	// address is the failure the SDK spells out: you have to change the
-	// Expansion Hub's address and build a new configuration.
 	if m.Address == ControlHubAddress && p.HasParent && p.ParentAddress != ControlHubAddress {
 		issues = append(issues, Issue{Error, m.Line,
 			fmt.Sprintf("%q is at address %d, which is reserved for the Control Hub - "+
@@ -180,7 +168,6 @@ func checkAddress(m Module, p Portal) Issues {
 	return issues
 }
 
-// slot identifies one physical connector on a hub.
 type slot struct {
 	flavor Flavor
 	bus    int
@@ -200,8 +187,7 @@ func checkPorts(m Module) Issues {
 
 		flavor := FlavorOf(d.Tag)
 		if flavor == Unclassified {
-			// Not a device type from the SDK. Its name still has to be
-			// unique, but nothing here knows which ports it uses.
+
 			continue
 		}
 
@@ -258,9 +244,6 @@ func checkRange(d Device, f Flavor, m Module) Issues {
 	return issues
 }
 
-// checkName covers what makes a name unusable from an OpMode. The lookup is by
-// exact string, so surrounding whitespace is invisible in the Driver Station
-// and breaks hardwareMap.get at runtime.
 func checkName(d Device) Issues {
 	if !d.Enabled() {
 		return nil

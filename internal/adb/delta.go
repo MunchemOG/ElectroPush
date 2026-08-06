@@ -16,25 +16,24 @@ import (
 )
 
 const (
-	// On the persistent /data partition, so the cache survives a reboot.
 	remoteRoot     = "/data/local/tmp/pusher"
 	remoteCacheDir = remoteRoot + "/cache"
 	remoteManifest = remoteRoot + "/manifest"
 	remoteStaging  = remoteRoot + "/incoming"
 	remoteDeltaAPK = remoteRoot + "/app.apk"
 
-	// Cache + rebuilt APK + pm install's own copy.
 	spaceFactor = 3
 
-	// Old Android does not reliably return a shell's exit status through adb,
-	// so remote scripts confirm success by echoing this instead.
 	okMarker = "PUSHER_OK"
 )
 
+// ErrDeltaUnavailable means a delta transfer cannot be used this time.
 type ErrDeltaUnavailable struct{ Reason string }
 
+// Error explains why the delta transfer was unavailable.
 func (e ErrDeltaUnavailable) Error() string { return e.Reason }
 
+// DeltaResult is what a delta transfer sent and what it skipped.
 type DeltaResult struct {
 	TotalChunks  int
 	SentChunks   int
@@ -150,8 +149,6 @@ func pushChunks(serial string, data []byte, missing []delta.Chunk) error {
 		return ErrDeltaUnavailable{"chunk push failed: " + err.Error()}
 	}
 
-	// adb versions differ on whether a pushed directory's contents land in the
-	// destination or one level below it, so both layouts are swept up.
 	move := fmt.Sprintf("mv %s/*.chunk %s/ 2>/dev/null; mv %s/*/*.chunk %s/ 2>/dev/null; rm -rf %s; echo %s",
 		remoteStaging, remoteCacheDir, remoteStaging, remoteCacheDir, remoteStaging, okMarker)
 	if _, err := run(serial, "shell", move); err != nil {
@@ -204,8 +201,6 @@ func reassemble(serial string) error {
 	return nil
 }
 
-// The safety rail: a corrupt reassembly must never reach pm install. Any
-// failure here returns ErrDeltaUnavailable, which falls back to a full push.
 func verifyRemote(serial string, data []byte) error {
 	sha := sha1.Sum(data)
 	md5sum := md5.Sum(data)
@@ -335,8 +330,6 @@ func installDelta(serial, apkPath string) error {
 		return err
 	}
 
-	// Only after a successful install: a failed deploy keeps the old cache to
-	// retry against. Must also run before the caller drops the connection.
 	pruneCache(serial, result.chunks)
 
 	return nil

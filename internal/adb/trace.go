@@ -48,9 +48,6 @@ func Target() (string, error) {
 }
 
 // ListTraces returns the trace files on the device, newest first.
-//
-// ls -t orders by mtime, which is what "newest" has to mean here: the filename
-// carries the wall clock of a hub whose clock is frequently wrong.
 func ListTraces(serial string) ([]RemoteTrace, error) {
 	out, err := Shell(serial, "ls", "-t", TraceDir, "2>/dev/null")
 	if err != nil {
@@ -74,8 +71,6 @@ func ListTraces(serial string) ([]RemoteTrace, error) {
 	return traces, nil
 }
 
-// Files are named <OpMode>-<millis>.json, so the OpMode is everything before the
-// final dash. Splitting on the last dash keeps names that contain dashes intact.
 func opModeFromName(name string) string {
 	base := strings.TrimSuffix(name, ".json")
 	if i := strings.LastIndex(base, "-"); i > 0 {
@@ -85,7 +80,6 @@ func opModeFromName(name string) string {
 }
 
 // MatchTraces returns the traces whose OpMode matches name, case-insensitively.
-// An empty name matches everything.
 func MatchTraces(traces []RemoteTrace, name string) []RemoteTrace {
 	if name == "" {
 		return traces
@@ -102,7 +96,6 @@ func MatchTraces(traces []RemoteTrace, name string) []RemoteTrace {
 		return hits
 	}
 
-	// Fall back to a substring match so a partial class name still finds something.
 	for _, t := range traces {
 		if strings.Contains(strings.ToLower(t.OpMode), want) {
 			hits = append(hits, t)

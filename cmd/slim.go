@@ -15,6 +15,7 @@ var (
 	slimUndo       bool
 	slimABI        string
 	slimSourceMaps bool
+	slimStoreLibs  bool
 )
 
 var slimCmd = &cobra.Command{
@@ -35,6 +36,7 @@ func init() {
 	slimCmd.Flags().BoolVar(&slimUndo, "undo", false, "Restore the gradle files pusher patched")
 	slimCmd.Flags().StringVar(&slimABI, "abi", "", "ABI to keep (default: ask the connected hub)")
 	slimCmd.Flags().BoolVar(&slimSourceMaps, "strip-source-maps", false, "Also exclude JavaScript source maps from assets")
+	slimCmd.Flags().BoolVar(&slimStoreLibs, "store-libs", false, "Store native libraries uncompressed so the install does not extract them")
 }
 
 func runSlim(cmd *cobra.Command, args []string) error {
@@ -90,6 +92,20 @@ func runSlim(cmd *cobra.Command, args []string) error {
 			fmt.Println("[OK] TeamCode/build.gradle now excludes *.map source maps")
 		} else {
 			fmt.Println("[=] Source maps already excluded")
+		}
+	}
+
+	if slimStoreLibs || config.GetStoreLibs() {
+		libsChanged, err := project.StoreLibs(false)
+		if err != nil {
+			return err
+		}
+		if libsChanged {
+			changed = true
+			fmt.Println("[OK] Native libraries are now stored, not compressed")
+			fmt.Println("    The APK gets bigger; the install stops extracting them.")
+		} else {
+			fmt.Println("[=] Native libraries already stored")
 		}
 	}
 

@@ -60,6 +60,7 @@ Requires `adb` and an FTC project with a Gradle wrapper.
 | `pusher slim` | Shrink the APK (`--undo` to revert) |
 | `pusher hwconfig` | Pull, edit and push the robot's hardware configs |
 | `pusher doctor` | Diagnose Wi-Fi, adb and project problems |
+| `pusher dev` | Measure what a deploy costs (see the warning) |
 | `pusher visualiser <OpMode>` | Draw the path an auto drove, coloured by speed |
 | `pusher prepare` | Cache Gradle dependencies while online |
 | `pusher help` | Help |
@@ -185,6 +186,61 @@ falls back to a full transfer.
 which is about 10 MB of a stock FTC APK. It asks the connected hub which
 architecture it runs and refuses to guess, so connect the robot first. Files it
 edits are backed up next to themselves; `pusher slim --undo` restores them.
+
+## Deploy speed
+
+A deploy is two halves that behave differently: getting the bytes to the robot,
+and the package manager installing them once they arrive. The install is not
+just a copy. It writes the APK into `/data/app`, verifies the signature,
+extracts the native libraries if they are compressed, and runs dexopt over
+every dex file. On a stock FTC project that is tens of megabytes of writes and
+tens of megabytes of dex to compile.
+
+`pusher settings` -> **Deploy speed** has a switch for each part of that, because
+what wins over USB is not what wins over the robot's 2.4 GHz hotspot:
+
+| setting | what it does | default |
+|---|---|---|
+| Send only changed parts | sends only the chunks of the APK that changed | on |
+| Skip install when unchanged | does nothing at all if the robot already holds this build | on |
+| Stream the install | writes the APK straight into an install session instead of pushing it to a temporary file first, halving what gets written on the robot | on |
+| Store native libraries uncompressed | stops the install extracting 20 MB+ of libraries, at the cost of a bigger APK. Applied by `pusher slim` | off |
+| Install only changed splits | when the project builds a base plus a feature module, installs only the module that changed | off |
+
+The last two are not free. Storing the libraries makes the APK bigger, which
+costs transfer time, so it is a win on USB or 5 GHz and a question on 2.4 GHz.
+Stored entries also make the delta cache far more effective, because one changed
+byte in a deflate stream shifts everything after it while stored bytes do not
+move.
+
+Everything falls back safely. A streaming install that the hub does not like
+drops to the staged one; a split install with nothing to inherit from installs
+the whole APK.
+
+Do not guess which of these to turn on. `pusher dev` measures them.
+
+## pusher dev
+
+Measuring tools for working on pusher itself. **If you do not already know why
+you want this, you do not want it** — it deploys to the robot over and over and
+reinstalls the app several times.
+
+```
+pusher dev
+```
+
+- **Benchmark the deploy** times every configuration against the Android Studio
+  equivalent, which is one streamed install of the whole APK.
+- **Hot reload feasibility** times pushing a team-code-sized dex to the hub and
+  compiling it there, to see what a reload would have to beat. Installs nothing.
+- **Both, with a full report** writes a report to `pusher-reports/` in your
+  project covering the APK's composition, every measured configuration, what
+  each setting is worth on your hub, and Sloth's published figures for context.
+
+**Pusher is not a Sloth replacement.** Sloth hot reloads: it sends only the
+team's code and loads it into a running app, and reports under a second. Pusher
+makes an APK install faster. Those are different problems, and everything pusher
+does still ends in a package manager install.
 
 ## Per-OS notes
 

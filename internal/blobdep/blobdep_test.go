@@ -28,7 +28,6 @@ func read(t *testing.T, root string) string {
 	return string(data)
 }
 
-// activeLines counts uncommented blob dependency lines.
 func activeLines(gradle string) int {
 	n := 0
 	for _, line := range strings.Split(gradle, "\n") {
@@ -137,8 +136,6 @@ func TestSetArtifactIsReversible(t *testing.T) {
 	}
 }
 
-// Two active lines would hand Gradle two copies of the same classes. This is
-// the invariant that matters most in this file.
 func TestSetArtifactNeverLeavesTwoActiveLines(t *testing.T) {
 	starts := []string{
 		withComp,
@@ -265,7 +262,6 @@ func TestEnsureIgnoredKeepsExistingContent(t *testing.T) {
 	root := project(t, withComp)
 	path := filepath.Join(root, ".gitignore")
 
-	// No trailing newline, which is where naive appends corrupt the last rule.
 	if err := os.WriteFile(path, []byte("build/\n.idea/"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -300,7 +296,7 @@ func TestPruneRemovesOtherBlobAARsOnly(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// Something else living in libs must survive.
+
 	if err := os.WriteFile(filepath.Join(LibsDir(root), "someones-other.aar"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}

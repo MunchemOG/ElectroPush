@@ -9,10 +9,9 @@ import (
 	"time"
 )
 
-// NetworkManager records a real connection.timestamp per profile, so recency
-// here is stored data rather than the list-ordering inference macOS forces.
 const tracksRecency = true
 
+// LocationHint explains the permission this platform needs to read the network name.
 const LocationHint = `Wi-Fi control needs NetworkManager, which is standard on Debian and Ubuntu
 desktops. pusher drives it through nmcli.
 
@@ -40,7 +39,7 @@ func (m *Manager) detectInterface() string {
 	return parseNmcliWiFiDevice(out)
 }
 
-// Linux reports the SSID freely, so ErrSSIDUnavailable never arises here.
+// CurrentSSID is the network the machine is on.
 func (m *Manager) CurrentSSID() (string, error) {
 	out, err := nmcli("-t", "-f", "ACTIVE,SSID", "device", "wifi")
 	if err != nil {
@@ -49,7 +48,7 @@ func (m *Manager) CurrentSSID() (string, error) {
 	return parseNmcliActiveSSID(out), nil
 }
 
-// Ordered most-recently-connected first, from NetworkManager's own timestamps.
+// PreferredNetworks lists the saved networks, most recent first.
 func (m *Manager) PreferredNetworks() ([]string, error) {
 	out, err := nmcli("-t", "-f", "NAME,TYPE,TIMESTAMP", "connection", "show")
 	if err != nil {
@@ -58,6 +57,7 @@ func (m *Manager) PreferredNetworks() ([]string, error) {
 	return parseNmcliSavedNetworks(out), nil
 }
 
+// IsPoweredOn reports whether the Wi-Fi radio is on.
 func (m *Manager) IsPoweredOn() bool {
 	out, err := nmcli("radio", "wifi")
 	if err != nil {
@@ -66,6 +66,7 @@ func (m *Manager) IsPoweredOn() bool {
 	return parseNmcliRadio(out)
 }
 
+// PowerOn turns the Wi-Fi radio on.
 func (m *Manager) PowerOn() error {
 	if m.IsPoweredOn() {
 		return nil
@@ -79,6 +80,7 @@ func (m *Manager) PowerOn() error {
 	return nil
 }
 
+// Join connects to a network.
 func (m *Manager) Join(ssid, password string) error {
 	if ssid == "" {
 		return fmt.Errorf("no SSID given")
@@ -89,7 +91,7 @@ func (m *Manager) Join(ssid, password string) error {
 	}
 
 	if password != "" {
-		// Creates the profile if absent and updates the key if it changed.
+
 		args := []string{"device", "wifi", "connect", ssid, "password", password}
 		if iface := m.wifiInterface(); iface != "" {
 			args = append(args, "ifname", iface)
@@ -100,8 +102,6 @@ func (m *Manager) Join(ssid, password string) error {
 		return nil
 	}
 
-	// No password: prefer bringing up the saved profile, which reuses the
-	// stored key. Fall back to a scan-and-connect for open networks.
 	if _, err := nmcli("connection", "up", "id", ssid); err == nil {
 		return nil
 	}
@@ -112,6 +112,7 @@ func (m *Manager) Join(ssid, password string) error {
 	return nil
 }
 
+// PowerCycle turns the radio off and on again.
 func (m *Manager) PowerCycle() error {
 	if _, err := nmcli("radio", "wifi", "off"); err != nil {
 		return fmt.Errorf("failed to turn Wi-Fi off: %w", err)
@@ -126,8 +127,6 @@ func (m *Manager) PowerCycle() error {
 	return nil
 }
 
-// NetworkManager brings up a saved profile with its stored key, so leaving
-// needs no special handling.
 func (m *Manager) rejoin(ssid string, _ []string) error {
 	return m.Join(ssid, "")
 }

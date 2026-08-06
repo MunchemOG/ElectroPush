@@ -6,20 +6,15 @@ import (
 	"strings"
 )
 
-// Slot identifies where a device sits, so the editor can address one without
-// carrying pointers into a structure it also rewrites.
+// Slot identifies where a device sits, without holding a pointer into the config.
 type Slot struct {
 	Portal int
-	// Module is -1 for a device that hangs directly off a portal.
+
 	Module int
 	Device int
 }
 
 // New builds an empty configuration with a Control Hub in it.
-//
-// A Control Hub is included rather than starting from nothing: an empty file is
-// legal but there is nowhere to put a device, and every configuration anyone
-// makes starts by adding one.
 func New() *Config {
 	return &Config{
 		Declaration: `<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>`,
@@ -42,8 +37,7 @@ func New() *Config {
 	}
 }
 
-// Clone returns a copy that can be edited without touching the original, so the
-// editor can throw away an unsaved change.
+// Clone returns a copy that can be edited without touching the original.
 func Clone(cfg *Config) *Config {
 	out := *cfg
 	out.RootAttrs = append([]Attr(nil), cfg.RootAttrs...)
@@ -92,15 +86,12 @@ func (c *Config) SetDevice(s Slot, d Device) error {
 		return fmt.Errorf("no device there")
 	}
 
-	// The attributes of whatever was there are kept, so changing a device's
-	// type does not discard anything the model does not understand.
 	d.Attrs = (*list)[s.Device].Attrs
 	(*list)[s.Device] = d
 	return nil
 }
 
-// AddDevice puts a device on a module, in port order so the file reads the way
-// the hub is laid out.
+// AddDevice puts a device on a module, in port order.
 func (c *Config) AddDevice(portal, module int, d Device) error {
 	if portal < 0 || portal >= len(c.Portals) {
 		return fmt.Errorf("no such portal")
@@ -143,8 +134,6 @@ func (c *Config) devicesAt(s Slot) (*[]Device, bool) {
 	return &p.Modules[s.Module].Devices, true
 }
 
-// sortDevices orders a module's devices by flavour then port, which is how the
-// Driver Station writes them and how somebody reads a hub.
 func sortDevices(devices []Device) {
 	sort.SliceStable(devices, func(a, b int) bool {
 		fa, fb := FlavorOf(devices[a].Tag), FlavorOf(devices[b].Tag)
@@ -204,8 +193,7 @@ func (c *Config) RemoveModule(portal, module int) error {
 	return nil
 }
 
-// FreePort returns the lowest port of a flavour that nothing is using on a
-// module, so adding a device lands somewhere legal without being asked.
+// FreePort is the lowest port of a flavour nothing is using on a module.
 func (c *Config) FreePort(portal, module int, f Flavor, bus int) (int, bool) {
 	if portal < 0 || portal >= len(c.Portals) {
 		return 0, false
@@ -225,8 +213,6 @@ func (c *Config) FreePort(portal, module int, f Flavor, bus int) (int, bool) {
 		taken[d.Port] = true
 	}
 
-	// I2C is the exception: a bus takes as many devices as have distinct
-	// addresses, so there is no fixed port count to run out of.
 	limit := f.Ports()
 	if f == I2C {
 		limit = 8
@@ -241,8 +227,7 @@ func (c *Config) FreePort(portal, module int, f Flavor, bus int) (int, bool) {
 	return 0, false
 }
 
-// NameTaken reports whether a name is already used, ignoring one slot so
-// renaming a device does not collide with itself.
+// NameTaken reports whether a name is used, ignoring one slot so a rename can keep its own.
 func (c *Config) NameTaken(name string, except Slot) bool {
 	for pi, p := range c.Portals {
 		if p.InHardwareMap() && p.Name == name {
@@ -264,12 +249,7 @@ func (c *Config) NameTaken(name string, except Slot) bool {
 	return false
 }
 
-// SuggestTags returns the device types matching what has been typed, best match
-// first, for the editor's autocompletion.
-//
-// A prefix match ranks above a match in the middle, because somebody typing
-// "goBILDA" wants the goBILDA parts, and "servo" should still find
-// ContinuousRotationServo.
+// SuggestTags returns the device types matching what has been typed, best match first.
 func SuggestTags(typed string) []string {
 	all := KnownTags()
 	sort.Strings(all)

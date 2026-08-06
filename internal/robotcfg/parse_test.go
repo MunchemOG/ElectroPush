@@ -5,10 +5,6 @@ import (
 	"testing"
 )
 
-// realConfig is a configuration the Driver Station actually wrote, kept
-// verbatim. It is the shape that matters: single-quoted declaration, a Control
-// Hub and an Expansion Hub on one portal, I2C devices carrying both port and
-// bus, and an Ethernet device the SDK emits with name= twice.
 const realConfig = `<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
 <Robot type="FirstInspires-FTC">
     <LynxUsbDevice name="Control Hub Portal" serialNumber="(embedded)" parentModuleAddress="173">
@@ -68,8 +64,6 @@ func TestParsesAConfigurationTheDriverStationWrote(t *testing.T) {
 	}
 }
 
-// The SDK's Ethernet writer emits name= twice. A file the robot happily loads
-// must not be rejected here, and the first value is the one that counts.
 func TestADuplicatedAttributeDoesNotBreakParsing(t *testing.T) {
 	cfg := parse(t, realConfig)
 
@@ -98,15 +92,11 @@ func TestI2cDevicesKeepTheirBus(t *testing.T) {
 		t.Errorf("got bus %d port %d (bus present: %v)", pinpoint.Bus, pinpoint.Port, pinpoint.HasBus)
 	}
 
-	// Both I2C devices sit on port 0 of different buses, which is legal. If
-	// the bus were dropped this would read as a collision.
 	if got := Validate(cfg); got.Errors() {
 		t.Errorf("a real configuration reported errors: %v", got)
 	}
 }
 
-// Line numbers are what makes an error message actionable, so they have to
-// point at the element rather than the whitespace in front of it.
 func TestIssuesPointAtTheRightLine(t *testing.T) {
 	cfg := parse(t, realConfig)
 
@@ -115,7 +105,6 @@ func TestIssuesPointAtTheRightLine(t *testing.T) {
 		byName[d.Name] = d
 	}
 
-	// "transfer" is the first device, on line 5 of the file above.
 	if got := byName["transfer"].Line; got != 5 {
 		t.Errorf("got line %d for the first motor, want 5", got)
 	}
@@ -124,9 +113,6 @@ func TestIssuesPointAtTheRightLine(t *testing.T) {
 	}
 }
 
-// A webcam and an Ethernet device are top-level elements, but an OpMode
-// resolves them through hardwareMap by name like everything else. A motor
-// sharing a webcam's name is the same collision as two motors sharing one.
 func TestTopLevelDevicesShareTheHardwareMapNamespace(t *testing.T) {
 	cfg := parse(t, `<Robot type="FirstInspires-FTC">
     <LynxUsbDevice name="portal" serialNumber="(embedded)" parentModuleAddress="173">
@@ -145,7 +131,6 @@ func TestTopLevelDevicesShareTheHardwareMapNamespace(t *testing.T) {
 		t.Errorf("got %q", issues[0].Msg)
 	}
 
-	// The hub chain's own name is not resolvable, so it must not collide.
 	clean := parse(t, `<Robot type="FirstInspires-FTC">
     <LynxUsbDevice name="portal" serialNumber="(embedded)" parentModuleAddress="173">
         <LynxModule name="portal" port="173">
@@ -193,8 +178,6 @@ func TestRejectsSomethingThatIsNotAConfiguration(t *testing.T) {
 	}
 }
 
-// The template the SDK ships with an empty configuration has to load, or
-// starting from scratch is impossible.
 func TestAnEmptyConfigurationIsValid(t *testing.T) {
 	cfg := parse(t, "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n<Robot type=\"FirstInspires-FTC\">\n</Robot>\n")
 
@@ -206,8 +189,6 @@ func TestAnEmptyConfigurationIsValid(t *testing.T) {
 	}
 }
 
-// Ports the Driver Station left empty are written as placeholders, and several
-// of them share the same name.
 func TestUnconfiguredPortsAreIgnored(t *testing.T) {
 	cfg := parse(t, `<Robot type="FirstInspires-FTC">
     <LynxUsbDevice name="portal" serialNumber="(embedded)" parentModuleAddress="173">

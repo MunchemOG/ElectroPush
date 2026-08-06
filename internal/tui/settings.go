@@ -37,6 +37,7 @@ const (
 	screenBlobRuns
 	screenBlobToken
 	screenUpdate
+	screenDeploy
 )
 
 type addStep int
@@ -51,6 +52,7 @@ const defaultHeight = 24
 
 const minVisibleRows = 3
 
+// SettingsModel is the settings menu.
 type SettingsModel struct {
 	screen screen
 	cursor int
@@ -80,8 +82,6 @@ type SettingsModel struct {
 	quit   bool
 }
 
-// projectRoot is the directory pusher was invoked from, which is where an FTC
-// project's TeamCode/build.gradle lives.
 func (m *SettingsModel) projectRoot() string {
 	if m.root == "" {
 		m.root, _ = os.Getwd()
@@ -89,6 +89,7 @@ func (m *SettingsModel) projectRoot() string {
 	return m.root
 }
 
+// NewSettingsModel builds the settings menu.
 func NewSettingsModel() (*SettingsModel, error) {
 	cfg, err := config.Load()
 	if err != nil {
@@ -102,6 +103,7 @@ func NewSettingsModel() (*SettingsModel, error) {
 	return m, nil
 }
 
+// RunSettings opens the settings menu.
 func RunSettings() error {
 	model, err := NewSettingsModel()
 	if err != nil {
@@ -136,6 +138,7 @@ func sortStrings(items []string) {
 	}
 }
 
+// Init satisfies tea.Model.
 func (m *SettingsModel) Init() tea.Cmd { return nil }
 
 var mainItems = []string{
@@ -147,10 +150,12 @@ var mainItems = []string{
 	"Send only changed parts",
 	"Gradle threads",
 	"blob library",
+	"Deploy speed",
 	"Update pusher",
 	"Exit",
 }
 
+// Update satisfies tea.Model.
 func (m *SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if size, ok := msg.(tea.WindowSizeMsg); ok {
 		m.height = size.Height
@@ -159,8 +164,6 @@ func (m *SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// The update screen does its work in commands, so its results arrive here
-	// rather than on a keystroke.
 	switch msg := msg.(type) {
 	case releaseFoundMsg:
 		m.update.checking = false
@@ -220,15 +223,15 @@ func (m *SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateBlobToken(key)
 	case screenUpdate:
 		return m.updateUpdate(key)
+	case screenDeploy:
+		return m.updateDeploy(key)
 	}
 
 	return m, nil
 }
 
-// optionalRow is the position in mainItems of the entry an install only shows
-// once it has been turned on. The visible list and the action switch both go
-// through rows() rather than indexing mainItems directly, since the positions
-// stop lining up otherwise.
+// Position in mainItems of the entry an install only shows once turned on.
+// rows() exists because the indexes stop lining up otherwise.
 const optionalRow = 7
 
 func (m *SettingsModel) rows() []int {
@@ -244,11 +247,6 @@ func (m *SettingsModel) rows() []int {
 	return out
 }
 
-// checkGate reports whether this keystroke completed the activation pattern.
-//
-// Only the inputs that would navigate away are consumed. Up and down still move
-// the cursor throughout, so the screen behaves exactly as it always does and
-// gives no sign of being partway through anything.
 func (m *SettingsModel) checkGate(key tea.KeyMsg) bool {
 	if feature.Revealed() {
 		return false
@@ -316,8 +314,10 @@ func (m *SettingsModel) updateMain(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case 7:
 			return m, m.enterBlob()
 		case 8:
-			return m, m.enterUpdate()
+			m.goTo(screenDeploy, 0)
 		case 9:
+			return m, m.enterUpdate()
+		case 10:
 			m.quit = true
 			return m, tea.Quit
 		}
@@ -554,6 +554,8 @@ func (m *SettingsModel) listLength() int {
 		return 0
 	case screenUpdate:
 		return 0
+	case screenDeploy:
+		return len(deployItems)
 	}
 	return 0
 }
@@ -611,6 +613,7 @@ func (m *SettingsModel) loadNetworks() {
 	m.networks = networks
 }
 
+// View satisfies tea.Model.
 func (m *SettingsModel) View() string {
 	if m.quit {
 		return ""
@@ -639,6 +642,8 @@ func (m *SettingsModel) View() string {
 		b.WriteString(m.viewBlobToken())
 	case screenUpdate:
 		b.WriteString(m.viewUpdate())
+	case screenDeploy:
+		b.WriteString(m.viewDeploy())
 	}
 
 	if m.err != nil {
@@ -660,6 +665,7 @@ func (m *SettingsModel) viewMain() string {
 		onOff(config.GetDeltaTransfer()),
 		strconv.Itoa(config.GetThreads()),
 		m.blobLabel(),
+		m.deployLabel(),
 		m.updateLabel(),
 		"",
 	}

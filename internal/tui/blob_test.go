@@ -11,9 +11,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// modelIn builds a settings model rooted at a throwaway project. authed decides
-// whether the model behaves as though GitHub already said yes, since every
-// screen below the menu depends on that.
 func modelIn(t *testing.T, gradle string, authed bool) *SettingsModel {
 	t.Helper()
 
@@ -41,8 +38,6 @@ const gradleWithBlob = `dependencies {
 }
 `
 
-// Without access the menu must not be a dead end: it says why and offers the
-// one thing that fixes it.
 func TestBlobMenuWithoutAccessOffersTheToken(t *testing.T) {
 	m := modelIn(t, gradleWithBlob, false)
 
@@ -60,7 +55,6 @@ func TestBlobMenuWithoutAccessOffersTheToken(t *testing.T) {
 	}
 }
 
-// Nothing that touches the library may be reachable without access.
 func TestBlobMenuWithoutAccessHidesTheLibraryActions(t *testing.T) {
 	m := modelIn(t, gradleWithBlob, false)
 
@@ -109,8 +103,6 @@ func TestTokenLabelReportsState(t *testing.T) {
 	}
 }
 
-// The token must never be readable off the screen, and must not survive in
-// model state once it has been submitted.
 func TestTokenEntryIsMaskedAndNotRetained(t *testing.T) {
 	m := modelIn(t, gradleWithBlob, false)
 	m.goTo(screenBlobToken, 0)
@@ -134,8 +126,6 @@ func TestTokenEntryIsMaskedAndNotRetained(t *testing.T) {
 	}
 }
 
-// A missing TeamCode/build.gradle is the normal case when pusher runs outside a
-// project, and must not blow up the settings screen.
 func TestBlobScreensSurviveANonProjectDirectory(t *testing.T) {
 	m := modelIn(t, "", true)
 
@@ -159,8 +149,6 @@ func TestBlobRunsViewReportsWhyItIsEmpty(t *testing.T) {
 	}
 }
 
-// A dependency line pointing at an AAR that is not on disk is a real state,
-// reached by cloning a project whose libs are gitignored. Say so.
 func TestBlobViewFlagsAMissingAAR(t *testing.T) {
 	m := modelIn(t, gradleWithBlob, true)
 

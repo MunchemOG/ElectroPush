@@ -141,7 +141,6 @@ func init() {
 		hwDiffCmd, hwCheckCmd, hwRemoveCmd)
 }
 
-// runHWMenu opens the interactive menu.
 func runHWMenu(cmd *cobra.Command, args []string) error {
 	local, err := store()
 	if err != nil {
@@ -151,7 +150,6 @@ func runHWMenu(cmd *cobra.Command, args []string) error {
 	return tui.RunHWConfig(local.Dir)
 }
 
-// store resolves where configurations are kept in this project.
 func store() (*robotcfg.Store, error) {
 	if hwDir != "" {
 		return robotcfg.NewStore(hwDir), nil
@@ -177,8 +175,6 @@ func runHWList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// The robot is optional here: listing what the project has is useful
-	// without one connected, and connecting is a whole Wi-Fi round trip.
 	var (
 		robotNames []string
 		hashes     map[string]string
@@ -207,8 +203,6 @@ func runHWList(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Project: %s\n\n", local.Dir)
 
-	// Without a robot there is nothing to compare against, so the columns that
-	// would only ever say "unknown" are left out.
 	if serial == "" {
 		for _, name := range localNames {
 			fmt.Printf("  %s\n", name)
@@ -249,8 +243,6 @@ func runHWList(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// compare says how a project copy stands against the robot's. An unknown
-// answer reads as "yes, it is here" rather than guessing at sameness.
 func compare(local *robotcfg.Store, hashes map[string]string, name string) string {
 	theirs, known := hashes[name]
 	if !known {
@@ -336,9 +328,6 @@ func runHWPush(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Everything is checked before anything is sent, and before the robot is
-	// asked for, so a broken file is reported without needing a connection and
-	// a broken second file cannot leave the robot half updated.
 	files := make(map[string][]byte, len(wanted))
 	blocked := false
 
@@ -389,9 +378,7 @@ func runHWPush(cmd *cobra.Command, args []string) error {
 
 	fmt.Println()
 	if replacedActive {
-		// The robot controller reads the file when a configuration is
-		// activated, not while it is running one. Overwriting the file under
-		// it changes nothing until it is re-selected.
+
 		fmt.Printf("[!] %q is the configuration the robot is running.\n", active)
 		fmt.Println("    It keeps the old wiring until you re-select it:")
 		fmt.Println("    Driver Station -> Configure Robot -> pick it -> Activate.")
@@ -631,8 +618,6 @@ func runHWRemove(cmd *cobra.Command, args []string) error {
 		fmt.Printf("[!] %q is the configuration the robot is running.\n", name)
 	}
 
-	// Keep a copy in the project: this is the one operation here that cannot
-	// be undone from the robot.
 	if local, err := store(); err == nil {
 		if data, err := robotcfg.Fetch(serial, name); err == nil {
 			if path, err := local.Backup(name, data); err == nil {
@@ -654,8 +639,6 @@ func runHWRemove(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// readAnywhere prefers the project's copy and falls back to the robot, so
-// viewing works with or without a robot connected.
 func readAnywhere(name string) ([]byte, string, error) {
 	if local, err := store(); err == nil && local.Has(name) {
 		data, err := local.Read(name)
@@ -671,8 +654,6 @@ func readAnywhere(name string) ([]byte, string, error) {
 	return data, "on the robot", err
 }
 
-// report prints what is wrong with a configuration and says whether it is
-// usable.
 func report(name string, data []byte) bool {
 	cfg, err := robotcfg.Parse(data)
 	if err != nil {
@@ -701,7 +682,6 @@ func printIssues(issues robotcfg.Issues) {
 	}
 }
 
-// pick resolves the names asked for against what exists.
 func pick(args, available []string, where string) ([]string, error) {
 	if len(args) == 0 {
 		return available, nil
@@ -743,7 +723,6 @@ func merged(a, b []string) []string {
 	return all
 }
 
-// openEditor runs the user's editor on a file and waits for it.
 func openEditor(path string) error {
 	editor := firstSet("VISUAL", "EDITOR")
 	if editor == "" {
@@ -754,8 +733,6 @@ func openEditor(path string) error {
 		}
 	}
 
-	// $EDITOR is frequently "code --wait" or "subl -w", so it has to be split
-	// rather than run as one executable name.
 	parts := strings.Fields(editor)
 	cmd := exec.Command(parts[0], append(parts[1:], path)...)
 	cmd.Stdin = os.Stdin

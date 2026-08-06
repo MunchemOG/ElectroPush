@@ -9,12 +9,14 @@ import (
 	"github.com/spf13/viper"
 )
 
+// Profile is one saved robot: a name, its Wi-Fi and the password.
 type Profile struct {
 	Name     string `mapstructure:"name"`
 	SSID     string `mapstructure:"ssid"`
 	Password string `mapstructure:"password"`
 }
 
+// Config is everything pusher remembers between runs.
 type Config struct {
 	DefaultProfile string              `mapstructure:"default_profile"`
 	Profiles       map[string]*Profile `mapstructure:"profiles"`
@@ -32,6 +34,14 @@ type Config struct {
 	DeltaTransfer bool `mapstructure:"delta_transfer"`
 
 	HubABI string `mapstructure:"hub_abi"`
+
+	SkipUnchanged bool `mapstructure:"skip_unchanged"`
+
+	StreamInstall bool `mapstructure:"stream_install"`
+
+	StoreLibs bool `mapstructure:"store_libs"`
+
+	SplitInstall bool `mapstructure:"split_install"`
 }
 
 var (
@@ -39,14 +49,13 @@ var (
 	configFile string
 )
 
+// Initialize locates the config file and loads it, creating one if needed.
 func Initialize() error {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("failed to get home directory: %w", err)
 	}
 
-	// Under sudo, use the invoking user's home so "pusher" and "sudo pusher"
-	// share one config rather than silently diverging.
 	if os.Geteuid() == 0 {
 		if sudoUser := os.Getenv("SUDO_USER"); sudoUser != "" {
 			if u, err := user.Lookup(sudoUser); err == nil && u != nil && u.HomeDir != "" {
@@ -75,6 +84,10 @@ func Initialize() error {
 	viper.SetDefault("auto_slim", false)
 	viper.SetDefault("delta_transfer", true)
 	viper.SetDefault("hub_abi", "")
+	viper.SetDefault("skip_unchanged", true)
+	viper.SetDefault("stream_install", true)
+	viper.SetDefault("store_libs", false)
+	viper.SetDefault("split_install", false)
 
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {
 
@@ -91,6 +104,7 @@ func Initialize() error {
 	return nil
 }
 
+// Load reads the config.
 func Load() (*Config, error) {
 	var cfg Config
 	if err := viper.Unmarshal(&cfg); err != nil {
@@ -99,6 +113,7 @@ func Load() (*Config, error) {
 	return &cfg, nil
 }
 
+// Save writes the config back.
 func Save(cfg *Config) error {
 	viper.Set("default_profile", cfg.DefaultProfile)
 	viper.Set("profiles", cfg.Profiles)
@@ -110,6 +125,10 @@ func Save(cfg *Config) error {
 	viper.Set("auto_slim", cfg.AutoSlim)
 	viper.Set("delta_transfer", cfg.DeltaTransfer)
 	viper.Set("hub_abi", cfg.HubABI)
+	viper.Set("skip_unchanged", cfg.SkipUnchanged)
+	viper.Set("stream_install", cfg.StreamInstall)
+	viper.Set("store_libs", cfg.StoreLibs)
+	viper.Set("split_install", cfg.SplitInstall)
 
 	if err := viper.WriteConfig(); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
@@ -117,6 +136,7 @@ func Save(cfg *Config) error {
 	return nil
 }
 
+// AddProfile stores a robot profile, making it the default if it is the first.
 func AddProfile(name, ssid, password string) error {
 	cfg, err := Load()
 	if err != nil {
@@ -140,6 +160,7 @@ func AddProfile(name, ssid, password string) error {
 	return Save(cfg)
 }
 
+// GetDefaultProfile returns the profile deploys use.
 func GetDefaultProfile() (*Profile, error) {
 	cfg, err := Load()
 	if err != nil {
@@ -158,6 +179,7 @@ func GetDefaultProfile() (*Profile, error) {
 	return profile, nil
 }
 
+// SetDefaultProfile chooses which profile deploys use.
 func SetDefaultProfile(name string) error {
 	cfg, err := Load()
 	if err != nil {
@@ -172,6 +194,7 @@ func SetDefaultProfile(name string) error {
 	return Save(cfg)
 }
 
+// SaveLastWiFi records the network pusher last saw.
 func SaveLastWiFi(ssid string) error {
 	cfg, err := Load()
 	if err != nil {
@@ -182,6 +205,7 @@ func SaveLastWiFi(ssid string) error {
 	return Save(cfg)
 }
 
+// GetLastWiFi returns the network pusher last saw.
 func GetLastWiFi() (string, error) {
 	cfg, err := Load()
 	if err != nil {
@@ -190,11 +214,13 @@ func GetLastWiFi() (string, error) {
 	return cfg.LastWiFi, nil
 }
 
+// ConfigExists reports whether a config file has been written.
 func ConfigExists() bool {
 	_, err := os.Stat(configFile)
 	return err == nil
 }
 
+// HasProfiles reports whether any robot has been set up.
 func HasProfiles() (bool, error) {
 	cfg, err := Load()
 	if err != nil {
@@ -203,6 +229,7 @@ func HasProfiles() (bool, error) {
 	return len(cfg.Profiles) > 0, nil
 }
 
+// GetThreads is how many workers Gradle may use.
 func GetThreads() int {
 	threads := viper.GetInt("threads")
 	if threads <= 0 {
@@ -211,6 +238,7 @@ func GetThreads() int {
 	return threads
 }
 
+// SetThreads limits how many workers Gradle may use.
 func SetThreads(count int) error {
 	cfg, err := Load()
 	if err != nil {
@@ -220,14 +248,17 @@ func SetThreads(count int) error {
 	return Save(cfg)
 }
 
+// ResetThreads puts the Gradle worker count back to the default.
 func ResetThreads() error {
 	return SetThreads(8)
 }
 
+// GetHomeSSID is the network to return to after deploying.
 func GetHomeSSID() string {
 	return viper.GetString("home_ssid")
 }
 
+// SetHomeSSID sets the network to return to after deploying.
 func SetHomeSSID(ssid string) error {
 	cfg, err := Load()
 	if err != nil {
@@ -237,10 +268,12 @@ func SetHomeSSID(ssid string) error {
 	return Save(cfg)
 }
 
+// GetSwitchBack reports whether pusher returns to your own network after a deploy.
 func GetSwitchBack() bool {
 	return viper.GetBool("switch_back")
 }
 
+// SetSwitchBack controls whether pusher returns to your own network.
 func SetSwitchBack(enabled bool) error {
 	cfg, err := Load()
 	if err != nil {
@@ -250,10 +283,12 @@ func SetSwitchBack(enabled bool) error {
 	return Save(cfg)
 }
 
+// GetPreferUSB reports whether an attached hub is used in preference to Wi-Fi.
 func GetPreferUSB() bool {
 	return viper.GetBool("prefer_usb")
 }
 
+// SetPreferUSB controls whether an attached hub is preferred over Wi-Fi.
 func SetPreferUSB(enabled bool) error {
 	cfg, err := Load()
 	if err != nil {
@@ -263,10 +298,12 @@ func SetPreferUSB(enabled bool) error {
 	return Save(cfg)
 }
 
+// GetAutoSlim reports whether every push slims the APK first.
 func GetAutoSlim() bool {
 	return viper.GetBool("auto_slim")
 }
 
+// SetAutoSlim controls whether every push slims the APK first.
 func SetAutoSlim(enabled bool) error {
 	cfg, err := Load()
 	if err != nil {
@@ -276,10 +313,12 @@ func SetAutoSlim(enabled bool) error {
 	return Save(cfg)
 }
 
+// GetDeltaTransfer reports whether only changed parts of the APK are sent.
 func GetDeltaTransfer() bool {
 	return viper.GetBool("delta_transfer")
 }
 
+// SetDeltaTransfer controls whether only changed parts of the APK are sent.
 func SetDeltaTransfer(enabled bool) error {
 	cfg, err := Load()
 	if err != nil {
@@ -289,22 +328,23 @@ func SetDeltaTransfer(enabled bool) error {
 	return Save(cfg)
 }
 
-// The install key is written straight through rather than going via Save, so
-// nothing about it appears in Config. A fresh device has no such key in its
-// config file at all.
+// GetInstallKey returns this install's key, empty on a fresh device.
 func GetInstallKey() string {
 	return viper.GetString("install_key")
 }
 
+// SetInstallKey records this install's key.
 func SetInstallKey(key string) error {
 	viper.Set("install_key", key)
 	return viper.WriteConfig()
 }
 
+// GetHubABI is the CPU architecture the hub was last seen running.
 func GetHubABI() string {
 	return viper.GetString("hub_abi")
 }
 
+// SetHubABI records the CPU architecture the hub runs.
 func SetHubABI(abi string) error {
 	cfg, err := Load()
 	if err != nil {
@@ -314,6 +354,7 @@ func SetHubABI(abi string) error {
 	return Save(cfg)
 }
 
+// DeleteProfile removes a robot profile, picking a new default if needed.
 func DeleteProfile(name string) error {
 	cfg, err := Load()
 	if err != nil {
@@ -334,5 +375,57 @@ func DeleteProfile(name string) error {
 		}
 	}
 
+	return Save(cfg)
+}
+
+// GetSkipUnchanged reports whether an install is skipped when the robot already has this build.
+func GetSkipUnchanged() bool { return viper.GetBool("skip_unchanged") }
+
+// SetSkipUnchanged controls whether an unchanged build is installed again.
+func SetSkipUnchanged(enabled bool) error {
+	cfg, err := Load()
+	if err != nil {
+		return err
+	}
+	cfg.SkipUnchanged = enabled
+	return Save(cfg)
+}
+
+// GetStreamInstall reports whether the APK is streamed into an install session.
+func GetStreamInstall() bool { return viper.GetBool("stream_install") }
+
+// SetStreamInstall controls whether the APK is streamed into an install session.
+func SetStreamInstall(enabled bool) error {
+	cfg, err := Load()
+	if err != nil {
+		return err
+	}
+	cfg.StreamInstall = enabled
+	return Save(cfg)
+}
+
+// GetStoreLibs reports whether slim also stores native libraries uncompressed.
+func GetStoreLibs() bool { return viper.GetBool("store_libs") }
+
+// SetStoreLibs controls whether slim stores native libraries uncompressed.
+func SetStoreLibs(enabled bool) error {
+	cfg, err := Load()
+	if err != nil {
+		return err
+	}
+	cfg.StoreLibs = enabled
+	return Save(cfg)
+}
+
+// GetSplitInstall reports whether only changed split APKs are installed.
+func GetSplitInstall() bool { return viper.GetBool("split_install") }
+
+// SetSplitInstall controls whether only changed split APKs are installed.
+func SetSplitInstall(enabled bool) error {
+	cfg, err := Load()
+	if err != nil {
+		return err
+	}
+	cfg.SplitInstall = enabled
 	return Save(cfg)
 }

@@ -9,9 +9,6 @@ import (
 	"strings"
 )
 
-// backupDir holds the robot's copy of anything about to be overwritten. It is
-// inside the configuration directory so it travels with a checkout, and dotted
-// so it stays out of the listing.
 const backupDir = ".pusher-backup"
 
 // Store is a directory of configuration files in a project.
@@ -19,9 +16,7 @@ type Store struct {
 	Dir string
 }
 
-// NewStore points at a directory. The directory is created when something is
-// first written to it, not here: listing a project that has never pulled a
-// configuration should not leave an empty directory behind.
+// NewStore points at a directory, creating it only when something is written.
 func NewStore(dir string) *Store {
 	return &Store{Dir: dir}
 }
@@ -65,7 +60,7 @@ func (s *Store) Read(name string) ([]byte, error) {
 	return data, nil
 }
 
-// Write saves a configuration, creating the directory if it is not there yet.
+// Write saves a configuration.
 func (s *Store) Write(name string, data []byte) error {
 	if err := CheckName(name); err != nil {
 		return err
@@ -79,8 +74,7 @@ func (s *Store) Write(name string, data []byte) error {
 	return nil
 }
 
-// Remove deletes a configuration from the project, keeping a copy first: this
-// is the only way to lose an edit that was never pushed.
+// Remove deletes a configuration from the project, keeping a copy first.
 func (s *Store) Remove(name string) error {
 	data, err := s.Read(name)
 	if err != nil {
@@ -105,10 +99,6 @@ func (s *Store) Has(name string) bool {
 }
 
 // Backup keeps a copy of what is about to be overwritten.
-//
-// Overwriting the robot's configuration from a laptop is the one thing here
-// that destroys work nobody can get back: the change may have been made on the
-// Driver Station between the pull and the push. The copy costs one file.
 func (s *Store) Backup(name string, data []byte) (string, error) {
 	dir := filepath.Join(s.Dir, backupDir)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -124,9 +114,6 @@ func (s *Store) Backup(name string, data []byte) (string, error) {
 }
 
 // Same reports whether two configurations are byte for byte identical.
-//
-// Byte comparison rather than a parse: a file that differs only in formatting
-// still differs, and reporting it as unchanged would hide a real edit.
 func Same(a, b []byte) bool {
 	return bytes.Equal(a, b)
 }

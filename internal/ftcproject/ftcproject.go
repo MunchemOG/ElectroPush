@@ -17,6 +17,7 @@ var quotedRe = regexp.MustCompile(`["']([^"']+)["']`)
 
 var sourceMapPatternRe = regexp.MustCompile(`ignoreAssetsPatterns`)
 
+// Project is an FTC project and the gradle files pusher may patch.
 type Project struct {
 	Root string
 
@@ -25,6 +26,7 @@ type Project struct {
 	TeamCodeGradle string
 }
 
+// Detect confirms a directory is an FTC project and locates its gradle files.
 func Detect(root string) (*Project, error) {
 	abs, err := filepath.Abs(root)
 	if err != nil {
@@ -44,21 +46,25 @@ func Detect(root string) (*Project, error) {
 	return proj, nil
 }
 
+// Analysis is what the project currently builds.
 type Analysis struct {
 	ABIs []string
 
 	StripsSourceMaps bool
 
 	HasBackups bool
+
+	CompressesLibs bool
 }
 
+// Analyze reads what the project currently builds.
 func (p *Project) Analyze() (*Analysis, error) {
 	common, err := os.ReadFile(p.CommonGradle)
 	if err != nil {
 		return nil, fmt.Errorf("cannot read %s: %w", p.CommonGradle, err)
 	}
 
-	analysis := &Analysis{HasBackups: p.HasBackups()}
+	analysis := &Analysis{HasBackups: p.HasBackups(), CompressesLibs: p.LegacyPackaging()}
 
 	seen := map[string]bool{}
 	for _, match := range abiFiltersRe.FindAllStringSubmatch(string(common), -1) {
@@ -78,9 +84,8 @@ func (p *Project) Analyze() (*Analysis, error) {
 	return analysis, nil
 }
 
-// Must edit build.common.gradle, not TeamCode/build.gradle: AGP unions
-// ndk.abiFilters from defaultConfig with the build type's, so a narrower list
-// added elsewhere merges straight back to the original set.
+// build.common.gradle, not TeamCode: AGP unions abiFilters from defaultConfig
+// with the build type's, so a narrower list elsewhere merges straight back.
 func (p *Project) SetABI(abi string) (bool, error) {
 	original, err := os.ReadFile(p.CommonGradle)
 	if err != nil {
@@ -108,6 +113,7 @@ func (p *Project) SetABI(abi string) (bool, error) {
 	return true, nil
 }
 
+// StripSourceMaps excludes JavaScript source maps, which the robot never reads.
 func (p *Project) StripSourceMaps() (bool, error) {
 	original, err := os.ReadFile(p.TeamCodeGradle)
 	if err != nil {
@@ -118,8 +124,6 @@ func (p *Project) StripSourceMaps() (bool, error) {
 		return false, nil
 	}
 
-	// .add(), never +=: AGP exposes ignoreAssetsPatterns as a read-only List,
-	// so reassigning it fails at configuration time.
 	block := `// pusher: source maps are debugger-only and never read on the robot.
 androidResources {
     ignoreAssetsPatterns.add('*.map')
@@ -139,6 +143,55 @@ androidResources {
 	}
 
 	return true, nil
+}
+
+var legacyPackagingRe = regexp.MustCompile(`(?m)^([ \t]*)jniLibs\.useLegacyPackaging[ \t]+(true|false)[ \t]*$`)
+
+// StoreLibs stops native libraries being compressed, so the install does not extract them.
+func (p *Project) StoreLibs(enable bool) (bool, error) {
+	original, err := os.ReadFile(p.TeamCodeGradle)
+	if err != nil {
+		return false, fmt.Errorf("cannot read %s: %w", p.TeamCodeGradle, err)
+	}
+
+	want := "false"
+	if enable {
+		want = "true"
+	}
+
+	patched := legacyPackagingRe.ReplaceAllString(string(original), "${1}jniLibs.useLegacyPackaging "+want)
+
+	if patched == string(original) {
+		if legacyPackagingRe.Match(original) {
+
+			return false, nil
+		}
+		return false, fmt.Errorf("no jniLibs.useLegacyPackaging line in %s", p.TeamCodeGradle)
+	}
+
+	if err := p.backup(p.TeamCodeGradle, original); err != nil {
+		return false, err
+	}
+
+	if err := os.WriteFile(p.TeamCodeGradle, []byte(patched), 0644); err != nil {
+		return false, fmt.Errorf("cannot write %s: %w", p.TeamCodeGradle, err)
+	}
+
+	return true, nil
+}
+
+// LegacyPackaging reports whether native libraries are still compressed.
+func (p *Project) LegacyPackaging() bool {
+	content, err := os.ReadFile(p.TeamCodeGradle)
+	if err != nil {
+		return true
+	}
+
+	match := legacyPackagingRe.FindSubmatch(content)
+	if match == nil {
+		return true
+	}
+	return string(match[2]) == "true"
 }
 
 func appendToAndroidBlock(content, block string) (string, error) {
@@ -178,8 +231,7 @@ func indentBlock(block string) string {
 	return b.String()
 }
 
-// Never overwrites an existing backup: the first one is the only pristine copy,
-// so a second slim run must not replace it with already-patched content.
+// Never overwrites an existing backup: the first is the only pristine copy.
 func (p *Project) backup(path string, content []byte) error {
 	backupPath := path + backupSuffix
 	if _, err := os.Stat(backupPath); err == nil {
@@ -197,6 +249,7 @@ func (p *Project) backupTargets() []string {
 	return []string{p.CommonGradle, p.TeamCodeGradle}
 }
 
+// HasBackups reports whether pusher has patched anything.
 func (p *Project) HasBackups() bool {
 	for _, path := range p.backupTargets() {
 		if _, err := os.Stat(path + backupSuffix); err == nil {
@@ -206,6 +259,7 @@ func (p *Project) HasBackups() bool {
 	return false
 }
 
+// Undo restores every gradle file pusher patched.
 func (p *Project) Undo() ([]string, error) {
 	var restored []string
 
@@ -234,6 +288,7 @@ func (p *Project) Undo() ([]string, error) {
 	return restored, nil
 }
 
+// PickABI chooses the architecture the hub runs that the project also packages.
 func PickABI(deviceABIs, projectABIs []string) (string, error) {
 	if len(deviceABIs) == 0 {
 		return "", fmt.Errorf("device reported no ABIs")

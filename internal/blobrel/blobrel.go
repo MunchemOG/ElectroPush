@@ -1,6 +1,3 @@
-// Package blobrel fetches blob library builds from the private repository's
-// GitHub releases. JitPack cannot build a private repo, so pusher carries the
-// AAR itself and the FTC project never needs credentials of its own.
 package blobrel
 
 import (
@@ -14,21 +11,19 @@ import (
 	"github.com/andreibanu/pusher/internal/ghauth"
 )
 
-// api is a variable so tests can point it at a stub. The redirect behaviour
-// that has to be verified only happens against a real server.
 var api = "https://api.github.com/repos/" + ghauth.Repo
 
 // Variant is which build of the library to fetch.
 type Variant string
 
+// The library builds. Competition carries no recording code at all.
 const (
-	// Competition carries no path-recording code at all.
 	Competition Variant = "blob-competition"
-	// Dev records traces for the visualiser.
+
 	Dev Variant = "blob-dev"
 )
 
-// AssetName is what CI attaches to a release: blob-competition-v1.4.0.aar.
+// AssetName is what CI attaches to a release.
 func AssetName(v Variant, tag string) string {
 	return fmt.Sprintf("%s-%s.aar", v, tag)
 }
@@ -65,7 +60,6 @@ func Tags(token string) ([]string, error) {
 	return tags, nil
 }
 
-// asset is one file attached to a release.
 type asset struct {
 	ID   int64  `json:"id"`
 	Name string `json:"name"`
@@ -103,11 +97,8 @@ func names(assets []asset) string {
 	return strings.Join(out, ", ")
 }
 
-// download pulls one asset by id.
-//
-// The asset endpoint answers with a redirect to object storage, which rejects
-// the request outright if GitHub's Authorization header is still attached. Go
-// forwards headers across redirects by default, so it has to be stripped.
+// The asset endpoint redirects to object storage, which rejects the request if
+// GitHub's Authorization header is still attached. Go forwards it by default.
 func download(token string, id int64) ([]byte, error) {
 	client := &http.Client{
 		Timeout: 5 * time.Minute,
@@ -145,8 +136,7 @@ func download(token string, id int64) ([]byte, error) {
 		return nil, fmt.Errorf("download was empty")
 	}
 	if !isZip(data) {
-		// An AAR is a zip. Anything else means an error page came back with a
-		// 200, which is worth catching before it lands in the project.
+
 		return nil, fmt.Errorf("what came back is not an AAR")
 	}
 	return data, nil

@@ -1,7 +1,3 @@
-// Package delta splits a file at content-defined boundaries. Fixed-size blocks
-// would be useless here: inserting bytes near the start of an APK shifts every
-// later block, so all of them would look changed and the whole file would be
-// resent. Content-defined cut points resynchronise after an edit.
 package delta
 
 import (
@@ -12,6 +8,7 @@ import (
 	"strings"
 )
 
+// Chunk size bounds for the content-defined splitter.
 const (
 	MinChunk = 128 << 10
 
@@ -22,9 +19,6 @@ const (
 
 var gear [256]uint64
 
-// Generated deterministically on purpose. This table decides where chunk
-// boundaries fall, so changing it moves every boundary and instantly
-// invalidates the cache on every robot.
 func init() {
 	state := uint64(0x9E3779B97F4A7C15)
 	for i := range gear {
@@ -36,6 +30,7 @@ func init() {
 	}
 }
 
+// Chunk is one piece of a split APK, identified by its content.
 type Chunk struct {
 	Hash string
 
@@ -44,10 +39,12 @@ type Chunk struct {
 	Size int64
 }
 
+// Filename is what the chunk is cached under on the robot.
 func (c Chunk) Filename() string {
 	return c.Hash + ".chunk"
 }
 
+// Split cuts data into content-defined chunks.
 func Split(data []byte) []Chunk {
 	total := int64(len(data))
 	if total == 0 {
@@ -98,6 +95,7 @@ func hashOf(b []byte) string {
 	return hex.EncodeToString(sum[:16])
 }
 
+// SplitFile chunks a file and returns its contents.
 func SplitFile(path string) ([]Chunk, []byte, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -107,8 +105,7 @@ func SplitFile(path string) ([]Chunk, []byte, error) {
 	return Split(data), data, nil
 }
 
-// Lists every occurrence, including duplicates: the device rebuilds the file by
-// concatenating these in order, so dropping a repeat would truncate the APK.
+// Manifest lists the chunks that rebuild the APK, in order.
 func Manifest(chunks []Chunk) string {
 	var b strings.Builder
 	for _, c := range chunks {
@@ -118,6 +115,7 @@ func Manifest(chunks []Chunk) string {
 	return b.String()
 }
 
+// Missing returns the chunks the robot does not already hold.
 func Missing(chunks []Chunk, present map[string]bool) []Chunk {
 	var missing []Chunk
 	seen := make(map[string]bool, len(chunks))
@@ -133,6 +131,7 @@ func Missing(chunks []Chunk, present map[string]bool) []Chunk {
 	return missing
 }
 
+// TotalSize is how many bytes a set of chunks covers.
 func TotalSize(chunks []Chunk) int64 {
 	var total int64
 	for _, c := range chunks {
@@ -141,6 +140,7 @@ func TotalSize(chunks []Chunk) int64 {
 	return total
 }
 
+// Unreferenced lists cached chunks this build no longer needs.
 func Unreferenced(chunks []Chunk, present map[string]bool) []string {
 	needed := make(map[string]bool, len(chunks))
 	for _, c := range chunks {

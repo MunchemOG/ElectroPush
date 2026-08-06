@@ -9,7 +9,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// openEditor loads the configuration and builds the device tree.
 func (m *hwModel) openEditor() tea.Cmd {
 	if err := m.loadConfig(); err != nil {
 		m.err = err
@@ -32,8 +31,6 @@ func (m *hwModel) loadConfig() error {
 		return fmt.Errorf("%s does not parse: %w", m.sel, err)
 	}
 
-	// Edits happen on a copy, so backing out of the editor leaves the file
-	// exactly as it was.
 	m.cfg = robotcfg.Clone(cfg)
 	m.saved = string(data)
 	m.dirty = false
@@ -50,10 +47,6 @@ func (m *hwModel) revalidate() {
 	m.issues = robotcfg.Validate(m.cfg)
 }
 
-// rebuildRows flattens the configuration into the lines the editor shows.
-//
-// Every action has a row of its own - adding a device, adding a hub - so the
-// editor can be used without knowing a single shortcut.
 func (m *hwModel) rebuildRows() {
 	m.rows = m.rows[:0]
 	if m.cfg == nil {
@@ -153,8 +146,6 @@ func hwDeviceLabel(d robotcfg.Device) string {
 	return fmt.Sprintf("%-11s %s", where, name)
 }
 
-// firstSelectable opens the editor on the first device rather than the hub
-// heading above it, so the cursor starts on something worth pressing enter on.
 func (m *hwModel) firstSelectable() int {
 	for i, row := range m.rows {
 		if row.Kind == hwRowDevice {
@@ -170,8 +161,6 @@ func (m *hwModel) firstSelectable() int {
 	return 0
 }
 
-// moveRows skips the headings, so holding a direction never parks the cursor
-// somewhere enter does nothing.
 func (m *hwModel) moveRows(delta int) {
 	if len(m.rows) == 0 {
 		return
@@ -289,7 +278,6 @@ func (m *hwModel) addModule(portal int) {
 	m.status = fmt.Sprintf("Added %s", m.cfg.Portals[portal].Modules[index].Name)
 }
 
-// save writes the edited configuration back to the project.
 func (m *hwModel) save() {
 	if m.cfg == nil {
 		return
@@ -308,7 +296,6 @@ func (m *hwModel) save() {
 	m.rebuildEntries()
 }
 
-// openDeviceForm fills the form from an existing device.
 func (m *hwModel) openDeviceForm(row hwRow) {
 	device, ok := m.cfg.DeviceAt(row.Slot)
 	if !ok {
@@ -336,7 +323,6 @@ func (m *hwModel) openDeviceForm(row hwRow) {
 	m.goTo(hwScreenDevice, 0)
 }
 
-// openAddForm starts a new device, already pointed at a free port.
 func (m *hwModel) openAddForm(portal, module int) {
 	if module < 0 {
 		return
@@ -361,9 +347,6 @@ func (m *hwModel) refreshSuggestions() {
 	}
 }
 
-// applyType fills in what follows from a device type: a free port of the right
-// flavour, and a bus for an I2C device. Choosing a type is most of the work,
-// and everything after it has a sensible answer.
 func (m *hwModel) applyType(tag string) {
 	m.form.typed = tag
 
@@ -417,8 +400,7 @@ func (m *hwModel) updateHWDevice(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "tab", "down":
-		// On the type field the list is what down moves through, since that is
-		// the whole point of it.
+
 		if m.form.field == hwFieldType && key.String() == "down" {
 			if len(m.form.suggest) > 0 {
 				m.form.pick = (m.form.pick + 1) % len(m.form.suggest)
@@ -439,8 +421,7 @@ func (m *hwModel) updateHWDevice(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "enter":
-		// On the type field, enter takes the highlighted suggestion rather than
-		// saving, so a half-typed name never becomes a device type.
+
 		if m.form.field == hwFieldType && len(m.form.suggest) > 0 {
 			m.applyType(m.form.suggest[m.form.pick])
 			m.refreshSuggestions()
@@ -484,8 +465,6 @@ func (m *hwModel) editField(edit func(string) string) {
 	m.checkForm()
 }
 
-// digitsOnly keeps a port field numeric, with a leading minus allowed because
-// an Ethernet device carries port="-1".
 func digitsOnly(s string) string {
 	var b strings.Builder
 	for i, r := range s {
@@ -496,9 +475,6 @@ func digitsOnly(s string) string {
 	return b.String()
 }
 
-// checkForm says what is wrong while it is being typed, rather than after
-// saving. Catching a duplicate name at the moment it is typed is most of what
-// makes this easier than editing the XML.
 func (m *hwModel) checkForm() {
 	m.form.problem = ""
 
@@ -528,8 +504,7 @@ func (m *hwModel) checkForm() {
 
 	flavor := robotcfg.FlavorOf(m.form.typed)
 	if flavor == robotcfg.Unclassified {
-		// Nothing is known about this type's ports, so there is nothing left
-		// to check. It is still allowed: teams register their own.
+
 		return
 	}
 
@@ -559,7 +534,6 @@ func (m *hwModel) checkForm() {
 	}
 }
 
-// portTaken reports what else is on the port the form is pointing at.
 func (m *hwModel) portTaken(flavor robotcfg.Flavor, port int) (string, bool) {
 	if m.form.module < 0 || m.form.portal < 0 {
 		return "", false

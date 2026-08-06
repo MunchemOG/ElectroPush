@@ -7,6 +7,7 @@ import (
 	"github.com/andreibanu/pusher/internal/robotcfg"
 )
 
+// View satisfies tea.Model.
 func (m *hwModel) View() string {
 	if m.quit {
 		return ""
@@ -114,8 +115,6 @@ func (m *hwModel) problemSummary() string {
 	}
 }
 
-// problemList shows the first few problems under the tree. Not all of them:
-// they are marked in the tree itself, and a long list would push it off screen.
 func (m *hwModel) problemList() string {
 	if len(m.issues) == 0 {
 		return ""
@@ -161,8 +160,6 @@ func (m *hwModel) viewHWDevice() string {
 
 	b.WriteString(m.field("Type", m.form.typed, hwFieldType))
 
-	// The suggestions are the point of the type field: nobody remembers that a
-	// goBILDA Yellow Jacket is spelled goBILDA5202SeriesMotor.
 	if m.form.field == hwFieldType {
 		b.WriteString(m.suggestions())
 	} else if flavor := robotcfg.FlavorOf(m.form.typed); flavor != robotcfg.Unclassified {
@@ -210,8 +207,6 @@ func (m *hwModel) field(label, value string, which hwField) string {
 	return fmt.Sprintf("%s%-7s %s\n", marker, label, shown)
 }
 
-// suggestions shows a window around the highlighted type rather than the whole
-// list, which is long enough to fill the screen on its own.
 func (m *hwModel) suggestions() string {
 	if len(m.form.suggest) == 0 {
 		return "         " + unsetStyle.Render("no device type matches") + "\n"

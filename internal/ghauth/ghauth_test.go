@@ -13,8 +13,6 @@ func isolate(t *testing.T) string {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 
-	// Tests must not adopt whatever GitHub login the machine running them is
-	// signed in to, which would make the result depend on the developer.
 	restore := discover
 	discover = func() (Credentials, bool) { return Credentials{}, false }
 	t.Cleanup(func() { discover = restore })
@@ -22,8 +20,6 @@ func isolate(t *testing.T) string {
 	return home
 }
 
-// findable makes discovery succeed, standing in for a machine that is already
-// signed in to an account with access.
 func findable(t *testing.T, creds Credentials) {
 	t.Helper()
 	restore := discover
@@ -51,7 +47,6 @@ func TestSaveWritesOwnerOnly(t *testing.T) {
 	}
 }
 
-// A token must not end up in config.yaml, which people paste into issues.
 func TestCredentialsLiveOutsideTheConfigFile(t *testing.T) {
 	home := isolate(t)
 
@@ -98,7 +93,6 @@ func TestLoadTreatsAMissingFileAsNoToken(t *testing.T) {
 	}
 }
 
-// A corrupt file must not lock someone out with no way back.
 func TestLoadSurvivesCorruption(t *testing.T) {
 	isolate(t)
 
@@ -134,8 +128,6 @@ func TestClearRemovesTheToken(t *testing.T) {
 	}
 }
 
-// Fail closed only when there is no token at all. Resolve does no network here
-// because a fresh cache short-circuits it, which is the whole point.
 func TestResolveWithoutATokenFailsClosed(t *testing.T) {
 	isolate(t)
 
@@ -144,8 +136,6 @@ func TestResolveWithoutATokenFailsClosed(t *testing.T) {
 	}
 }
 
-// The point of discovery: someone already signed in is never asked to paste a
-// token, and what gets stored references the source rather than copying it.
 func TestResolveAdoptsAnExistingGitHubLogin(t *testing.T) {
 	isolate(t)
 	findable(t, Credentials{Source: "env", Login: "someone", CheckedAt: time.Now().Unix()})
@@ -158,7 +148,6 @@ func TestResolveAdoptsAnExistingGitHubLogin(t *testing.T) {
 		t.Errorf("got %+v", creds)
 	}
 
-	// And it is remembered, so the probes do not run on every call.
 	stored, _ := Load()
 	if stored.Source != "env" {
 		t.Errorf("discovery was not persisted: %+v", stored)
@@ -186,7 +175,6 @@ func TestResolveTrustsAFreshCacheWithoutNetwork(t *testing.T) {
 	}
 }
 
-// The cache has to outlast a competition weekend spent offline.
 func TestCacheLastsLongEnoughForAnEvent(t *testing.T) {
 	if TTL < 3*24*time.Hour {
 		t.Errorf("TTL of %v is too short to cover an event away from network", TTL)
@@ -211,7 +199,6 @@ func TestFreshnessBoundary(t *testing.T) {
 	}
 }
 
-// A token that has never checked out is not trusted just because it exists.
 func TestUnverifiedCredentialsAreNotFresh(t *testing.T) {
 	creds := Credentials{Token: "x"}
 	if creds.verified() || creds.fresh() {
@@ -234,8 +221,6 @@ func TestStatusOK(t *testing.T) {
 	}
 }
 
-// A 404 from GitHub means "you cannot see this", not "it does not exist", and
-// has to fail closed rather than being mistaken for a network problem.
 func TestDeniedIsDistinguishableFromUnreachable(t *testing.T) {
 	denied := &deniedError{"no access"}
 	if !isDenied(denied) {

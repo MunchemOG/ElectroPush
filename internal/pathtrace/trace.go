@@ -1,6 +1,3 @@
-// Package pathtrace reads the JSON path traces written by the blob library and
-// turns them into something you can look at: a speed profile over each curve and
-// a self-contained HTML visualiser.
 package pathtrace
 
 import (
@@ -13,12 +10,14 @@ import (
 	"strings"
 )
 
+// Point is one position on the field.
 type Point struct {
 	X float64 `json:"x"`
 	Y float64 `json:"y"`
 	H float64 `json:"h"`
 }
 
+// Segment is one path the robot followed.
 type Segment struct {
 	Index            int         `json:"index"`
 	Type             string      `json:"type"`
@@ -33,7 +32,6 @@ type Segment struct {
 	Curve            [][]float64 `json:"curve"`
 	CallSite         []string    `json:"callSite"`
 
-	// Filled in by Annotate and Profile.
 	Label      string    `json:"-"`
 	Source     string    `json:"-"`
 	Length     float64   `json:"-"`
@@ -42,6 +40,7 @@ type Segment struct {
 	Speeds     []float64 `json:"-"`
 }
 
+// Sample is one recorded moment during a run.
 type Sample struct {
 	T        int64   `json:"t"`
 	X        float64 `json:"x"`
@@ -52,6 +51,7 @@ type Sample struct {
 	Segment  int     `json:"seg"`
 }
 
+// Trace is one recorded autonomous run.
 type Trace struct {
 	Version      int       `json:"version"`
 	OpMode       string    `json:"opMode"`
@@ -79,8 +79,7 @@ func Load(path string) (*Trace, error) {
 	return &t, nil
 }
 
-// ActualSeconds is the measured wall-clock duration of a segment. The last
-// segment has no end time, so it is charged the remainder of the run.
+// ActualSeconds is how long this segment really took.
 func (s Segment) ActualSeconds(totalMs int64) float64 {
 	end := s.EndMs
 	if end < 0 {
@@ -94,16 +93,13 @@ func (s Segment) ActualSeconds(totalMs int64) float64 {
 
 var frameRe = regexp.MustCompile(`^(.+)\.([A-Za-z0-9_$]+):(-?\d+)$`)
 
-// Annotate maps each segment back to the source line that committed it, and to
-// the enclosing `case LABEL:` when there is one. That is what turns a flat list
-// of paths into the flow of the auto, without the OpMode having to cooperate.
+// Annotate maps each segment back to the source line that created it.
 func (t *Trace) Annotate(projectRoot string) {
 	cache := map[string][]string{}
 
 	for i := range t.Segments {
 		seg := &t.Segments[i]
 
-		// Innermost project frame is the line that actually made the call.
 		for j := len(seg.CallSite) - 1; j >= 0; j-- {
 			m := frameRe.FindStringSubmatch(seg.CallSite[j])
 			if m == nil {
@@ -131,8 +127,6 @@ func (t *Trace) Annotate(projectRoot string) {
 	}
 }
 
-// findSource locates the .java file for a fully qualified class name. Nested
-// classes (Outer$Inner) and alliance subclasses both land on the outer file.
 func findSource(root, class string, cache map[string][]string) string {
 	if root == "" {
 		return ""
@@ -152,8 +146,6 @@ func findSource(root, class string, cache map[string][]string) string {
 	relative := strings.ReplaceAll(class, ".", string(filepath.Separator)) + ".java"
 	var found string
 
-	// Build output and version control dwarf the source tree, and walking them
-	// costs more than the lookup itself.
 	skip := map[string]bool{"build": true, ".gradle": true, ".git": true, ".idea": true}
 
 	filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
@@ -179,9 +171,6 @@ func findSource(root, class string, cache map[string][]string) string {
 
 var caseRe = regexp.MustCompile(`^\s*case\s+([A-Za-z0-9_.]+)\s*:`)
 
-// enclosingCase scans upward from a line for the `case X:` it sits under. A
-// `break` or the switch itself ends the search, so a line after a case block
-// does not inherit that block's label.
 func enclosingCase(file string, line int, cache map[string][]string) string {
 	lines, ok := cache["lines:"+file]
 	if !ok {

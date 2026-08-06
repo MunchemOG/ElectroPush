@@ -19,7 +19,7 @@ func TestCellarFormula(t *testing.T) {
 		{"/home/linuxbrew/.linuxbrew/Cellar/pusher/1.0.34/bin/pusher", "pusher", true},
 		{"/usr/local/bin/pusher", "", false},
 		{"/Users/someone/go/bin/pusher", "", false},
-		// A directory called Cellar with nothing under it names no formula.
+
 		{"/opt/homebrew/Cellar", "", false},
 	}
 
@@ -31,8 +31,6 @@ func TestCellarFormula(t *testing.T) {
 	}
 }
 
-// The asset has to match what the release workflow actually publishes, or every
-// update fails at the download.
 func TestAssetNameMatchesPublishedNames(t *testing.T) {
 	published := map[string]bool{
 		"pusher-darwin-amd64":      true,
@@ -63,8 +61,8 @@ func TestSumFor(t *testing.T) {
 		ok    bool
 	}{
 		{"pusher-darwin-arm64", "abc123", true},
-		{"pusher-linux-amd64", "def456", true},       // normalised to lower case
-		{"pusher-windows-amd64.exe", "789aaa", true}, // binary-mode asterisk stripped
+		{"pusher-linux-amd64", "def456", true},
+		{"pusher-windows-amd64.exe", "789aaa", true},
 		{"pusher-darwin-universal", "", false},
 	}
 
@@ -91,7 +89,7 @@ func TestReleaseVersionAndNewer(t *testing.T) {
 	}{
 		{"1.0.34", true},
 		{"1.0.35", false},
-		{"v1.0.35", false}, // a stamped v must not read as a difference
+		{"v1.0.35", false},
 		{"dev", true},
 		{"", true},
 	}

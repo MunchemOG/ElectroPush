@@ -83,22 +83,16 @@ func pushOverWiFi(gradlePath string) error {
 		return err
 	}
 
-	// Deliberately not persisted: recomputed every run so moving between home
-	// and the lab needs no configuration.
 	if home != "" {
 		fmt.Printf("[OK] Currently on: %s\n", home)
 	}
 
-	// Slimming runs before the build, so it relies on an ABI cached from an
-	// earlier connection: the hub is not reachable yet.
 	slimmedFor := ""
 	if config.GetAutoSlim() {
 		slimmedFor = config.GetHubABI()
 		applyAutoSlim()
 	}
 
-	// Build before switching networks, while real internet is still available.
-	// This is why no offline mode is needed on the robot's hotspot.
 	if err := buildProject(gradlePath, onRobot); err != nil {
 		return err
 	}
@@ -118,9 +112,6 @@ func pushOverWiFi(gradlePath string) error {
 
 	leavingRobot := switchBack && home != ""
 
-	// Disconnect while the robot is still reachable; after the network hop the
-	// address is unroutable. Kept only when a failed deploy leaves us on the
-	// robot, where the live connection is what a retry needs.
 	if deployErr == nil || leavingRobot {
 		disconnectADB()
 	}
@@ -154,9 +145,6 @@ func disconnectADB() {
 	fmt.Println("[OK] ADB disconnected")
 }
 
-// Precedence: an explicit setting, then the live SSID, then inference from the
-// saved-network order. Must run before joining the robot, which destroys every
-// signal of where we came from.
 func resolveHomeNetwork(wifiMgr *wifi.Manager, onRobot, switchBack bool, robotSSID string) (string, error) {
 	if !switchBack {
 		return "", nil
@@ -243,12 +231,30 @@ func install(gradlePath, serial string) error {
 
 	fmt.Printf("\n[*] APK: %s\n", apkPath)
 
+	opt := adb.Options{
+		Delta:         config.GetDeltaTransfer(),
+		SkipUnchanged: config.GetSkipUnchanged(),
+		Stream:        config.GetStreamInstall(),
+	}
+	if config.GetSplitInstall() {
+		opt.Splits = gradle.FindSplits(gradle.ProjectDir(gradlePath))
+	}
+
 	start := time.Now()
-	if err := adb.Install(serial, apkPath, config.GetDeltaTransfer()); err != nil {
+	plan, err := adb.InstallWith(serial, apkPath, opt)
+	if err != nil {
 		return fmt.Errorf("install failed: %w", err)
 	}
 
-	fmt.Printf("\n[OK] Deployed in %.1fs\n", time.Since(start).Seconds())
+	switch {
+	case plan.Skipped:
+		fmt.Printf("\n[=] Nothing to install: %s (%.1fs)\n", plan.Reason, time.Since(start).Seconds())
+	case plan.Splits > 0:
+		fmt.Printf("\n[OK] Deployed %d changed split(s) in %.1fs\n", plan.Splits, time.Since(start).Seconds())
+	default:
+		fmt.Printf("\n[OK] Deployed in %.1fs\n", time.Since(start).Seconds())
+	}
+
 	return nil
 }
 

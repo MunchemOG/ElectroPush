@@ -6,9 +6,6 @@ import (
 	"testing"
 )
 
-// load reads the full configuration off disk rather than the abbreviated copy
-// in parse_test.go, so the editing tests run against a hub that is actually
-// full: a free-port search only means something when the ports are used up.
 func load(t *testing.T) *Config {
 	t.Helper()
 
@@ -34,7 +31,6 @@ func original(t *testing.T) string {
 	return string(data)
 }
 
-// The editor works on a copy so an abandoned edit leaves the file alone.
 func TestCloneDoesNotShareAnything(t *testing.T) {
 	wantOriginal := original(t)
 	original := load(t)
@@ -59,8 +55,6 @@ func TestCloneDoesNotShareAnything(t *testing.T) {
 	}
 }
 
-// A device lands in port order rather than at the end, so the file keeps
-// reading the way the hub is laid out.
 func TestAddedDevicesLandInPortOrder(t *testing.T) {
 	cfg := load(t)
 
@@ -84,24 +78,20 @@ func TestAddedDevicesLandInPortOrder(t *testing.T) {
 func TestFreePortSkipsWhatIsTaken(t *testing.T) {
 	cfg := load(t)
 
-	// The Control Hub has motors on 0-3 already.
 	if _, ok := cfg.FreePort(0, 1, Motor, 0); ok {
 		t.Error("found a free motor port on a full hub")
 	}
 
-	// Servos 0,1,2,3,5 are used, so 4 is the gap.
 	port, ok := cfg.FreePort(0, 1, Servo, 0)
 	if !ok || port != 4 {
 		t.Errorf("got port %d (found: %v), want 4", port, ok)
 	}
 
-	// Analog 0 is used, so 1 is next.
 	port, ok = cfg.FreePort(0, 1, Analog, 0)
 	if !ok || port != 1 {
 		t.Errorf("got analog port %d, want 1", port)
 	}
 
-	// I2C is per bus: bus 0 has the IMU on port 0, bus 1 has nothing.
 	if port, ok := cfg.FreePort(0, 1, I2C, 0); !ok || port != 1 {
 		t.Errorf("got I2C bus 0 port %d, want 1", port)
 	}
@@ -110,11 +100,10 @@ func TestFreePortSkipsWhatIsTaken(t *testing.T) {
 	}
 }
 
-// Renaming must not collide with the device being renamed.
 func TestNameTakenIgnoresTheSlotBeingEdited(t *testing.T) {
 	cfg := load(t)
 
-	here := Slot{Portal: 0, Module: 1, Device: 0} // "fr"
+	here := Slot{Portal: 0, Module: 1, Device: 0}
 
 	if !cfg.NameTaken("fr", Slot{Portal: 9}) {
 		t.Error("fr should be taken when nothing is excluded")
@@ -126,7 +115,6 @@ func TestNameTakenIgnoresTheSlotBeingEdited(t *testing.T) {
 		t.Error("a real collision was missed")
 	}
 
-	// A top-level device competes for the same names.
 	if !cfg.NameTaken("limelight", here) {
 		t.Error("the Ethernet device's name was not counted")
 	}
@@ -135,8 +123,6 @@ func TestNameTakenIgnoresTheSlotBeingEdited(t *testing.T) {
 func TestSetDeviceKeepsAttributesItDoesNotModel(t *testing.T) {
 	cfg := load(t)
 
-	// The pinpoint carries a bus attribute, so a type change proves the
-	// carried attributes survive rather than being rebuilt from the model.
 	slot := Slot{Portal: 0, Module: 1, Device: 14}
 
 	before, ok := cfg.DeviceAt(slot)
@@ -179,7 +165,6 @@ func TestRemoveDevice(t *testing.T) {
 func TestAddModuleTakesTheLowestFreeAddress(t *testing.T) {
 	cfg := load(t)
 
-	// Address 2 is taken; 173 is the Control Hub and out of the hand-set range.
 	index, err := cfg.AddModule(0)
 	if err != nil {
 		t.Fatal(err)
@@ -202,8 +187,6 @@ func TestAddModuleTakesTheLowestFreeAddress(t *testing.T) {
 	}
 }
 
-// Autocompletion is the whole point of the type field, so the ranking has to
-// put what somebody meant at the top.
 func TestSuggestTagsRanksPrefixMatchesFirst(t *testing.T) {
 	got := SuggestTags("gobilda")
 	if len(got) < 3 {
@@ -215,7 +198,6 @@ func TestSuggestTagsRanksPrefixMatchesFirst(t *testing.T) {
 		}
 	}
 
-	// A match in the middle still counts, ranked after the prefix matches.
 	got = SuggestTags("servo")
 	if len(got) == 0 {
 		t.Fatal("no servo types")
@@ -227,7 +209,6 @@ func TestSuggestTagsRanksPrefixMatchesFirst(t *testing.T) {
 		t.Errorf("a mid-string match was dropped: %v", got)
 	}
 
-	// Nothing typed offers everything, so the list can be browsed.
 	if len(SuggestTags("")) != len(KnownTags()) {
 		t.Error("an empty query should offer every type")
 	}

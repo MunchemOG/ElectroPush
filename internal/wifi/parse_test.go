@@ -15,8 +15,7 @@ func TestParseNetworksetupSSID(t *testing.T) {
 		{"normal association", "Current Wi-Fi Network: ASUS_5G\n", "ASUS_5G"},
 		{"SSID containing a colon keeps everything after the first one",
 			"Current Wi-Fi Network: Andrei: Robot\n", "Andrei: Robot"},
-		// macOS prints this both when genuinely offline and when it is simply
-		// refusing to name the network, so it must not parse.
+
 		{"the not-associated line yields nothing",
 			"You are not associated with an AirPort network.\n", ""},
 		{"empty output", "", ""},
@@ -55,8 +54,6 @@ func TestParseDarwinPreferred(t *testing.T) {
 	}
 }
 
-// nmcli escapes the field separator, so a naive split would corrupt any SSID
-// containing a colon.
 func TestSplitTerseHandlesEscapes(t *testing.T) {
 	tests := []struct {
 		line string
@@ -105,8 +102,6 @@ func TestParseNmcliActiveSSID(t *testing.T) {
 	}
 }
 
-// NetworkManager stores a real last-connected time, so ordering here is data
-// rather than the inference macOS forces on us.
 func TestParseNmcliSavedNetworksOrdersByLastUsed(t *testing.T) {
 	output := strings.Join([]string{
 		"ASUS_5G:802-11-wireless:1754100000",
@@ -148,7 +143,6 @@ func TestParseNmcliRadio(t *testing.T) {
 	}
 }
 
-// Asking for SSID must not match the BSSID line sitting right below it.
 func TestNetshFieldMatchesExactKey(t *testing.T) {
 	output := `
 There is 1 interface on the system:
@@ -206,7 +200,6 @@ func TestParseNetshProfilesEmpty(t *testing.T) {
 	}
 }
 
-// An unescaped & or < in a password produces a profile Windows rejects.
 func TestWlanProfileXMLEscapesAndStaysValid(t *testing.T) {
 	profile, err := wlanProfileXML("Robot & <Friends>", `p@ss"w<o>rd&`)
 	if err != nil {
@@ -220,7 +213,6 @@ func TestWlanProfileXMLEscapesAndStaysValid(t *testing.T) {
 		t.Error("the password was inserted without escaping")
 	}
 
-	// The real check: Windows must be handed well-formed XML.
 	if err := xml.Unmarshal([]byte(profile), new(struct {
 		XMLName xml.Name
 	})); err != nil {
@@ -240,10 +232,6 @@ func TestEscapeSingleQuotes(t *testing.T) {
 	}
 }
 
-// macOS keeps the saved-network list most-recently-joined first, so the first
-// entry is the network in use. The robot's own networks have to be skipped:
-// after joining the robot it sits at the top, and returning it as the place to
-// go back to would strand the user on the hotspot.
 func TestFirstNotIn(t *testing.T) {
 	atTheLab := []string{"ICHB-Robotics-5G", "14270-RC", "ICHB-GIM", "ASUS_5G"}
 	onTheRobot := []string{"14270-RC", "ICHB-Robotics-5G", "ICHB-GIM", "ASUS_5G"}

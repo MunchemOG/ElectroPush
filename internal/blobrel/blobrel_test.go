@@ -8,7 +8,6 @@ import (
 	"testing"
 )
 
-// aar is the smallest thing that passes the zip sniff.
 var aar = append([]byte{'P', 'K', 3, 4}, []byte("payload")...)
 
 func TestAssetNameMatchesTheAgreedContract(t *testing.T) {
@@ -20,9 +19,6 @@ func TestAssetNameMatchesTheAgreedContract(t *testing.T) {
 	}
 }
 
-// The asset endpoint redirects to object storage, which rejects the request if
-// GitHub's Authorization header is still attached. Go forwards headers across
-// redirects by default, so this is the one that silently breaks downloads.
 func TestFetchDoesNotForwardTheTokenAcrossTheRedirect(t *testing.T) {
 	var storageSawAuth bool
 
@@ -81,8 +77,6 @@ func TestFetchNamesWhatIsActuallyThere(t *testing.T) {
 	}
 }
 
-// A 404 on a private repo means the token cannot see it, and the message has to
-// say that rather than implying the release is gone.
 func TestNotFoundBlamesAccessNotExistence(t *testing.T) {
 	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -101,8 +95,6 @@ func TestNotFoundBlamesAccessNotExistence(t *testing.T) {
 	}
 }
 
-// An error page served with a 200 must not be written into the project as a
-// library.
 func TestFetchRejectsSomethingThatIsNotAnAAR(t *testing.T) {
 	storage := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("<html>gateway timeout</html>"))

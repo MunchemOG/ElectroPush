@@ -53,8 +53,14 @@ func runHelp(cmd *cobra.Command, args []string) {
 	if feature.Revealed() {
 		fmt.Println("  pusher visualiser     Draw the path an auto drove (alias: vis)")
 	}
+	fmt.Println("  pusher dev            Measure what a deploy costs (see the warning)")
 	fmt.Println("  pusher --version      Show version information")
 	fmt.Println("  pusher help           Show this help")
+	fmt.Println("")
+	fmt.Println("pusher dev:")
+	fmt.Println("  Measuring tools for working on pusher itself. It deploys to the")
+	fmt.Println("  robot repeatedly and reinstalls the app several times. If you do")
+	fmt.Println("  not already know why you want it, you do not want it.")
 	fmt.Println("")
 	fmt.Println("Deploying:")
 	fmt.Println("  A hub on USB is used automatically and your Wi-Fi is left alone.")

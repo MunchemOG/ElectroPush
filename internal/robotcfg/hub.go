@@ -1,8 +1,6 @@
 package robotcfg
 
 import (
-	// MD5 is used to tell whether two files are the same, never to protect
-	// anything. It is what the hub's shell can compute without extra tools.
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
@@ -14,16 +12,12 @@ import (
 	"github.com/andreibanu/pusher/internal/adb"
 )
 
-// HubDir is where the robot controller keeps its configurations. Every
-// configuration the Driver Station can see lives here as one XML file, and the
-// filename without its extension is the name shown on the Driver Station.
+// HubDir is where the robot controller keeps its configurations.
 const HubDir = "/sdcard/FIRST"
 
 // Ext is the extension the robot controller looks for.
 const Ext = ".xml"
 
-// illegalNameChars are the characters the robot controller refuses in a
-// configuration name, because the name becomes a filename.
 const illegalNameChars = `?:"*|/\<>`
 
 // CheckName reports whether a name can be used as a configuration name.
@@ -47,9 +41,6 @@ func RemotePath(name string) string {
 }
 
 // List returns the configuration names on the robot, sorted.
-//
-// Names routinely contain spaces, so the listing is one name per line and is
-// never split on whitespace.
 func List(serial string) ([]string, error) {
 	out, err := adb.Shell(serial, "ls", "-1", HubDir, "2>/dev/null")
 	if err != nil {
@@ -63,7 +54,7 @@ func parseListing(out string) []string {
 	var names []string
 
 	for _, line := range strings.Split(out, "\n") {
-		// adb shell hands back CRLF on some hubs.
+
 		file := strings.TrimSpace(strings.TrimRight(line, "\r"))
 
 		if !strings.HasSuffix(file, Ext) {
@@ -77,11 +68,6 @@ func parseListing(out string) []string {
 }
 
 // Hashes returns an MD5 for every configuration on the robot, keyed by name.
-//
-// One shell call rather than a pull per configuration: over the robot's Wi-Fi
-// a listing that transferred every file would take long enough to be worth
-// avoiding. An empty result means the hub has no md5sum, which is not an error
-// worth surfacing - the caller falls back to saying nothing about sameness.
 func Hashes(serial string) map[string]string {
 	out, err := adb.Shell(serial, "md5sum", HubDir+"/*"+Ext, "2>/dev/null")
 	if err != nil {
@@ -97,8 +83,6 @@ func parseHashes(out string) map[string]string {
 	for _, line := range strings.Split(out, "\n") {
 		line = strings.TrimSpace(strings.TrimRight(line, "\r"))
 
-		// "<32 hex chars>  <path>". The path is taken as the rest of the line
-		// because configuration names contain spaces.
 		digest, path, found := strings.Cut(line, "  ")
 		if !found || len(digest) != 32 {
 			continue
@@ -146,10 +130,6 @@ func Fetch(serial, name string) ([]byte, error) {
 }
 
 // Send writes one configuration to the robot.
-//
-// It goes through a temporary file rather than a shell redirect: configuration
-// names contain spaces and quotes survive adb's shell round trip badly, and a
-// push either transfers the file or fails.
 func Send(serial, name string, data []byte) error {
 	if err := CheckName(name); err != nil {
 		return err
@@ -198,31 +178,18 @@ func Exists(serial, name string) bool {
 	return false
 }
 
-// shellQuote wraps a path for the shell adb runs on the far side. Only used for
-// rm; transfers go through adb push and pull, which take paths verbatim.
 func shellQuote(path string) string {
 	return "'" + strings.ReplaceAll(path, "'", `'\''`) + "'"
 }
 
-// rcPackages are the robot controller applications whose settings might hold
-// the active configuration. The first is what every team builds from; the
-// second is the Control Hub's factory-installed one.
 var rcPackages = []string{
 	"com.qualcomm.ftcrobotcontroller",
 	"com.revrobotics.ftcrobotcontroller",
 }
 
-// activeConfigPref is the settings key the robot controller stores the active
-// configuration under. The value is the JSON form of the SDK's RobotConfigFile.
 const activeConfigPref = "pref_hardware_config_filename"
 
-// ActiveConfig returns the configuration the robot controller currently has
-// selected.
-//
-// This is best effort by design. It reads the application's own settings, which
-// only works where adb runs privileged - true on a Control Hub, not on a phone
-// used as a robot controller. Nothing depends on the answer: an empty string
-// means "could not tell", never "none selected".
+// ActiveConfig returns the configuration the robot has selected, empty if it cannot tell.
 func ActiveConfig(serial string) string {
 	for _, pkg := range rcPackages {
 		path := fmt.Sprintf("/data/data/%s/shared_prefs/%s_preferences.xml", pkg, pkg)
@@ -240,11 +207,6 @@ func ActiveConfig(serial string) string {
 	return ""
 }
 
-// activeFromPrefs digs the configuration name out of the settings file.
-//
-// The stored value is a JSON object that has been XML-escaped into an Android
-// preferences file, so it arrives as &quot; rather than ". Pulling the key out
-// by hand avoids parsing an Android preferences file to read one string.
 func activeFromPrefs(prefs string) string {
 	marker := `name="` + activeConfigPref + `"`
 
@@ -282,9 +244,7 @@ func unescapeXML(s string) string {
 	).Replace(s)
 }
 
-// LocalDir is where configurations are kept in an FTC project. It sits at the
-// project root rather than under TeamCode so a configuration is versioned
-// alongside the code that names its devices.
+// LocalDir is where configurations are kept in an FTC project.
 func LocalDir(projectRoot string) string {
 	return filepath.Join(projectRoot, "configs")
 }
