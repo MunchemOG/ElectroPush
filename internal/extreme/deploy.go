@@ -39,7 +39,7 @@ func Status(root, serial, apkPath string) State {
 
 	s.Excluded = Excluded(root)
 	if !s.Excluded {
-		s.Reason = "team code is still packaged in the APK, so a reload would be ignored"
+		s.Reason = "this project is not set up yet: `pusher settings` -> Pusher Extreme -> Set up this project"
 		return s
 	}
 
@@ -62,9 +62,9 @@ func Status(root, serial, apkPath string) State {
 	installed := adb.InstalledFingerprint(serial)
 	switch {
 	case installed == "":
-		s.Reason = "the robot has not been deployed to by pusher yet"
+		s.Reason = "the robot has not been deployed to by pusher yet, so this one installs and the next reloads"
 	case installed != fingerprint:
-		s.Reason = "the APK changed, so it has to be installed before a reload counts"
+		s.Reason = "the APK changed, so this one installs and the next reloads"
 	default:
 		s.APKMatches = true
 	}
