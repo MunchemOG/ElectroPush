@@ -254,6 +254,10 @@ func install(gradlePath, serial string) error {
 		return fmt.Errorf("install failed: %w", err)
 	}
 
+	// The robot now holds this project's non-team-code state, so the next
+	// deploy can tell that only team code changed and reload instead.
+	recordExtremeState(serial)
+
 	switch {
 	case plan.Skipped:
 		fmt.Printf("\n[=] Nothing to install: %s (%.1fs)\n", plan.Reason, time.Since(start).Seconds())

@@ -22,6 +22,8 @@ type State struct {
 	// produces. If it is not, something other than team code changed and the
 	// APK has to be installed before a reload means anything.
 	APKMatches bool
+	// Signature is the current project state, for recording after an install.
+	Signature string
 	// Reason explains a no, for showing rather than guessing.
 	Reason string
 }
@@ -48,23 +50,26 @@ func Status(root, serial, apkPath string) State {
 		return s
 	}
 
-	if apkPath == "" {
-		s.Reason = "no APK has been built yet"
-		return s
-	}
-
-	fingerprint, err := adb.APKFingerprint(apkPath)
+	// The APK itself is not comparable: two builds of an unchanged project
+	// differ, because D8 does not pack classes into dex files deterministically.
+	// What the APK is built from is comparable.
+	signature, err := Signature(root)
 	if err != nil {
-		s.Reason = "cannot read the APK"
+		s.Reason = "cannot read the project"
+		return s
+	}
+	s.Signature = signature
+
+	if adb.InstalledFingerprint(serial) == "" {
+		s.Reason = "the robot has not been deployed to by pusher yet, so this one installs and the next reloads"
 		return s
 	}
 
-	installed := adb.InstalledFingerprint(serial)
-	switch {
-	case installed == "":
-		s.Reason = "the robot has not been deployed to by pusher yet, so this one installs and the next reloads"
-	case installed != fingerprint:
-		s.Reason = "the APK changed, so this one installs and the next reloads"
+	switch recorded := RecordedSignature(serial); {
+	case recorded == "":
+		s.Reason = "the robot has not been installed to since this was set up, so this one installs and the next reloads"
+	case recorded != signature:
+		s.Reason = "something outside team code changed, so this one installs and the next reloads"
 	default:
 		s.APKMatches = true
 	}

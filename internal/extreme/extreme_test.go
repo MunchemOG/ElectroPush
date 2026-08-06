@@ -373,3 +373,95 @@ func fakeJar(t *testing.T, dir, entry string) string {
 	}
 	return path
 }
+
+// Comparing the built APK against the robot's cannot work: two builds of an
+// unchanged project differ, because D8 does not pack classes into dex files
+// deterministically. Measured on a real project, classes3.dex and classes5.dex
+// changed every build while every other entry stayed byte for byte the same, so
+// a reload was never once judged equivalent and every deploy installed.
+func TestTheSignatureIgnoresTeamCodeAndNoticesEverythingElse(t *testing.T) {
+	root := t.TempDir()
+
+	mkdir := func(parts ...string) string {
+		dir := filepath.Join(append([]string{root}, parts...)...)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		return dir
+	}
+
+	write := func(path, content string) {
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	mkdir(Module)
+	write(GradleFile(root), "dependencies {\n}\n")
+
+	team := mkdir(Module, "src", "main", "java", "org", "firstinspires", "ftc", "teamcode")
+	write(filepath.Join(team, "Auto.java"), "public class Auto {}\n")
+
+	res := mkdir(Module, "src", "main", "res")
+	write(filepath.Join(res, "thing.xml"), "<x/>\n")
+
+	before, err := Signature(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Team code is the thing that should reload, so it must not count.
+	write(filepath.Join(team, "Auto.java"), "public class Auto { int x = 1; }\n")
+	write(filepath.Join(team, "New.java"), "public class New {}\n")
+
+	if after, _ := Signature(root); after != before {
+		t.Error("a team code change counted as needing an install")
+	}
+
+	// Anything that ends up in the APK must count.
+	for _, change := range []struct{ name, path, content string }{
+		{"a gradle file", GradleFile(root), "dependencies {\n  implementation 'x'\n}\n"},
+		{"a resource", filepath.Join(res, "thing.xml"), "<y/>\n"},
+	} {
+		original, _ := os.ReadFile(change.path)
+		write(change.path, change.content)
+
+		if after, _ := Signature(root); after == before {
+			t.Errorf("%s did not count as a change", change.name)
+		}
+
+		write(change.path, string(original))
+	}
+
+	// And restoring everything has to give the original answer back, or the
+	// comparison drifts and every deploy installs anyway.
+	if after, _ := Signature(root); after != before {
+		t.Error("the signature did not come back after undoing the changes")
+	}
+}
+
+// Build outputs are derived, and hashing them would make the signature change
+// on every build for the same reason the APK does.
+func TestTheSignatureSkipsBuildOutput(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, Module, "build", "intermediates"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, Module, "build.gradle"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	before, err := Signature(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(filepath.Join(root, Module, "build", "intermediates", "out.jar"),
+		[]byte("anything"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if after, _ := Signature(root); after != before {
+		t.Error("build output counted as a change")
+	}
+}

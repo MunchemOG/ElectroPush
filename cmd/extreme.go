@@ -64,6 +64,24 @@ func tryExtreme(gradlePath, serial, apkPath string) (bool, error) {
 	return true, nil
 }
 
+// recordExtremeState notes what the robot now holds, after an install that
+// went through the ordinary path. Without it the next deploy cannot tell
+// whether anything outside team code changed and installs again.
+func recordExtremeState(serial string) {
+	if !config.GetExtreme() {
+		return
+	}
+
+	project, err := extreme.FindProject()
+	if err != nil || !extreme.Excluded(project.Root) {
+		return
+	}
+
+	if signature, err := extreme.Signature(project.Root); err == nil {
+		extreme.RecordSignature(serial, signature)
+	}
+}
+
 // extremeDeploy is the deploy path when Pusher Extreme is set up.
 //
 // The APK is still built, because it is the only way to know whether anything
