@@ -231,3 +231,20 @@ func gradleEnv() []string {
 	home := filepath.Dir(filepath.Dir(tc.Javac))
 	return append(env, "JAVA_HOME="+home)
 }
+
+// classNames lists the classes in a jar, the same way the SDK does.
+func classNames(jarPath string) ([]string, error) {
+	archive, err := zip.OpenReader(jarPath)
+	if err != nil {
+		return nil, err
+	}
+	defer archive.Close()
+
+	var names []string
+	for _, entry := range archive.File {
+		if strings.HasSuffix(entry.Name, ".class") {
+			names = append(names, strings.TrimSuffix(entry.Name, ".class"))
+		}
+	}
+	return names, nil
+}

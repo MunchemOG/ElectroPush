@@ -38,6 +38,7 @@ const (
 	screenBlobToken
 	screenUpdate
 	screenDeploy
+	screenExtreme
 )
 
 type addStep int
@@ -73,6 +74,7 @@ type SettingsModel struct {
 	confirmDeleteIndex int
 
 	blob     blobState
+	extreme  extremeState
 	root     string
 	gateStep int
 	update   updateState
@@ -151,6 +153,7 @@ var mainItems = []string{
 	"Gradle threads",
 	"blob library",
 	"Deploy speed",
+	"Pusher Extreme",
 	"Update pusher",
 	"Exit",
 }
@@ -225,6 +228,8 @@ func (m *SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateUpdate(key)
 	case screenDeploy:
 		return m.updateDeploy(key)
+	case screenExtreme:
+		return m.updateExtreme(key)
 	}
 
 	return m, nil
@@ -316,8 +321,11 @@ func (m *SettingsModel) updateMain(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case 8:
 			m.goTo(screenDeploy, 0)
 		case 9:
-			return m, m.enterUpdate()
+			m.refreshExtreme()
+			m.goTo(screenExtreme, 0)
 		case 10:
+			return m, m.enterUpdate()
+		case 11:
 			m.quit = true
 			return m, tea.Quit
 		}
@@ -556,6 +564,8 @@ func (m *SettingsModel) listLength() int {
 		return 0
 	case screenDeploy:
 		return len(deployItems)
+	case screenExtreme:
+		return len(extremeItems)
 	}
 	return 0
 }
@@ -644,6 +654,8 @@ func (m *SettingsModel) View() string {
 		b.WriteString(m.viewUpdate())
 	case screenDeploy:
 		b.WriteString(m.viewDeploy())
+	case screenExtreme:
+		b.WriteString(m.viewExtreme())
 	}
 
 	if m.err != nil {
@@ -666,6 +678,7 @@ func (m *SettingsModel) viewMain() string {
 		strconv.Itoa(config.GetThreads()),
 		m.blobLabel(),
 		m.deployLabel(),
+		m.extremeLabel(),
 		m.updateLabel(),
 		"",
 	}

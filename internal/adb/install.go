@@ -89,6 +89,21 @@ func forgetInstalled(serial string) {
 	_, _ = Shell(serial, "rm", "-f", installedMarker)
 }
 
+// InstalledFingerprint is the APK the robot was last given by pusher, empty
+// when it cannot tell.
+func InstalledFingerprint(serial string) string {
+	out, err := Shell(serial, "cat", installedMarker, "2>/dev/null")
+	if err != nil {
+		return ""
+	}
+
+	fields := strings.Fields(strings.TrimSpace(out))
+	if len(fields) == 0 {
+		return ""
+	}
+	return fields[0]
+}
+
 // ForgetInstalled makes the next deploy install unconditionally.
 func ForgetInstalled(serial string) { forgetInstalled(serial) }
 

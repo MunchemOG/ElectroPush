@@ -219,6 +219,36 @@ the whole APK.
 
 Do not guess which of these to turn on. `pusher dev` measures them.
 
+## Pusher Extreme
+
+Reloads your OpModes onto a running robot instead of installing an APK. Under a
+second, against around forty for a normal deploy.
+
+Set it up in `pusher settings` -> **Pusher Extreme**. One marked block is added
+to `TeamCode/build.gradle` and nothing else in your project is touched. The same
+menu undoes it.
+
+After that a deploy compiles your team code, pushes it to the robot and tells
+the robot controller to rescan. Nothing is installed.
+
+**It only reloads when that is equivalent.** If anything outside team code
+changed, or the robot is not running the APK this project builds, it installs
+normally and says why. Reloading when an install was needed would leave the
+robot running stale code with everything reporting success, which is the worst
+thing it could do.
+
+**While it is set up, your team code is not in the APK.** That is the point:
+parent-first classloading means a class in the APK always wins, so it has to be
+absent for a reloaded one to be used. The consequence is that anyone deploying
+the project from Android Studio gets a robot with no OpModes until pusher
+reloads them. Undo in the menu puts it back, then deploy once.
+
+How it works, if it matters: the FTC SDK already loads classes from outside the
+APK for OnBotJava, and already watches a file to know when to rescan. Pusher
+compiles your code on your laptop, puts the jar and dex where the SDK reads
+them, and touches that file. No `DexClassLoader` of pusher's own, and no changes
+to the robot controller app.
+
 ## pusher dev
 
 Measuring tools for working on pusher itself. **If you do not already know why
