@@ -259,17 +259,18 @@ func InstallWith(serial, apkPath string, opt Options) (InstallPlan, error) {
 		return plan, fmt.Errorf("adb not found")
 	}
 
-	pkg := ""
-	if opt.SkipUnchanged || len(opt.Splits) > 1 {
-		pkg = PackageName(apkPath)
-	}
+	// What was installed is recorded whatever the settings say. Skipping an
+	// unchanged install is only one reader of that record: Pusher Extreme uses
+	// it to decide whether a reload is equivalent to an install, and without it
+	// it can never tell and always installs.
+	pkg := PackageName(apkPath)
 
 	fingerprint := ""
-	if opt.SkipUnchanged && pkg != "" {
-		sum, err := APKFingerprint(apkPath)
-		if err == nil {
+	if pkg != "" {
+		if sum, err := APKFingerprint(apkPath); err == nil {
 			fingerprint = sum
-			if alreadyInstalled(serial, sum, pkg) {
+
+			if opt.SkipUnchanged && alreadyInstalled(serial, sum, pkg) {
 				plan.Skipped = true
 				plan.Reason = "the robot already has this exact build"
 				return plan, nil

@@ -47,9 +47,9 @@ var devHelp = []string{
 		"Sloth's published figures for context.",
 
 	"Compiles an OpMode here, pushes it to the hub and tells the robot\n" +
-		"controller to rescan. The OpMode binds a motor by name and shows its\n" +
-		"encoder, and each run alternates between m1 and m2, so a reload is\n" +
-		"proved by the binding changing rather than by the code merely running.",
+		"controller to rescan. Binds a motor by name and shows its encoder,\n" +
+		"alternating m1 and m2 so a reload is proved by the binding changing.\n" +
+		"Replaces anything Pusher Extreme reloaded: deploy again afterwards.",
 
 	"Deletes the pushed dex and tells the robot controller to rescan.",
 

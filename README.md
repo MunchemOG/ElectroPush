@@ -249,6 +249,30 @@ compiles your code on your laptop, puts the jar and dex where the SDK reads
 them, and touches that file. No `DexClassLoader` of pusher's own, and no changes
 to the robot controller app.
 
+### What it does not get on with
+
+**OnBotJava.** They use the same mechanism and the same file to say where
+classes live, so whichever ran last wins. Building anything in OnBotJava points
+that file at OnBotJava's own output and your reloaded team code stops being
+found; the next deploy points it back. Pick one.
+
+**`pusher dev` -> Hot reload an OpMode.** Same thing, on purpose: the proof
+replaces whatever is currently loaded, including your team code. Deploy again
+afterwards.
+
+**Libraries that call back into your code.** Your OpModes can use pedro,
+dashboard, ftclib and the rest normally, because those live in the APK and a
+reloaded class can see them. The reverse does not hold: a library cannot resolve
+your classes, so anything that takes a callback typed on one of your types, or
+reflects over them, fails at runtime rather than at compile time.
+
+**`pusher slim --undo`** restores whole gradle files from backups, one of which
+holds the Pusher Extreme block. Pusher puts the block back and says so, but if
+you edit those files by hand the same trap is there.
+
+**Installing only changed splits** aims at the same cost from the other
+direction and does nothing useful once team code is out of the APK.
+
 ## pusher dev
 
 Measuring tools for working on pusher itself. **If you do not already know why
