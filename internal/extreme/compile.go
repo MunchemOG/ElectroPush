@@ -303,14 +303,11 @@ func inAny(entry string, keep []string) bool {
 	for _, item := range keep {
 		item = strings.TrimSuffix(item, "/")
 
-		if isClassEntry(item) {
-			if entry == item || strings.HasPrefix(entry, item+"$") {
-				return true
-			}
-			continue
-		}
-
-		if strings.HasPrefix(entry, item+"/") {
+		// Both forms are checked rather than one of them guessed at: the entry
+		// is that class, an inner class of it, or something under it as a
+		// package. No naming convention separates the two reliably.
+		if entry == item || strings.HasPrefix(entry, item+"$") ||
+			strings.HasPrefix(entry, item+"/") {
 			return true
 		}
 	}
