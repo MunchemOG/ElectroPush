@@ -118,3 +118,55 @@ func FindReflected(root string) Reflection {
 
 	return out
 }
+
+// driverAnnotations mark a class the SDK instantiates as a hardware device.
+//
+// These cannot be reloaded, and unlike anything else here that is not a
+// preference. Every reload builds a new classloader, so a reloaded driver is a
+// different class each time while the device instance in the hardware map was
+// built under an earlier one. hardwareMap.get then finds nothing assignable to
+// what the OpMode asked for, and the robot reports that it cannot find its
+// hardware.
+var driverAnnotations = []string{
+	"@DeviceProperties", "@I2cDeviceType", "@MotorType", "@ServoType",
+	"@AnalogSensorType", "@DigitalIoDeviceType", "@I2cSensor",
+}
+
+// FindDrivers returns the team files defining hardware device drivers, as paths
+// without the .java extension.
+//
+// File granularity rather than package: a driver usually sits among ordinary
+// code that should still reload.
+func FindDrivers(root string) []string {
+	base := filepath.Join(root, SourceRoot)
+
+	var out []string
+
+	filepath.Walk(base, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".java") {
+			return nil
+		}
+
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+
+		for _, annotation := range driverAnnotations {
+			if !strings.Contains(string(content), annotation) {
+				continue
+			}
+
+			rel, err := filepath.Rel(base, path)
+			if err != nil {
+				return nil
+			}
+			out = append(out, strings.TrimSuffix(filepath.ToSlash(rel), ".java"))
+			return nil
+		}
+		return nil
+	})
+
+	sort.Strings(out)
+	return out
+}

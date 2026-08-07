@@ -102,7 +102,7 @@ func Reload(p *Project, serial string, cp Classpath, keep []string) (*Result, er
 	defer os.RemoveAll(work)
 
 	start := time.Now()
-	build, err := Compile(p, cp, work, keep)
+	build, err := Compile(p, cp, work, keep, RegisteredConfigs(serial))
 	if err != nil {
 		return out, err
 	}
@@ -130,6 +130,8 @@ func Reload(p *Project, serial string, cp Classpath, keep []string) (*Result, er
 	if err != nil {
 		return out, err
 	}
+
+	RecordRegisteredConfigs(serial, build.Registered)
 
 	out.Push, out.Bytes = delivery.Push, delivery.Bytes
 	out.Total = time.Since(started)

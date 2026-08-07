@@ -40,11 +40,22 @@ var keptRe = regexp.MustCompile(`// Kept in the APK anyway: (.*)`)
 // The exclusion is a closure rather than a pattern because of the keep list.
 // Ant patterns cannot say "everything under here except that", and generating
 // one pattern per subpackage would stop covering a package added later.
+//
+// Directories are always let through. Excluding one prunes everything under it
+// before any of it is considered, which drops the kept class along with its
+// package and leaves the keep list silently dead.
 func blockFor(keep []string) string {
+	// A keep entry is either a package, which ends in a slash once trimmed, or
+	// a single class. Both are matched by prefix, with the class form pinned to
+	// a dot so Foo does not also keep FooBar.
 	var conditions strings.Builder
-	for _, pkg := range keep {
-		fmt.Fprintf(&conditions, " &&\n                        !path.startsWith('%s/')",
-			strings.TrimSuffix(pkg, "/"))
+	for _, entry := range keep {
+		trimmed := strings.TrimSuffix(entry, "/")
+		if isClassEntry(trimmed) {
+			fmt.Fprintf(&conditions, " &&\n                        !path.startsWith('%s.')", trimmed)
+			continue
+		}
+		fmt.Fprintf(&conditions, " &&\n                        !path.startsWith('%s/')", trimmed)
 	}
 
 	kept := "nothing"
@@ -64,13 +75,25 @@ android {
             java {
                 exclude { details ->
                     def path = details.path
-                    path.startsWith('` + TeamPackage + `/')` + conditions.String() + `
+                    !details.directory &&
+                        path.startsWith('` + TeamPackage + `/')` + conditions.String() + `
                 }
             }
         }
     }
 }
 ` + endMarker
+}
+
+// isClassEntry reports whether a keep entry names one class rather than a
+// package. A class file starts with a capital letter by convention, and this
+// only has to separate the two forms this tool produces.
+func isClassEntry(entry string) bool {
+	base := entry
+	if i := strings.LastIndex(entry, "/"); i >= 0 {
+		base = entry[i+1:]
+	}
+	return base != "" && base[0] >= 'A' && base[0] <= 'Z'
 }
 
 // GradleFile is the module file the exclusion lives in.
