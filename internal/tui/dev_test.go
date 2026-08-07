@@ -59,3 +59,20 @@ func contains(s, sub string) bool {
 }
 
 var _ tea.Model = (*devModel)(nil)
+
+// A measuring tool must not be able to leave the robot broken. Reloading onto a
+// robot whose APK does not match the project puts classes that were kept out of
+// the reload in neither place, and the robot then crashes on init resolving
+// them. That is exactly what happened: a benchmark run reloaded after the keep
+// list changed but before the APK carrying those classes had been installed.
+func TestTheBenchmarkRefusesWhenAReloadWouldNotBeValid(t *testing.T) {
+	m := &devModel{height: 40}
+
+	// No robot at all is the simplest case of the same rule.
+	if cmd := m.benchExtreme(); cmd != nil {
+		t.Error("the benchmark started with no robot connected")
+	}
+	if m.err == nil {
+		t.Error("no reason was given")
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"github.com/andreibanu/pusher/internal/config"
 	"github.com/andreibanu/pusher/internal/extreme"
 	"github.com/andreibanu/pusher/internal/gradle"
+	"github.com/andreibanu/pusher/internal/hotreload"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -44,6 +45,7 @@ type extremeState struct {
 	status    extreme.State
 	haveRoot  bool
 	kept      []string
+	drivers   []string
 	reflected extreme.Reflection
 }
 
@@ -59,6 +61,7 @@ func (m *SettingsModel) refreshExtreme() {
 	m.extreme.root = project.Root
 	m.extreme.set = extreme.Excluded(project.Root)
 	m.extreme.kept = extreme.Kept(project.Root)
+	m.extreme.drivers = extreme.FindDrivers(project.Root)
 	m.extreme.reflected = extreme.FindReflected(project.Root)
 
 	serial := ""
@@ -120,10 +123,13 @@ func (m *SettingsModel) setUpExtreme() {
 		return
 	}
 
-	// Nothing is kept by default. @Config turns out to be common enough, and
-	// often on the OpModes themselves, that keeping everything it touches
-	// would leave most of the project unreloadable.
-	if err := extreme.Exclude(m.extreme.root); err != nil {
+	// Hardware device drivers are kept whatever anyone would prefer. Every
+	// reload builds a new classloader, so a reloaded driver is a different
+	// class each time while the device in the hardware map was built under an
+	// earlier one, and the robot then cannot find its own hardware.
+	drivers := extreme.FindDrivers(m.extreme.root)
+
+	if err := extreme.Exclude(m.extreme.root, drivers...); err != nil {
 		m.err = err
 		return
 	}
@@ -133,7 +139,12 @@ func (m *SettingsModel) setUpExtreme() {
 	}
 
 	m.refreshExtreme()
+
 	m.status = "Set up. Deploy once to install the APK without team code."
+	if len(drivers) > 0 {
+		m.status = fmt.Sprintf("Set up. %d hardware driver(s) stay in the APK. Deploy once.",
+			len(drivers))
+	}
 }
 
 func (m *SettingsModel) undoExtreme() {
@@ -151,8 +162,19 @@ func (m *SettingsModel) undoExtreme() {
 		return
 	}
 
-	m.refreshExtreme()
+	// A hub left holding a reload has those classes named twice once team code
+	// is packaged again, and the SDK then registers no OpMode at all.
 	m.status = "Undone. Deploy once so the robot gets an APK with team code in it."
+	if serial, err := adb.Target(); err == nil {
+		if err := hotreload.Clean(serial); err != nil {
+			m.status = "Undone, but the robot still holds a reload: connect it and undo again."
+		}
+		extreme.ForgetSignature(serial)
+	} else {
+		m.status = "Undone. Connect the robot and undo again to clear the reload off it, then deploy."
+	}
+
+	m.refreshExtreme()
 }
 
 func (m *SettingsModel) viewExtreme() string {
@@ -210,13 +232,16 @@ func (m *SettingsModel) extremeStatusLines() string {
 
 	extras := ""
 	if n := len(m.extreme.reflected.Classes); n > 0 {
-		extras = fmt.Sprintf("%d @Config classes bridged to FtcDashboard", n)
+		extras = fmt.Sprintf("%d @Config bridged", n)
 	}
-	if len(m.extreme.kept) > 0 {
+	if n := len(m.extreme.kept); n > 0 {
 		if extras != "" {
-			extras += "; "
+			extras += ", "
 		}
-		extras += fmt.Sprintf("%d packages kept in the APK", len(m.extreme.kept))
+		extras += fmt.Sprintf("%d kept in the APK (hardware drivers)", n)
+	}
+	if n := len(m.extreme.drivers); n > 0 && !m.extreme.set {
+		extras = fmt.Sprintf("%d hardware driver(s) will stay in the APK", n)
 	}
 	fmt.Fprintf(&b, "  %s\n\n", helpStyle.Render(trimTo(extras, 70)))
 

@@ -46,7 +46,8 @@ worth being straight about where each one is ahead.
   is the entire footprint. Sloth is a dependency that ships a runtime with it.
 - **Stock FTC Dashboard.** Sloth includes a drop-in replacement of Dashboard to
   make it compatible. Pusher registers your `@Config` classes with the real one
-  from inside the reload, so you keep the Dashboard you already have.
+  from inside the reload, so you keep the Dashboard you already have. Panels is
+  not handled yet.
 - **It refuses when a reload would be a lie.** If anything outside team code
   changed, it installs instead and says which input moved. Running stale code
   while everything reports success is the worst thing a tool like this can do.
@@ -317,6 +318,12 @@ the robot; the rest is compiling, which those figures may not include.
 
 - **Only `org.firstinspires.ftc.teamcode` is reloaded.** Everything else lives
   in the APK.
+- **Hardware device drivers written in team code stay in the APK.** Pusher finds
+  them and keeps them there automatically, one file at a time, so the rest of
+  the package still reloads. They cannot be reloaded: every reload builds a new
+  classloader, and a driver loaded from the reload is a different class each
+  time while the device in the hardware map was built under an earlier one. The
+  robot would report that it cannot find its own hardware.
 - **Your team code is not in the APK while this is set up.** That is what makes
   it work: a class in the APK always wins. It also means a teammate deploying
   from Android Studio gets a robot with no OpModes until pusher reloads them.
@@ -350,10 +357,18 @@ puts it where the SDK reads from, and touches that file. The SDK throws away its
 classloader, builds a new one and rediscovers your OpModes through the same path
 it uses for everything else.
 
-Checked against pedro, Panels, EasyOpenCV and blob: none of them go looking for
-classes on their own, so none of them need anything. FtcDashboard does, and is
-handled. A library that does and is not handled can have its package kept in the
-APK instead.
+Checked against the libraries in a real project, reading the full artifacts
+rather than their API jars: pedro, ftclib, EasyOpenCV and blob do not go looking
+for classes at all, so they need nothing.
+
+Two do. **FtcDashboard** scans the APK with `getPackageCodePath`, and is handled:
+pusher registers your `@Config` classes with it from inside the reload.
+**Panels** scans the same way through its own `ClassFinder`, and is **not
+handled yet**, so anything Panels discovers by scanning will not see reloaded
+classes. Panels used directly from your own code is unaffected.
+
+A library that scans and is not handled can have its package kept in the APK
+instead.
 
 ## Per-OS notes
 

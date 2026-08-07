@@ -36,6 +36,9 @@ type Build struct {
 	// Bridged is how many classes were handed to a library that could not
 	// otherwise see them.
 	Bridged int
+	// Registered is what the bridge puts into the dashboard, for the next
+	// reload to take away again if it stops registering them.
+	Registered []string
 }
 
 // FindProject locates the FTC project around the working directory.
@@ -83,7 +86,7 @@ func (p *Project) Sources() ([]string, error) {
 // classloader, so a partial dex would leave the classes it did not contain
 // unresolvable, and the SDK's re-registration abandons everything on the first
 // failure rather than skipping one class.
-func Compile(p *Project, cp Classpath, work string, keep []string) (Build, error) {
+func Compile(p *Project, cp Classpath, work string, keep, previous []string) (Build, error) {
 	var out Build
 
 	tc, err := hotreload.FindToolchain()
@@ -102,13 +105,14 @@ func Compile(p *Project, cp Classpath, work string, keep []string) (Build, error
 	// rather than names looked up at runtime, which is the whole reason it can
 	// hand reloaded classes to something that cannot see them.
 	configs := ConfigClasses(p.Root, keep)
-	bridge, err := GenerateBridge(work, configs, cp)
+	bridge, err := GenerateBridge(work, configs, previous, cp)
 	if err != nil {
 		return out, err
 	}
 	if bridge != "" {
 		sources = append(sources, bridge)
 		out.Bridged = len(configs)
+		out.Registered = RegisteredNames(configs)
 	}
 
 	classes := filepath.Join(work, "classes")
@@ -290,9 +294,23 @@ func split(entries []string, keep []string) (reload []string, kept int) {
 	return reload, kept
 }
 
-func inAny(entry string, prefixes []string) bool {
-	for _, prefix := range prefixes {
-		if strings.HasPrefix(entry, strings.TrimSuffix(prefix, "/")+"/") {
+// inAny reports whether a class entry is covered by a keep entry, which names
+// either a package or a single class. A class keeps its inner classes with it,
+// since they are compiled from the same file and share its identity.
+func inAny(entry string, keep []string) bool {
+	entry = strings.TrimSuffix(entry, ".class")
+
+	for _, item := range keep {
+		item = strings.TrimSuffix(item, "/")
+
+		if isClassEntry(item) {
+			if entry == item || strings.HasPrefix(entry, item+"$") {
+				return true
+			}
+			continue
+		}
+
+		if strings.HasPrefix(entry, item+"/") {
 			return true
 		}
 	}

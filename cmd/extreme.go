@@ -68,12 +68,17 @@ func tryExtreme(gradlePath, serial, apkPath string) (bool, error) {
 // went through the ordinary path. Without it the next deploy cannot tell
 // whether anything outside team code changed and installs again.
 func recordExtremeState(serial string) {
-	if !config.GetExtreme() {
+	project, err := extreme.FindProject()
+	if err != nil {
 		return
 	}
 
-	project, err := extreme.FindProject()
-	if err != nil || !extreme.Excluded(project.Root) {
+	// Off and on again regenerates an identical block, so an install that
+	// packaged team code has to take the signature away rather than let the
+	// robot keep agreeing with it. It would otherwise reload classes the APK
+	// already has, and the SDK then registers no OpModes at all.
+	if !config.GetExtreme() || !extreme.Excluded(project.Root) {
+		extreme.ForgetSignature(serial)
 		return
 	}
 
