@@ -25,7 +25,11 @@ import (
 
 var (
 	importRe = regexp.MustCompile(`(?m)^\s*import\s+(?:static\s+)?([\w.]+)\s*;`)
-	wordRe   = regexp.MustCompile(`\b[A-Z]\w*\b`)
+	wordRe   = regexp.MustCompile(`\b\w+\b`)
+
+	// A team class can also be named in full where it is used, with no import
+	// to follow. Rarer than an import, and just as fatal to the build.
+	qualifiedRe = regexp.MustCompile(regexp.QuoteMeta(strings.ReplaceAll(TeamPackage, "/", ".")) + `(?:\.\w+)+`)
 )
 
 // teamPrefix is the team package in java form.
@@ -44,7 +48,7 @@ func Closure(root string, keep []string) []string {
 	kept := map[string]bool{}
 	for _, entry := range keep {
 		trimmed := strings.TrimSuffix(entry, "/")
-		if isClassEntry(trimmed) {
+		if isClassEntry(root, trimmed) {
 			if index.files[trimmed] {
 				kept[trimmed] = true
 			}
@@ -158,6 +162,17 @@ func (s sources) needs(root, file string) []string {
 			if path, found := s.byName[name[:i]]; found {
 				out = append(out, path)
 			}
+		}
+	}
+
+	// A name written out in full at the point of use, with no import.
+	for _, name := range qualifiedRe.FindAllString(code, -1) {
+		for candidate := name; strings.Contains(candidate, "."); {
+			if path, found := s.byName[candidate]; found {
+				out = append(out, path)
+				break
+			}
+			candidate = candidate[:strings.LastIndex(candidate, ".")]
 		}
 	}
 

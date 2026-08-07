@@ -44,14 +44,14 @@ var keptRe = regexp.MustCompile(`// Kept in the APK anyway: (.*)`)
 // Directories are always let through. Excluding one prunes everything under it
 // before any of it is considered, which drops the kept class along with its
 // package and leaves the keep list silently dead.
-func blockFor(keep []string) string {
+func blockFor(root string, keep []string) string {
 	// A keep entry is either a package, which ends in a slash once trimmed, or
 	// a single class. Both are matched by prefix, with the class form pinned to
 	// a dot so Foo does not also keep FooBar.
 	var conditions strings.Builder
 	for _, entry := range keep {
 		trimmed := strings.TrimSuffix(entry, "/")
-		if isClassEntry(trimmed) {
+		if isClassEntry(root, trimmed) {
 			fmt.Fprintf(&conditions, " &&\n                        !path.startsWith('%s.')", trimmed)
 			continue
 		}
@@ -86,9 +86,23 @@ android {
 }
 
 // isClassEntry reports whether a keep entry names one class rather than a
-// package. A class file starts with a capital letter by convention, and this
-// only has to separate the two forms this tool produces.
-func isClassEntry(entry string) bool {
+// package.
+//
+// By looking, not by guessing at the capital letter. Convention is not
+// reliable: real projects have packages named Hardware and Util alongside
+// classes named velocityController, and getting this backwards emits a
+// condition that matches nothing, so the entry is excluded despite being kept.
+// Only a root with neither on disk falls back to the convention.
+func isClassEntry(root, entry string) bool {
+	if root != "" {
+		if _, err := os.Stat(filepath.Join(root, SourceRoot, filepath.FromSlash(entry)+".java")); err == nil {
+			return true
+		}
+		if info, err := os.Stat(filepath.Join(root, SourceRoot, filepath.FromSlash(entry))); err == nil {
+			return !info.IsDir()
+		}
+	}
+
 	base := entry
 	if i := strings.LastIndex(entry, "/"); i >= 0 {
 		base = entry[i+1:]
@@ -163,7 +177,7 @@ func Exclude(root string, keep ...string) error {
 	// that no longer matches the settings is worse than no block.
 	stripped := blockRe.ReplaceAllString(string(content), "\n")
 
-	updated := strings.TrimRight(stripped, "\n") + "\n\n" + blockFor(keep) + "\n"
+	updated := strings.TrimRight(stripped, "\n") + "\n\n" + blockFor(root, keep) + "\n"
 
 	if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
 		return fmt.Errorf("cannot write %s: %w", path, err)

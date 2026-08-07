@@ -639,6 +639,72 @@ public class MyTimer {}`)
 	}
 }
 
+// A team class can be named in full where it is used, with no import line to
+// follow, and the build fails just the same.
+func TestAFullyQualifiedReferenceIsFollowed(t *testing.T) {
+	root := t.TempDir()
+	team := strings.ReplaceAll(TeamPackage, "/", ".")
+
+	write := func(pkg, name, body string) {
+		dir := filepath.Join(root, SourceRoot, filepath.FromSlash(TeamPackage), pkg)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name+".java"), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	write("hw", "MyDriver", `package `+team+`.hw;
+@I2cDeviceType
+public class MyDriver {
+    `+team+`.foo.MyTimer timer = new `+team+`.foo.MyTimer();
+}`)
+	write("foo", "MyTimer", "package "+team+".foo;\npublic class MyTimer {}")
+
+	kept := Closure(root, []string{TeamPackage + "/hw/MyDriver"})
+
+	found := false
+	for _, entry := range kept {
+		if entry == TeamPackage+"/foo/MyTimer" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("kept %v, missing the class named in full", kept)
+	}
+}
+
+// Naming conventions do not separate a class from a package. Real projects have
+// packages called Hardware and classes called velocityController, and guessing
+// wrong emits a condition that matches nothing, so the entry is excluded
+// despite being on the keep list.
+func TestClassAndPackageAreToldApartByLooking(t *testing.T) {
+	root := t.TempDir()
+	team := filepath.Join(root, SourceRoot, filepath.FromSlash(TeamPackage))
+
+	if err := os.MkdirAll(filepath.Join(team, "Hardware"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(team, "Hardware", "velocityController.java"),
+		[]byte("package x;"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if isClassEntry(root, TeamPackage+"/Hardware") {
+		t.Error("a capitalised package was read as a class")
+	}
+	if !isClassEntry(root, TeamPackage+"/Hardware/velocityController") {
+		t.Error("a lowercase class was read as a package")
+	}
+
+	// Nothing on disk falls back to the convention rather than guessing wrong
+	// in a new way.
+	if !isClassEntry(root, TeamPackage+"/gone/Missing") {
+		t.Error("an unknown entry did not fall back to the convention")
+	}
+}
+
 // Everything reachable would be most of a project, and a kept class cannot
 // reload. What is not needed has to stay out.
 func TestTheClosureDoesNotKeepUnrelatedCode(t *testing.T) {
