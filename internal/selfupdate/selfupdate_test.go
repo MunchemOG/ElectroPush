@@ -31,6 +31,45 @@ func TestCellarFormula(t *testing.T) {
 	}
 }
 
+// A bare name is ambiguous. `brew upgrade pusher` resolves to the unrelated
+// NWPusher cask and fails saying a cask is not installed, so the tap the keg
+// records has to come along.
+func TestATappedFormulaIsQualifiedByItsTap(t *testing.T) {
+	cases := []struct {
+		name    string
+		receipt string
+		want    string
+	}{
+		{"a tap", `{"source":{"tap":"pzmuv1517/pzmuv1517"}}`, "pzmuv1517/pzmuv1517/pusher"},
+		{"core needs no qualifying", `{"source":{"tap":"homebrew/core"}}`, "pusher"},
+		{"no tap recorded", `{"source":{}}`, "pusher"},
+		{"unreadable receipt", "not json", "pusher"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			cellar := t.TempDir()
+
+			keg := filepath.Join(cellar, "Cellar", "pusher", "1.2.0")
+			if err := os.MkdirAll(filepath.Join(keg, "bin"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(keg, "INSTALL_RECEIPT.json"),
+				[]byte(c.receipt), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			formula, ok := cellarFormula(filepath.Join(keg, "bin", "pusher"))
+			if !ok {
+				t.Fatal("a Cellar path was not recognised as a Homebrew install")
+			}
+			if formula != c.want {
+				t.Errorf("got %q, want %q", formula, c.want)
+			}
+		})
+	}
+}
+
 func TestAssetNameMatchesPublishedNames(t *testing.T) {
 	published := map[string]bool{
 		"pusher-darwin-amd64":      true,

@@ -69,14 +69,55 @@ func Detect() (Install, error) {
 	return Install{Method: Binary, Path: exe}, nil
 }
 
+// cellarFormula names the formula this binary was installed as, qualified by
+// its tap.
+//
+// The tap matters. A bare name is ambiguous across taps and casks, and
+// `brew upgrade pusher` resolves to the unrelated NWPusher cask rather than
+// this formula, so the upgrade fails saying a cask is not installed.
 func cellarFormula(path string) (string, bool) {
 	parts := strings.Split(filepath.ToSlash(path), "/")
+
 	for i, part := range parts {
-		if part == "Cellar" && i+1 < len(parts) {
-			return parts[i+1], true
+		if part != "Cellar" || i+2 >= len(parts) {
+			continue
 		}
+
+		name := parts[i+1]
+
+		// .../Cellar/<formula>/<version>/ holds the receipt, whatever is below.
+		keg := strings.Join(parts[:i+3], "/")
+		if tap := receiptTap(filepath.Join(filepath.FromSlash(keg), "INSTALL_RECEIPT.json")); tap != "" {
+			name = tap + "/" + name
+		}
+
+		return name, true
 	}
+
 	return "", false
+}
+
+// receiptTap is the tap a keg was installed from, empty when it came from
+// homebrew/core or the receipt cannot be read.
+func receiptTap(path string) string {
+	blob, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+
+	var receipt struct {
+		Source struct {
+			Tap string `json:"tap"`
+		} `json:"source"`
+	}
+	if err := json.Unmarshal(blob, &receipt); err != nil {
+		return ""
+	}
+
+	if receipt.Source.Tap == "homebrew/core" {
+		return ""
+	}
+	return receipt.Source.Tap
 }
 
 // Release is a published version and where to download it.
@@ -153,12 +194,15 @@ func Latest() (Release, error) {
 }
 
 // UpgradeBrew hands the update to Homebrew.
+//
+// --formula stops brew resolving the name to a cask, which it will do for a
+// bare name that some cask also claims.
 func UpgradeBrew(formula string) (string, error) {
 	if formula == "" {
 		formula = "pusher"
 	}
 
-	out, err := exec.Command("brew", "upgrade", formula).CombinedOutput()
+	out, err := exec.Command("brew", "upgrade", "--formula", formula).CombinedOutput()
 	text := strings.TrimSpace(string(out))
 	if err != nil {
 		return text, fmt.Errorf("brew upgrade %s failed: %w", formula, err)
