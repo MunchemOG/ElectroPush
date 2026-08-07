@@ -166,6 +166,18 @@ func UpgradeBrew(formula string) (string, error) {
 	return text, nil
 }
 
+// LastLine is the final non-empty line of some output. Homebrew says plenty and
+// only the end of it is the outcome.
+func LastLine(out string) string {
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		if line := strings.TrimSpace(lines[i]); line != "" {
+			return line
+		}
+	}
+	return ""
+}
+
 // Apply replaces the running binary, verified against the release checksums.
 func Apply(rel Release, path string) error {
 	if rel.AssetURL == "" {

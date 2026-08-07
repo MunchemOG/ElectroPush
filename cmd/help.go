@@ -54,6 +54,8 @@ func runHelp(cmd *cobra.Command, args []string) {
 		fmt.Println("  pusher visualiser     Draw the path an auto drove (alias: vis)")
 	}
 	fmt.Println("  pusher dev            Measure what a deploy costs (see the warning)")
+	fmt.Println("  pusher update         Update pusher itself to the latest release")
+	fmt.Println("    pusher update --check    Say what is available, install nothing")
 	fmt.Println("  pusher --version      Show version information")
 	fmt.Println("  pusher help           Show this help")
 	fmt.Println("")
