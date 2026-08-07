@@ -28,6 +28,48 @@ If a hub is on USB it uses that and leaves your Wi-Fi alone. Otherwise it builds
 first, joins the robot's Wi-Fi, deploys, and puts you back on the network you
 started on.
 
+### [Pusher Extreme](#pusher-extreme) reloads your code instead of installing it
+
+**2.89 seconds instead of about 39.** Only your team code goes to the robot, and
+nothing is installed. Experimental, and under active development.
+
+<details>
+<summary><b>How it compares to Sloth</b></summary>
+
+Sloth got here first and is the reason anyone knows this is possible. It is
+worth being straight about where each one is ahead.
+
+**Where Pusher Extreme is better**
+
+- **Nothing is added to your robot app.** No library, no runtime, no annotations,
+  no gradle plugin. One marked block goes into `TeamCode/build.gradle` and that
+  is the entire footprint. Sloth is a dependency that ships a runtime with it.
+- **Stock FTC Dashboard.** Sloth includes a drop-in replacement of Dashboard to
+  make it compatible. Pusher registers your `@Config` classes with the real one
+  from inside the reload, so you keep the Dashboard you already have.
+- **It refuses when a reload would be a lie.** If anything outside team code
+  changed, it installs instead and says which input moved. Running stale code
+  while everything reports success is the worst thing a tool like this can do.
+- **It is the command you already run.** `pusher` decides for itself whether to
+  reload or install; there is no second task to remember.
+
+**Where Sloth is better**
+
+- **Sloth is faster.** It advertises under a second, ceiling of two. Pusher
+  Extreme is 2.89s, of which 1.09s reaches the robot and the rest is compiling.
+- **Sloth is safe to deploy while an OpMode is running**, because it applies the
+  change when the OpMode ends. Pusher Extreme reloads immediately, and what that
+  does mid-OpMode has not been established. Stop the OpMode first.
+- **`@Pinned` is finer grained.** Sloth pins individual classes. Pusher keeps
+  whole packages in the APK, which is a blunter instrument.
+- **Sloth is an extensible runtime.** Sinister classpath scanning lets libraries
+  and your own code hook into reloads. Pusher has one internal bridge and no
+  public extension point.
+- **Sloth is mature.** Pusher Extreme has been measured on one project, on one
+  hub, and is explicitly experimental.
+
+</details>
+
 ## Install
 
 ```bash
@@ -60,7 +102,6 @@ Requires `adb` and an FTC project with a Gradle wrapper.
 | `pusher slim` | Shrink the APK (`--undo` to revert) |
 | `pusher hwconfig` | Pull, edit and push the robot's hardware configs |
 | `pusher doctor` | Diagnose Wi-Fi, adb and project problems |
-| `pusher dev` | Measure what a deploy costs (see the warning) |
 | `pusher visualiser <OpMode>` | Draw the path an auto drove, coloured by speed |
 | `pusher prepare` | Cache Gradle dependencies while online |
 | `pusher help` | Help |
@@ -217,7 +258,7 @@ Everything falls back safely. A streaming install that the hub does not like
 drops to the staged one; a split install with nothing to inherit from installs
 the whole APK.
 
-Do not guess which of these to turn on. `pusher dev` measures them.
+Do not guess which of these to turn on. Measure them.
 
 ## Pusher Extreme
 
@@ -313,29 +354,6 @@ Checked against pedro, Panels, EasyOpenCV and blob: none of them go looking for
 classes on their own, so none of them need anything. FtcDashboard does, and is
 handled. A library that does and is not handled can have its package kept in the
 APK instead.
-
-## pusher dev
-
-Measuring tools for working on pusher itself. **If you do not already know why
-you want this, you do not want it** — it deploys to the robot over and over and
-reinstalls the app several times.
-
-```
-pusher dev
-```
-
-- **Benchmark the deploy** times every configuration against the Android Studio
-  equivalent, which is one streamed install of the whole APK.
-- **Hot reload feasibility** times pushing a team-code-sized dex to the hub and
-  compiling it there, to see what a reload would have to beat. Installs nothing.
-- **Both, with a full report** writes a report to `pusher-reports/` in your
-  project covering the APK's composition, every measured configuration, what
-  each setting is worth on your hub, and Sloth's published figures for context.
-
-**Pusher is not a Sloth replacement.** Sloth hot reloads: it sends only the
-team's code and loads it into a running app, and reports under a second. Pusher
-makes an APK install faster. Those are different problems, and everything pusher
-does still ends in a package manager install.
 
 ## Per-OS notes
 
