@@ -591,6 +591,16 @@ func (m *devModel) benchExtreme() tea.Cmd {
 		return nil
 	}
 
+	// The same check a deploy makes. Reloading onto a robot whose APK does not
+	// match this project leaves classes that were deliberately kept out of the
+	// reload present in neither place, and the robot crashes on init resolving
+	// them. A measuring tool must not be able to do that.
+	apk, _ := gradle.FindApk(project.Root)
+	if state := extreme.Status(project.Root, m.serial, apk); !state.Usable() {
+		m.err = fmt.Errorf("cannot reload yet: %s\n    run `pusher` first", state.Reason)
+		return nil
+	}
+
 	m.busy = "starting"
 	m.started = time.Now()
 	m.elapsed = 0
