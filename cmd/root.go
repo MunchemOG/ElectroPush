@@ -59,6 +59,7 @@ func init() {
 	rootCmd.AddCommand(slimCmd)
 	rootCmd.AddCommand(hwconfigCmd)
 	rootCmd.AddCommand(doctorCmd)
+	rootCmd.AddCommand(updateCmd)
 	rootCmd.AddCommand(devCmd)
 	rootCmd.AddCommand(visualiseCmd)
 	rootCmd.AddCommand(helpCmd)

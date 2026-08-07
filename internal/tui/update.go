@@ -38,7 +38,7 @@ func applyUpdate(install selfupdate.Install, release selfupdate.Release) tea.Cmd
 	return func() tea.Msg {
 		if install.Method == selfupdate.Homebrew {
 			out, err := selfupdate.UpgradeBrew(install.Formula)
-			return updateAppliedMsg{result: lastLine(out), err: err}
+			return updateAppliedMsg{result: selfupdate.LastLine(out), err: err}
 		}
 
 		if err := selfupdate.Apply(release, install.Path); err != nil {
@@ -46,16 +46,6 @@ func applyUpdate(install selfupdate.Install, release selfupdate.Release) tea.Cmd
 		}
 		return updateAppliedMsg{result: "Installed " + release.Tag}
 	}
-}
-
-func lastLine(out string) string {
-	lines := strings.Split(strings.TrimSpace(out), "\n")
-	for i := len(lines) - 1; i >= 0; i-- {
-		if line := strings.TrimSpace(lines[i]); line != "" {
-			return line
-		}
-	}
-	return ""
 }
 
 func (m *SettingsModel) enterUpdate() tea.Cmd {
