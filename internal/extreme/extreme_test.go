@@ -273,7 +273,7 @@ func TestKeptClassesAreNotPackagedForReload(t *testing.T) {
 func TestTheBridgeOnlyNamesLibrariesThatArePresent(t *testing.T) {
 	work := t.TempDir()
 
-	path, err := GenerateBridge(work, []string{"a.b.Tuned"}, Classpath{})
+	path, err := GenerateBridge(work, []string{"a.b.Tuned"}, nil, Classpath{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,12 +282,9 @@ func TestTheBridgeOnlyNamesLibrariesThatArePresent(t *testing.T) {
 	if strings.Contains(body, "acmerobotics") {
 		t.Errorf("dashboard is referenced without being on the classpath:\n%s", body)
 	}
-	// The hook still has to exist, so the always-on part keeps working.
+	// The hook still has to exist, since it is what runs inside the reload.
 	if !strings.Contains(body, "@OpModeRegistrar") {
 		t.Error("the registrar hook is missing")
-	}
-	if !strings.Contains(body, "setContextClassLoader") {
-		t.Error("the general case is missing")
 	}
 }
 
@@ -297,7 +294,7 @@ func TestTheBridgeNamesEachConfigClass(t *testing.T) {
 	work := t.TempDir()
 	cp := Classpath{Compile: []string{fakeJar(t, work, dashboardMarker)}}
 
-	path, err := GenerateBridge(work, []string{"a.b.One", "a.b.Two"}, cp)
+	path, err := GenerateBridge(work, []string{"a.b.One", "a.b.Two"}, nil, cp)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -320,7 +317,7 @@ func TestTheBridgeIsEmptyWithNoConfigClasses(t *testing.T) {
 	work := t.TempDir()
 	cp := Classpath{Compile: []string{fakeJar(t, work, dashboardMarker)}}
 
-	path, err := GenerateBridge(work, nil, cp)
+	path, err := GenerateBridge(work, nil, nil, cp)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -553,5 +550,63 @@ func TestTheGradleBlockPinsAClassToItsDot(t *testing.T) {
 	if !strings.Contains(string(mustRead(t, GradleFile(root))),
 		"!path.startsWith('org/firstinspires/ftc/teamcode/tuning/')") {
 		t.Error("a package keep is not matched as a directory")
+	}
+}
+
+// The bridge must not touch anything shared. An earlier version set the thread
+// context classloader, which repointed an SDK-owned thread at a loader that is
+// discarded on the next reload and left it resolving through a dead one.
+func TestTheBridgeChangesNothingGlobal(t *testing.T) {
+	work := t.TempDir()
+
+	path, err := GenerateBridge(work, []string{"a.b.Tuned"},
+		nil, Classpath{Compile: []string{fakeJar(t, work, dashboardMarker)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body := string(mustRead(t, path))
+	for _, forbidden := range []string{"setContextClassLoader", "System.setProperty", "Thread.currentThread"} {
+		if strings.Contains(body, forbidden) {
+			t.Errorf("the bridge touches shared state: %s", forbidden)
+		}
+	}
+}
+
+// A class registered by an earlier reload holds a Class from a loader that no
+// longer exists. Leaving it there is both a dead dashboard entry and a
+// reference into a discarded classloader.
+func TestTheBridgeRemovesWhatItNoLongerRegisters(t *testing.T) {
+	work := t.TempDir()
+	cp := Classpath{Compile: []string{fakeJar(t, work, dashboardMarker)}}
+
+	// Previously registered Gone and Stays; now only Stays exists.
+	path, err := GenerateBridge(work, []string{"a.b.Stays"}, []string{"Gone", "Stays"}, cp)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body := string(mustRead(t, path))
+	if !strings.Contains(body, `drop(root, "Gone")`) {
+		t.Errorf("a class that is no longer registered is not removed:\n%s", body)
+	}
+	if strings.Contains(body, `drop(root, "Stays")`) {
+		t.Error("a class that is still registered was removed")
+	}
+	if !strings.Contains(body, "a.b.Stays.class") {
+		t.Error("the surviving class was not registered")
+	}
+}
+
+func TestStaleNamesAreTheDifference(t *testing.T) {
+	got := stale([]string{"a.b.One", "a.b.Two"}, []string{"One", "Three"})
+
+	if len(got) != 1 || got[0] != "Three" {
+		t.Errorf("got %v, want only Three", got)
+	}
+
+	if got := RegisteredNames([]string{"a.b.One", "Two"}); len(got) != 2 ||
+		got[0] != "One" || got[1] != "Two" {
+		t.Errorf("got %v", got)
 	}
 }

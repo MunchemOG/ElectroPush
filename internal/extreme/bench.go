@@ -100,7 +100,7 @@ func Benchmark(p *Project, serial string, keep []string, runs int, progress func
 		}
 
 		start = time.Now()
-		build, err := Compile(p, cp, work, keep)
+		build, err := Compile(p, cp, work, keep, RegisteredConfigs(serial))
 		if err != nil {
 			os.RemoveAll(work)
 			out.Err = err

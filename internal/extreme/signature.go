@@ -143,3 +143,43 @@ func RecordedSignature(serial string) string {
 func ForgetSignature(serial string) {
 	_, _ = adb.Shell(serial, "rm", "-f", signatureFile)
 }
+
+// configsFile records which config classes the bridge registered, so the next
+// reload can take away the ones it stops registering rather than leaving them
+// pointing into a classloader that no longer exists.
+const configsFile = "/data/local/tmp/pusher/extreme-configs"
+
+// RecordRegisteredConfigs notes what the bridge put into the dashboard.
+func RecordRegisteredConfigs(serial string, names []string) {
+	_, _ = adb.Shell(serial, "mkdir", "-p", filepath.Dir(configsFile))
+
+	local, err := os.CreateTemp("", "pusher-configs-*")
+	if err != nil {
+		return
+	}
+	defer os.Remove(local.Name())
+
+	if _, err := local.WriteString(strings.Join(names, "\n")); err != nil {
+		local.Close()
+		return
+	}
+	local.Close()
+
+	_ = adb.Push(serial, local.Name(), configsFile)
+}
+
+// RegisteredConfigs is what the previous reload put into the dashboard.
+func RegisteredConfigs(serial string) []string {
+	out, err := adb.Shell(serial, "cat", configsFile, "2>/dev/null")
+	if err != nil {
+		return nil
+	}
+
+	var names []string
+	for _, line := range strings.Split(out, "\n") {
+		if name := strings.TrimSpace(strings.TrimRight(line, "\r")); name != "" {
+			names = append(names, name)
+		}
+	}
+	return names
+}

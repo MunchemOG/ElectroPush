@@ -32,10 +32,12 @@ const dashboardMarker = "com/acmerobotics/dashboard/FtcDashboard.class"
 
 // bridgeHead is the part that is always generated.
 //
-// Setting the context classloader is the cheap general case: a library that
-// resolves classes through it starts working with no knowledge of that library
-// here. One that calls Class.forName still cannot, because that uses the
-// caller's own loader.
+// It deliberately does nothing global. An earlier version set the thread
+// context classloader here, on the theory that a library resolving classes that
+// way would start working for free. That was speculation: none of pedro,
+// Panels, EasyOpenCV or blob resolve classes at all. What it actually did was
+// repoint an SDK-owned thread at a classloader that is discarded on the next
+// reload, leaving that thread resolving through a dead loader.
 const bridgeHead = `package ` + bridgePackage + `;
 
 import android.content.Context;
@@ -50,12 +52,6 @@ public final class ` + bridgeClass + ` {
 
     @OpModeRegistrar
     public static void register(Context context, AnnotatedOpModeManager manager) {
-        try {
-            Thread.currentThread().setContextClassLoader(
-                    ` + bridgeClass + `.class.getClassLoader());
-        } catch (Throwable ignored) {
-        }
-
         registerDashboardConfigs();
     }
 `
@@ -72,11 +68,11 @@ const bridgeNoDashboard = `
 //
 // Returns the file to add to the compile, or empty when there is nothing for
 // the bridge to do.
-func GenerateBridge(work string, configs []string, cp Classpath) (string, error) {
+func GenerateBridge(work string, configs, previous []string, cp Classpath) (string, error) {
 	body := bridgeNoDashboard
 
-	if len(configs) > 0 && onClasspath(cp, dashboardMarker) {
-		body = dashboardBody(configs)
+	if onClasspath(cp, dashboardMarker) && (len(configs) > 0 || len(previous) > 0) {
+		body = dashboardBody(configs, stale(configs, previous))
 	}
 
 	dir := filepath.Join(work, "generated", filepath.FromSlash(strings.ReplaceAll(bridgePackage, ".", "/")))
@@ -100,7 +96,46 @@ func GenerateBridge(work string, configs []string, cp Classpath) (string, error)
 //
 // Each class is registered separately and wrapped, because one that cannot be
 // reflected over must not take the rest with it.
-func dashboardBody(configs []string) string {
+// stale is the names registered last time that are not being registered now.
+//
+// Dashboard's config root outlives the reload, so an entry put there by an
+// earlier one stays, holding a Class from a classloader that no longer exists.
+// That is both a dead section in the dashboard for a class you deleted and a
+// reference into a discarded loader.
+func stale(configs, previous []string) []string {
+	current := map[string]bool{}
+	for _, name := range configs {
+		current[simpleName(name)] = true
+	}
+
+	var out []string
+	for _, name := range previous {
+		if !current[name] {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+// simpleName is what dashboard files a config class under.
+func simpleName(qualified string) string {
+	if i := strings.LastIndex(qualified, "."); i >= 0 {
+		return qualified[i+1:]
+	}
+	return qualified
+}
+
+// RegisteredNames is what this reload will put into the dashboard, recorded so
+// the next one can take away what it no longer registers.
+func RegisteredNames(configs []string) []string {
+	out := make([]string, 0, len(configs))
+	for _, name := range configs {
+		out = append(out, simpleName(name))
+	}
+	return out
+}
+
+func dashboardBody(configs, gone []string) string {
 	var b strings.Builder
 
 	b.WriteString(`
@@ -116,6 +151,11 @@ func dashboardBody(configs []string) string {
                 @Override
                 public void accept(com.acmerobotics.dashboard.config.variable.CustomVariable root) {
 `)
+
+	for _, name := range gone {
+		fmt.Fprintf(&b, `                    drop(root, "%s");
+`, name)
+	}
 
 	for _, name := range configs {
 		fmt.Fprintf(&b, `                    put(root, %s.class);
@@ -136,6 +176,14 @@ func dashboardBody(configs []string) string {
             root.putVariable(clazz.getSimpleName(),
                     com.acmerobotics.dashboard.config.reflection.ReflectionConfig
                             .createVariableFromClass(clazz));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static void drop(com.acmerobotics.dashboard.config.variable.CustomVariable root,
+                             String name) {
+        try {
+            root.removeVariable(name);
         } catch (Throwable ignored) {
         }
     }
