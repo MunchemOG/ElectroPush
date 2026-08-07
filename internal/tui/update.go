@@ -37,7 +37,7 @@ func findRelease() tea.Msg {
 func applyUpdate(install selfupdate.Install, release selfupdate.Release) tea.Cmd {
 	return func() tea.Msg {
 		if install.Method == selfupdate.Homebrew {
-			out, err := selfupdate.UpgradeBrew(install.Formula)
+			out, err := selfupdate.UpgradeBrew(install.Formula, release.Version())
 			return updateAppliedMsg{result: selfupdate.LastLine(out), err: err}
 		}
 

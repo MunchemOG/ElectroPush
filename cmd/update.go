@@ -61,7 +61,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 
 		// Homebrew says plenty and only the end of it is the outcome, which is
 		// what somebody watching a one-line command wants to see.
-		out, err := selfupdate.UpgradeBrew(install.Formula)
+		out, err := selfupdate.UpgradeBrew(install.Formula, release.Version())
 		if line := selfupdate.LastLine(out); line != "" {
 			fmt.Printf("    %s\n", line)
 		}
