@@ -60,6 +60,7 @@ func init() {
 	rootCmd.AddCommand(hwconfigCmd)
 	rootCmd.AddCommand(doctorCmd)
 	rootCmd.AddCommand(updateCmd)
+	rootCmd.AddCommand(dashCmd)
 	rootCmd.AddCommand(devCmd)
 	rootCmd.AddCommand(visualiseCmd)
 	rootCmd.AddCommand(helpCmd)

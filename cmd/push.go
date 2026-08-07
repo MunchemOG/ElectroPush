@@ -223,7 +223,22 @@ func deploy(gradlePath, serial string, offline bool) error {
 	return install(gradlePath, serial)
 }
 
+// install deploys, and reports what tuning that overwrote.
+//
+// The reading has to be taken here rather than inside either path, because both
+// of them put the code's values back.
 func install(gradlePath, serial string) error {
+	watch := beginDashWatch(serial)
+
+	if err := deployOnce(gradlePath, serial); err != nil {
+		return err
+	}
+
+	watch.report(gradle.ProjectDir(gradlePath))
+	return nil
+}
+
+func deployOnce(gradlePath, serial string) error {
 	// Reloading replaces the install entirely when it is equivalent, and says
 	// why when it is not rather than quietly doing the wrong one.
 	if done, err := extremeDeploy(gradlePath, serial); err != nil {

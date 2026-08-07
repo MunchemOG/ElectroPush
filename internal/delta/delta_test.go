@@ -186,9 +186,9 @@ func TestGearTableIsStable(t *testing.T) {
 	)
 
 	if gear[0] != wantFirst {
-		t.Errorf("gear[0] = %#016x, want %#016x — chunk boundaries would move", gear[0], wantFirst)
+		t.Errorf("gear[0] = %#016x, want %#016x; chunk boundaries would move", gear[0], wantFirst)
 	}
 	if gear[255] != wantLast {
-		t.Errorf("gear[255] = %#016x, want %#016x — chunk boundaries would move", gear[255], wantLast)
+		t.Errorf("gear[255] = %#016x, want %#016x; chunk boundaries would move", gear[255], wantLast)
 	}
 }
