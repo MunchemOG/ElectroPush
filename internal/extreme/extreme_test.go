@@ -584,6 +584,87 @@ func TestTheGradleBlockNeverExcludesADirectory(t *testing.T) {
 	}
 }
 
+// Keeping a class keeps it in the source set while excluding everything it
+// depends on, and javac then reports "cannot find symbol" on the import. The
+// unannotated classes look fine only because they are not compiled at all.
+func TestAKeptClassKeepsWhatItNeedsToCompile(t *testing.T) {
+	root := t.TempDir()
+
+	write := func(pkg, name, body string) {
+		dir := filepath.Join(root, SourceRoot, filepath.FromSlash(TeamPackage), pkg)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name+".java"), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	team := strings.ReplaceAll(TeamPackage, "/", ".")
+
+	write("hw", "MyDriver", `package `+team+`.hw;
+import `+team+`.foo.MyTimer;
+@DeviceProperties
+public class MyDriver {
+    MyTimer timer;
+    Helper helper;
+}`)
+	write("hw", "Helper", "package "+team+".hw;\npublic class Helper {}")
+	write("foo", "MyTimer", `package `+team+`.foo;
+import `+team+`.util.Clock;
+public class MyTimer {}`)
+	write("util", "Clock", "package "+team+".util;\npublic class Clock {}")
+	write("opmode", "Unrelated", "package "+team+".opmode;\npublic class Unrelated {}")
+
+	kept := Closure(root, []string{TeamPackage + "/hw/MyDriver"})
+
+	want := map[string]bool{
+		TeamPackage + "/hw/MyDriver": true,
+		// Imported directly.
+		TeamPackage + "/foo/MyTimer": true,
+		// Imported by what it imports.
+		TeamPackage + "/util/Clock": true,
+		// Same package, so referred to without an import.
+		TeamPackage + "/hw/Helper": true,
+	}
+
+	for _, entry := range kept {
+		if !want[entry] {
+			t.Errorf("kept %s, which nothing needs", entry)
+		}
+		delete(want, entry)
+	}
+	for entry := range want {
+		t.Errorf("did not keep %s, so the build cannot resolve it", entry)
+	}
+}
+
+// Everything reachable would be most of a project, and a kept class cannot
+// reload. What is not needed has to stay out.
+func TestTheClosureDoesNotKeepUnrelatedCode(t *testing.T) {
+	root := t.TempDir()
+	team := strings.ReplaceAll(TeamPackage, "/", ".")
+
+	dir := filepath.Join(root, SourceRoot, filepath.FromSlash(TeamPackage), "hw")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range map[string]string{
+		"MyDriver": "package " + team + ".hw;\n@MotorType\npublic class MyDriver {}",
+		"Sibling":  "package " + team + ".hw;\npublic class Sibling {}",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name+".java"), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	kept := Closure(root, []string{TeamPackage + "/hw/MyDriver"})
+
+	if len(kept) != 1 || kept[0] != TeamPackage+"/hw/MyDriver" {
+		t.Errorf("kept %v, want only the driver: an unreferenced sibling still reloads", kept)
+	}
+}
+
 // The bridge must not touch anything shared. An earlier version set the thread
 // context classloader, which repointed an SDK-owned thread at a loader that is
 // discarded on the next reload and left it resolving through a dead one.

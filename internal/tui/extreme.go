@@ -141,9 +141,17 @@ func (m *SettingsModel) setUpExtreme() {
 	m.refreshExtreme()
 
 	m.status = "Set up. Deploy once to install the APK without team code."
-	if len(drivers) > 0 {
+
+	// Exclude keeps whatever the drivers need to compile as well, and every one
+	// of those stops being reloadable. Reporting only the drivers would
+	// understate what was taken out of the reload.
+	if kept := extreme.Kept(m.extreme.root); len(kept) > 0 {
 		m.status = fmt.Sprintf("Set up. %d hardware driver(s) stay in the APK. Deploy once.",
 			len(drivers))
+		if extra := len(kept) - len(drivers); extra > 0 {
+			m.status = fmt.Sprintf("Set up. %d driver(s) plus %d they need stay in the APK. Deploy once.",
+				len(drivers), extra)
+		}
 	}
 }
 
