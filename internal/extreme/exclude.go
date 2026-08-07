@@ -145,7 +145,13 @@ func Kept(root string) []string {
 // Something a library reflects over has to stay in the APK. FtcDashboard scans
 // the base APK itself with getPackageCodePath, so a @Config class that is
 // reloaded is invisible to it however correctly it loads.
+//
+// keep is expanded to what those classes need to compile. Excluding a kept
+// class's own dependencies leaves it in the source set with nothing to resolve
+// against, and the build fails on the import.
 func Exclude(root string, keep ...string) error {
+	keep = Closure(root, keep)
+
 	path := GradleFile(root)
 
 	content, err := os.ReadFile(path)
