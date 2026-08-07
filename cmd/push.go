@@ -224,6 +224,14 @@ func deploy(gradlePath, serial string, offline bool) error {
 }
 
 func install(gradlePath, serial string) error {
+	// Reloading replaces the install entirely when it is equivalent, and says
+	// why when it is not rather than quietly doing the wrong one.
+	if done, err := extremeDeploy(gradlePath, serial); err != nil {
+		return err
+	} else if done {
+		return nil
+	}
+
 	apkPath, err := gradle.FindApk(gradle.ProjectDir(gradlePath))
 	if err != nil {
 		return fmt.Errorf("failed to find APK: %w", err)
@@ -245,6 +253,10 @@ func install(gradlePath, serial string) error {
 	if err != nil {
 		return fmt.Errorf("install failed: %w", err)
 	}
+
+	// The robot now holds this project's non-team-code state, so the next
+	// deploy can tell that only team code changed and reload instead.
+	recordExtremeState(serial)
 
 	switch {
 	case plan.Skipped:

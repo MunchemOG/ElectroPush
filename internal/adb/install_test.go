@@ -135,3 +135,27 @@ func TestDeltaAndStreamingCompose(t *testing.T) {
 		t.Error("streaming was asked for and did not run")
 	}
 }
+
+// The record of what is installed is not only for skipping. Pusher Extreme
+// reads it to decide whether a reload is equivalent to an install, and when it
+// was only written with skipping enabled, turning that setting off made extreme
+// silently never activate.
+func TestTheInstalledRecordIsKeptRegardlessOfSkipping(t *testing.T) {
+	serial := os.Getenv("PUSHER_TEST_DEVICE")
+	apk := os.Getenv("PUSHER_TEST_APK")
+
+	if serial == "" || apk == "" {
+		t.Skip("set PUSHER_TEST_DEVICE and PUSHER_TEST_APK to run this")
+	}
+
+	forgetInstalled(serial)
+
+	// Skipping off on purpose.
+	if _, err := InstallWith(serial, apk, Options{Stream: true, SkipUnchanged: false}); err != nil {
+		t.Fatalf("install failed: %v", err)
+	}
+
+	if InstalledFingerprint(serial) == "" {
+		t.Error("nothing was recorded, so extreme could never tell what the robot holds")
+	}
+}

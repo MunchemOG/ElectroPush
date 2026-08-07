@@ -8,6 +8,7 @@ import (
 	"github.com/andreibanu/pusher/internal/adb"
 	"github.com/andreibanu/pusher/internal/bench"
 	"github.com/andreibanu/pusher/internal/config"
+	"github.com/andreibanu/pusher/internal/extreme"
 	"github.com/andreibanu/pusher/internal/gradle"
 	"github.com/andreibanu/pusher/internal/hotreload"
 	tea "github.com/charmbracelet/bubbletea"
@@ -31,9 +32,13 @@ var devItems = []string{
 	"Hot reload feasibility",
 	"Both, with a full report",
 	"Hot reload an OpMode",
+	"Benchmark Pusher Extreme",
 	"Remove the hot reload proof",
 	"Exit",
 }
+
+// devHelpLines keeps the screen a fixed height as the cursor moves.
+const devHelpLines = 4
 
 var devHelp = []string{
 	"Deploys the current build with different settings and times each one,\n" +
@@ -47,9 +52,13 @@ var devHelp = []string{
 		"Sloth's published figures for context.",
 
 	"Compiles an OpMode here, pushes it to the hub and tells the robot\n" +
-		"controller to rescan. The OpMode binds a motor by name and shows its\n" +
-		"encoder, and each run alternates between m1 and m2, so a reload is\n" +
-		"proved by the binding changing rather than by the code merely running.",
+		"controller to rescan. Binds a motor by name and shows its encoder,\n" +
+		"alternating m1 and m2 so a reload is proved by the binding changing.\n" +
+		"Replaces anything Pusher Extreme reloaded: deploy again afterwards.",
+
+	"Compiles and reloads your own team code several times over and times\n" +
+		"each stage. Needs Pusher Extreme set up. Writes a report you can\n" +
+		"paste numbers out of.",
 
 	"Deletes the pushed dex and tells the robot controller to rescan.",
 
@@ -216,8 +225,10 @@ func (m *devModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case 3:
 			return m, m.tryReload()
 		case 4:
-			return m, m.cleanReload()
+			return m, m.benchExtreme()
 		case 5:
+			return m, m.cleanReload()
+		case 6:
 			m.quit = true
 			return m, tea.Quit
 		}
@@ -362,12 +373,7 @@ func (m *devModel) viewDevMain() string {
 		fmt.Fprintf(&b, "%s%s\n", cursor, item)
 	}
 
-	if m.cursor < len(devHelp) && devHelp[m.cursor] != "" {
-		b.WriteString("\n")
-		for _, line := range strings.Split(devHelp[m.cursor], "\n") {
-			b.WriteString("  " + helpStyle.Render(line) + "\n")
-		}
-	}
+	b.WriteString(helpBlock(devHelp, m.cursor, devHelpLines))
 
 	b.WriteString("\n" + helpStyle.Render("  enter run · up/down move · q quit") + "\n")
 	return b.String()
@@ -559,4 +565,57 @@ func wrapAt(s string, width int) []string {
 		out = append(out, s)
 	}
 	return out
+}
+
+// benchExtreme times a real reload of the project's own team code.
+func (m *devModel) benchExtreme() tea.Cmd {
+	if m.serial == "" {
+		m.err = fmt.Errorf("no robot connected - plug in USB or run `pusher connect`")
+		return nil
+	}
+
+	project, err := extreme.FindProject()
+	if err != nil {
+		m.err = fmt.Errorf("run this from your FTC project")
+		return nil
+	}
+	if !extreme.Excluded(project.Root) {
+		m.err = fmt.Errorf("set Pusher Extreme up first: `pusher settings` -> Pusher Extreme")
+		return nil
+	}
+
+	m.busy = "starting"
+	m.started = time.Now()
+	m.elapsed = 0
+
+	serial, root := m.serial, project.Root
+
+	work := func() tea.Msg {
+		result := extreme.Benchmark(project, serial, extreme.Kept(root), extremeRuns, post)
+		if result.Err != nil {
+			return devDoneMsg{err: result.Err}
+		}
+
+		body := result.Report()
+		saved, err := bench.SaveReport(root, body)
+		if err != nil {
+			saved = ""
+		}
+
+		return devDoneMsg{report: body, summary: extremeSummary(result), saved: saved}
+	}
+
+	return tea.Batch(work, waitForProgress, devTick())
+}
+
+// extremeRuns is how many reloads are timed. Enough to see the spread without
+// making the menu sit there for a minute.
+const extremeRuns = 5
+
+func extremeSummary(r extreme.BenchResult) string {
+	var b strings.Builder
+	for _, phase := range []extreme.Phase{r.Classpath, r.Compile, r.Deliver, r.Total} {
+		fmt.Fprintf(&b, "  %-22s %s\n", phase.Name, phase.Best().Round(time.Millisecond))
+	}
+	return b.String()
 }

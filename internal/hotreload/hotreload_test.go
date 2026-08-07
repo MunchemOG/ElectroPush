@@ -3,6 +3,7 @@ package hotreload
 import (
 	"archive/zip"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -279,5 +280,76 @@ func TestOnlyTheRobotControllersProcessIsRead(t *testing.T) {
 		if got := pidOf(line); got != "976" {
 			t.Errorf("pidOf(%q) = %q", line, got)
 		}
+	}
+}
+
+// Nothing may reach the trigger unchecked: one bad file empties the whole
+// OpMode list rather than being skipped, so a robot ends up with no OpModes at
+// all rather than one that did not update.
+func TestABadJarIsCaughtBeforeAnythingIsSent(t *testing.T) {
+	dir := t.TempDir()
+
+	jar := filepath.Join(dir, "x.jar")
+	dex := filepath.Join(dir, "x.dex")
+
+	// A jar that is not a zip.
+	if err := os.WriteFile(jar, []byte("not a zip"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dex, append([]byte("dex\n035\x00"), make([]byte, 64)...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := verifyLocal(built{Jar: jar, Dex: dex}); err == nil {
+		t.Error("a jar that is not a zip was accepted")
+	}
+}
+
+func TestABadDexIsCaughtBeforeAnythingIsSent(t *testing.T) {
+	tc, err := FindToolchain()
+	if err != nil {
+		t.Skip(err)
+	}
+	defer tc.Cleanup()
+
+	work := t.TempDir()
+	files, err := buildAll(tc, work, "Pusher Reload test", "m1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// A real jar, and a dex that is not one.
+	if err := os.WriteFile(files.Dex, []byte("PK\x03\x04 wrong"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := verifyLocal(files); err == nil {
+		t.Error("a dex that does not start like one was accepted")
+	}
+
+	// And an empty dex, which is what an interrupted transfer leaves.
+	if err := os.WriteFile(files.Dex, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyLocal(files); err == nil {
+		t.Error("an empty dex was accepted")
+	}
+}
+
+// What the tool builds itself has to pass its own check, or the check is wrong.
+func TestWhatIsBuiltPassesVerification(t *testing.T) {
+	tc, err := FindToolchain()
+	if err != nil {
+		t.Skip(err)
+	}
+	defer tc.Cleanup()
+
+	files, err := buildAll(tc, t.TempDir(), "Pusher Reload test", "m1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := verifyLocal(files); err != nil {
+		t.Errorf("the tool's own output failed verification: %v", err)
 	}
 }

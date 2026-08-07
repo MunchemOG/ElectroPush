@@ -42,6 +42,8 @@ type Config struct {
 	StoreLibs bool `mapstructure:"store_libs"`
 
 	SplitInstall bool `mapstructure:"split_install"`
+
+	Extreme bool `mapstructure:"extreme"`
 }
 
 var (
@@ -88,6 +90,7 @@ func Initialize() error {
 	viper.SetDefault("stream_install", true)
 	viper.SetDefault("store_libs", false)
 	viper.SetDefault("split_install", false)
+	viper.SetDefault("extreme", false)
 
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {
 
@@ -129,6 +132,7 @@ func Save(cfg *Config) error {
 	viper.Set("stream_install", cfg.StreamInstall)
 	viper.Set("store_libs", cfg.StoreLibs)
 	viper.Set("split_install", cfg.SplitInstall)
+	viper.Set("extreme", cfg.Extreme)
 
 	if err := viper.WriteConfig(); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
@@ -427,5 +431,18 @@ func SetSplitInstall(enabled bool) error {
 		return err
 	}
 	cfg.SplitInstall = enabled
+	return Save(cfg)
+}
+
+// GetExtreme reports whether a deploy reloads team code instead of installing
+// an APK, when that is equivalent.
+func GetExtreme() bool { return viper.GetBool("extreme") }
+
+func SetExtreme(enabled bool) error {
+	cfg, err := Load()
+	if err != nil {
+		return err
+	}
+	cfg.Extreme = enabled
 	return Save(cfg)
 }

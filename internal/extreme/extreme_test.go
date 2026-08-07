@@ -1,0 +1,467 @@
+package extreme
+
+import (
+	"archive/zip"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// Gradle's own chatter surrounds the answer, so the block markers are what make
+// the output readable rather than the line shapes.
+func TestClasspathIsReadFromTheMarkedBlock(t *testing.T) {
+	output := `Downloading gradle...
+> Task :TeamCode:pusherClasspath
+PUSHER_CP_BEGIN
+CP /a/one.jar
+CP /a/two.jar
+BOOT /sdk/android.jar
+PUSHER_CP_END
+
+BUILD SUCCESSFUL in 763ms
+CP /this/is/not/in/the/block.jar`
+
+	cp := parseClasspath(output)
+
+	if len(cp.Compile) != 2 {
+		t.Fatalf("got %v", cp.Compile)
+	}
+	if len(cp.Boot) != 1 {
+		t.Fatalf("got %v", cp.Boot)
+	}
+	for _, entry := range cp.Compile {
+		if strings.Contains(entry, "not/in/the/block") {
+			t.Error("a line outside the block was read")
+		}
+	}
+}
+
+// javac needs the platform as a boot classpath, not as an ordinary dependency,
+// or Android classes and the JDK's own resolve against each other.
+func TestArgsSeparateThePlatformFromTheDependencies(t *testing.T) {
+	cp := Classpath{
+		Compile: []string{"/a/one.jar", "/a/two.jar"},
+		Boot:    []string{"/sdk/android.jar"},
+	}
+
+	args := cp.Args()
+
+	joined := strings.Join(args, " ")
+	if !strings.Contains(joined, "-bootclasspath /sdk/android.jar") {
+		t.Errorf("got %v", args)
+	}
+	if !strings.Contains(joined, "-classpath /a/one.jar") {
+		t.Errorf("got %v", args)
+	}
+
+	// Nothing to say when there is nothing to say.
+	if got := (Classpath{}).Args(); len(got) != 0 {
+		t.Errorf("got %v", got)
+	}
+}
+
+func TestAnEmptyClasspathIsAnError(t *testing.T) {
+	if cp := parseClasspath("BUILD SUCCESSFUL"); len(cp.Compile) != 0 {
+		t.Errorf("got %v", cp.Compile)
+	}
+}
+
+// The exclusion is marked rather than backed up: slim already keeps a
+// .pusher-bak of the same file, and two features sharing one backup means
+// undoing either undoes both.
+func TestExclusionIsAddedAndRemovedExactly(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, Module), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	original := "android {\n    namespace = 'org.firstinspires.ftc.teamcode'\n}\n"
+	if err := os.WriteFile(GradleFile(root), []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if Excluded(root) {
+		t.Fatal("a fresh project reports as excluded")
+	}
+
+	if err := Exclude(root); err != nil {
+		t.Fatal(err)
+	}
+	if !Excluded(root) {
+		t.Fatal("the exclusion was not detected after adding it")
+	}
+
+	after, _ := os.ReadFile(GradleFile(root))
+	if !strings.Contains(string(after), TeamPackage) {
+		t.Error("the excluded package is not named in the block")
+	}
+	// The instruction for getting back has to be in the file, not only in a menu.
+	if !strings.Contains(string(after), "Remove this block") {
+		t.Error("the block does not say how to undo it")
+	}
+
+	// Adding twice must not stack.
+	if err := Exclude(root); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(string(mustRead(t, GradleFile(root))), beginMarker); got != 1 {
+		t.Errorf("the block appears %d times", got)
+	}
+
+	if err := Include(root); err != nil {
+		t.Fatal(err)
+	}
+	if Excluded(root) {
+		t.Error("still excluded after going back")
+	}
+
+	// And the file has to come back exactly as it was.
+	if got := string(mustRead(t, GradleFile(root))); got != original {
+		t.Errorf("the file did not come back unchanged:\n%q", got)
+	}
+}
+
+// Removing what was never added must not damage the file.
+func TestIncludeOnAnUntouchedProjectDoesNothing(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, Module), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	original := "dependencies {\n}\n"
+	if err := os.WriteFile(GradleFile(root), []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Include(root); err != nil {
+		t.Fatal(err)
+	}
+	if got := string(mustRead(t, GradleFile(root))); got != original {
+		t.Errorf("got %q", got)
+	}
+}
+
+func mustRead(t *testing.T, path string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}
+
+// @Config turned out to be on 45 of 120 files in a real project, including the
+// OpModes themselves, so keeping everything it touches in the APK would leave
+// most of the project unreloadable. They are bridged instead, and what is found
+// here is what gets bridged.
+func TestReflectedClassesAreFoundForBridging(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(root, SourceRoot, "org/firstinspires/ftc/teamcode/OpMode")
+	if err := os.MkdirAll(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	tuned := "package x;\n@Config\n@TeleOp(name = \"a\")\npublic class Tuned {}\n"
+	plain := "package x;\n@TeleOp(name = \"b\")\npublic class Plain {}\n"
+
+	if err := os.WriteFile(filepath.Join(src, "Tuned.java"), []byte(tuned), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "Plain.java"), []byte(plain), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	found := FindReflected(root)
+
+	if len(found.Classes) != 1 {
+		t.Fatalf("got %d, want only the @Config one", len(found.Classes))
+	}
+	if found.Classes[0].File != "Tuned.java" {
+		t.Errorf("got %q", found.Classes[0].File)
+	}
+
+	// The summary says what happens rather than what is lost, because what
+	// happens is that it keeps working.
+	if !strings.Contains(found.Summary(), "FtcDashboard") {
+		t.Errorf("got %q", found.Summary())
+	}
+
+	// And what is found is exactly what the bridge is given.
+	bridged := ConfigClasses(root, nil)
+	if len(bridged) != len(found.Classes) {
+		t.Errorf("found %d classes but bridged %d", len(found.Classes), len(bridged))
+	}
+}
+
+// Setting up must not quietly keep anything back.
+func TestSetupKeepsNothingByDefault(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, Module), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(GradleFile(root), []byte("android {\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Exclude(root); err != nil {
+		t.Fatal(err)
+	}
+
+	if kept := Kept(root); len(kept) != 0 {
+		t.Errorf("got %v, want nothing kept", kept)
+	}
+}
+
+// A keep list still has to work for anyone who wants the tuning back.
+func TestAKeptPackageIsNamedInTheBlockAndReadBack(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, Module), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(GradleFile(root), []byte("android {\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	pkg := "org/firstinspires/ftc/teamcode/tuning"
+	if err := Exclude(root, pkg); err != nil {
+		t.Fatal(err)
+	}
+
+	kept := Kept(root)
+	if len(kept) != 1 || kept[0] != pkg {
+		t.Fatalf("got %v", kept)
+	}
+
+	content := string(mustRead(t, GradleFile(root)))
+	if !strings.Contains(content, "!path.startsWith('"+pkg+"/')") {
+		t.Errorf("the kept package is not excluded from the exclusion:\n%s", content)
+	}
+
+	// Setting up again with a different list must replace, not stack.
+	if err := Exclude(root); err != nil {
+		t.Fatal(err)
+	}
+	if kept := Kept(root); len(kept) != 0 {
+		t.Errorf("the old keep list survived: %v", kept)
+	}
+	if got := strings.Count(string(mustRead(t, GradleFile(root))), beginMarker); got != 1 {
+		t.Errorf("the block appears %d times", got)
+	}
+}
+
+// The split decides what is packaged, so it has to match the gradle exclusion.
+func TestKeptClassesAreNotPackagedForReload(t *testing.T) {
+	entries := []string{
+		"org/firstinspires/ftc/teamcode/OpMode/Auto.class",
+		"org/firstinspires/ftc/teamcode/tuning/Constants.class",
+		"org/firstinspires/ftc/teamcode/tuning/Constants$Inner.class",
+	}
+
+	reload, kept := split(entries, []string{"org/firstinspires/ftc/teamcode/tuning"})
+
+	if kept != 2 {
+		t.Errorf("got %d kept, want the constants class and its inner one", kept)
+	}
+	if len(reload) != 1 || !strings.HasSuffix(reload[0], "Auto.class") {
+		t.Errorf("got %v", reload)
+	}
+}
+
+// A generated file must never mention a library the project does not have, or
+// the whole compile fails on a project that simply does not use it.
+func TestTheBridgeOnlyNamesLibrariesThatArePresent(t *testing.T) {
+	work := t.TempDir()
+
+	path, err := GenerateBridge(work, []string{"a.b.Tuned"}, Classpath{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body := string(mustRead(t, path))
+	if strings.Contains(body, "acmerobotics") {
+		t.Errorf("dashboard is referenced without being on the classpath:\n%s", body)
+	}
+	// The hook still has to exist, so the always-on part keeps working.
+	if !strings.Contains(body, "@OpModeRegistrar") {
+		t.Error("the registrar hook is missing")
+	}
+	if !strings.Contains(body, "setContextClassLoader") {
+		t.Error("the general case is missing")
+	}
+}
+
+// With the library present the classes have to be named directly, because a
+// reference compiled in is the thing the APK cannot produce for itself.
+func TestTheBridgeNamesEachConfigClass(t *testing.T) {
+	work := t.TempDir()
+	cp := Classpath{Compile: []string{fakeJar(t, work, dashboardMarker)}}
+
+	path, err := GenerateBridge(work, []string{"a.b.One", "a.b.Two"}, cp)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body := string(mustRead(t, path))
+	for _, want := range []string{"a.b.One.class", "a.b.Two.class", "createVariableFromClass", "withConfigRoot"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("%q is missing from the bridge", want)
+		}
+	}
+
+	// One class that cannot be reflected over must not take the rest with it.
+	if strings.Count(body, "catch (Throwable ignored)") < 2 {
+		t.Error("a failure in one class is not isolated from the others")
+	}
+}
+
+// Nothing to bridge means nothing generated beyond the hook.
+func TestTheBridgeIsEmptyWithNoConfigClasses(t *testing.T) {
+	work := t.TempDir()
+	cp := Classpath{Compile: []string{fakeJar(t, work, dashboardMarker)}}
+
+	path, err := GenerateBridge(work, nil, cp)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if strings.Contains(string(mustRead(t, path)), "acmerobotics") {
+		t.Error("dashboard is referenced with nothing to register")
+	}
+}
+
+// Classes kept in the APK are found the ordinary way, so bridging them too
+// would put them in the dashboard twice.
+func TestKeptClassesAreNotBridged(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(root, SourceRoot, "org/firstinspires/ftc/teamcode/tuning")
+	if err := os.MkdirAll(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "Consts.java"),
+		[]byte("@Config\npublic class Consts {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := ConfigClasses(root, nil); len(got) != 1 ||
+		got[0] != "org.firstinspires.ftc.teamcode.tuning.Consts" {
+		t.Fatalf("got %v", got)
+	}
+
+	if got := ConfigClasses(root, []string{"org/firstinspires/ftc/teamcode/tuning"}); len(got) != 0 {
+		t.Errorf("got %v, want nothing bridged", got)
+	}
+}
+
+// fakeJar writes a jar containing one entry, for classpath detection.
+func fakeJar(t *testing.T, dir, entry string) string {
+	t.Helper()
+
+	path := filepath.Join(dir, "fake.jar")
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+
+	archive := zip.NewWriter(file)
+	if _, err := archive.Create(entry); err != nil {
+		t.Fatal(err)
+	}
+	if err := archive.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// Comparing the built APK against the robot's cannot work: two builds of an
+// unchanged project differ, because D8 does not pack classes into dex files
+// deterministically. Measured on a real project, classes3.dex and classes5.dex
+// changed every build while every other entry stayed byte for byte the same, so
+// a reload was never once judged equivalent and every deploy installed.
+func TestTheSignatureIgnoresTeamCodeAndNoticesEverythingElse(t *testing.T) {
+	root := t.TempDir()
+
+	mkdir := func(parts ...string) string {
+		dir := filepath.Join(append([]string{root}, parts...)...)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		return dir
+	}
+
+	write := func(path, content string) {
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	mkdir(Module)
+	write(GradleFile(root), "dependencies {\n}\n")
+
+	team := mkdir(Module, "src", "main", "java", "org", "firstinspires", "ftc", "teamcode")
+	write(filepath.Join(team, "Auto.java"), "public class Auto {}\n")
+
+	res := mkdir(Module, "src", "main", "res")
+	write(filepath.Join(res, "thing.xml"), "<x/>\n")
+
+	before, err := Signature(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Team code is the thing that should reload, so it must not count.
+	write(filepath.Join(team, "Auto.java"), "public class Auto { int x = 1; }\n")
+	write(filepath.Join(team, "New.java"), "public class New {}\n")
+
+	if after, _ := Signature(root); after != before {
+		t.Error("a team code change counted as needing an install")
+	}
+
+	// Anything that ends up in the APK must count.
+	for _, change := range []struct{ name, path, content string }{
+		{"a gradle file", GradleFile(root), "dependencies {\n  implementation 'x'\n}\n"},
+		{"a resource", filepath.Join(res, "thing.xml"), "<y/>\n"},
+	} {
+		original, _ := os.ReadFile(change.path)
+		write(change.path, change.content)
+
+		if after, _ := Signature(root); after == before {
+			t.Errorf("%s did not count as a change", change.name)
+		}
+
+		write(change.path, string(original))
+	}
+
+	// And restoring everything has to give the original answer back, or the
+	// comparison drifts and every deploy installs anyway.
+	if after, _ := Signature(root); after != before {
+		t.Error("the signature did not come back after undoing the changes")
+	}
+}
+
+// Build outputs are derived, and hashing them would make the signature change
+// on every build for the same reason the APK does.
+func TestTheSignatureSkipsBuildOutput(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, Module, "build", "intermediates"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, Module, "build.gradle"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	before, err := Signature(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(filepath.Join(root, Module, "build", "intermediates", "out.jar"),
+		[]byte("anything"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if after, _ := Signature(root); after != before {
+		t.Error("build output counted as a change")
+	}
+}
