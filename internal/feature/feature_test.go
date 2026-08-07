@@ -2,15 +2,11 @@ package feature
 
 import "testing"
 
-// candidates is every input the settings screen can report, which is a superset
-// of what the pattern uses.
 var candidates = []string{
 	"up", "down", "left", "right", "enter", " ",
 	"a", "b", "h", "j", "k", "l", "q", "esc",
 }
 
-// full rebuilds the pattern from the package's own data, so the test never
-// restates it.
 func full() []string {
 	out := make([]string, Steps())
 	for i := range out {
@@ -65,20 +61,17 @@ func TestPartialPatternDoesNotComplete(t *testing.T) {
 func TestStrayInputRestarts(t *testing.T) {
 	seq := full()
 
-	// A fresh attempt after a stray input still has to work.
 	spoiled := append([]string{seq[0], seq[0], "j"}, seq...)
 	if _, done := run(spoiled); !done {
 		t.Error("a fresh attempt after a stray input should complete")
 	}
 
-	// One interrupted partway must not.
 	broken := append(append([]string{}, seq[:len(seq)-1]...), "j", seq[len(seq)-1])
 	if _, done := run(broken); done {
 		t.Error("an interrupted attempt should not complete")
 	}
 }
 
-// The opening entry repeats, so leaning on it must not desync the walk.
 func TestRepeatedOpeningEntry(t *testing.T) {
 	seq := full()
 	if _, done := run(append([]string{seq[0], seq[0], seq[0]}, seq...)); !done {

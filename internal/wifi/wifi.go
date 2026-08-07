@@ -8,22 +8,22 @@ import (
 	"time"
 )
 
+// RobotSubnet is the address range the robot hands out on its own network.
 const RobotSubnet = "192.168.43."
 
-// Returned when the OS refuses to name the current network. Only macOS does
-// this, but every platform shares the sentinel so callers stay portable.
+// ErrSSIDUnavailable means the OS would not say which network we are on.
 var ErrSSIDUnavailable = errors.New("the current Wi-Fi network name is unavailable")
 
+// Manager drives the platform's Wi-Fi tooling.
 type Manager struct {
 	iface string
 }
 
+// NewManager returns a Wi-Fi manager for this platform.
 func NewManager() *Manager {
 	return &Manager{}
 }
 
-// wifiInterface resolves the wireless interface name lazily, since discovering
-// it costs a subprocess on Linux and Windows.
 func (m *Manager) wifiInterface() string {
 	if m.iface == "" {
 		m.iface = m.detectInterface()
@@ -31,6 +31,7 @@ func (m *Manager) wifiInterface() string {
 	return m.iface
 }
 
+// GetIPv4 is the machine's current address.
 func (m *Manager) GetIPv4() (string, error) {
 	name := m.wifiInterface()
 	if name == "" {
@@ -58,6 +59,7 @@ func (m *Manager) GetIPv4() (string, error) {
 	return "", nil
 }
 
+// IsOnRobotNetwork reports whether we currently hold a robot address.
 func (m *Manager) IsOnRobotNetwork() (bool, error) {
 	ip, err := m.GetIPv4()
 	if err != nil {
@@ -69,13 +71,7 @@ func (m *Manager) IsOnRobotNetwork() (bool, error) {
 	return strings.HasPrefix(ip, RobotSubnet), nil
 }
 
-// MostRecentNetwork reports the network most recently connected to, skipping
-// any SSID in exclude. The robot's own networks must be excluded: joining the
-// robot makes it the most recent, and returning it as "home" would strand the
-// user on the hotspot.
-//
-// Returns "" where the OS keeps no usable history (Windows), rather than
-// guessing.
+// MostRecentNetwork guesses where we came from when the name is hidden.
 func (m *Manager) MostRecentNetwork(exclude ...string) (string, error) {
 	if !tracksRecency {
 		return "", nil
@@ -89,16 +85,12 @@ func (m *Manager) MostRecentNetwork(exclude ...string) (string, error) {
 	return firstNotIn(networks, exclude), nil
 }
 
-// Rejoin returns to a network the OS already holds the key for. leaving names
-// the networks to get off of, which matters on macOS where the only credential
-// free way back is to make the current network ineligible for auto-join.
+// Rejoin returns to a network, leaving the robot's behind.
 func (m *Manager) Rejoin(ssid string, leaving []string) error {
 	return m.rejoin(ssid, leaving)
 }
 
-// WaitToLeave blocks until the interface holds an IPv4 address outside subnet.
-// Leaving the robot has to be confirmed by address because macOS will not name
-// the current network.
+// WaitToLeave blocks until the machine no longer holds an address in a subnet.
 func (m *Manager) WaitToLeave(subnet string, timeout time.Duration) (string, error) {
 	deadline := time.Now().Add(timeout)
 
@@ -119,6 +111,7 @@ func (m *Manager) WaitToLeave(subnet string, timeout time.Duration) (string, err
 	}
 }
 
+// JoinAndWait joins a network and waits for an address on it.
 func (m *Manager) JoinAndWait(ssid, password, subnet string, timeout time.Duration) (string, error) {
 	if err := m.Join(ssid, password); err != nil {
 		return "", err
@@ -126,10 +119,7 @@ func (m *Manager) JoinAndWait(ssid, password, subnet string, timeout time.Durati
 	return m.WaitForIP(subnet, timeout)
 }
 
-// WaitForIP blocks until the interface holds an IPv4 address. A non-empty
-// subnet additionally requires that address to carry the given prefix, which is
-// how landing on the robot rather than some other remembered network is
-// confirmed.
+// WaitForIP blocks until the machine has an address in a subnet.
 func (m *Manager) WaitForIP(subnet string, timeout time.Duration) (string, error) {
 	deadline := time.Now().Add(timeout)
 

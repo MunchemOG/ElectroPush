@@ -1,20 +1,10 @@
 package robotcfg
 
-// The tables here were read out of the FTC SDK 11.1.0 jars: the xmlTag on each
-// driver's @MotorType / @ServoType / @AnalogSensorType / @DigitalIoDeviceType /
-// @I2cDeviceType annotation, and the port counts in LynxConstants.
-//
-// They exist to catch two devices sharing a port. A tag that is not listed is
-// left alone rather than guessed at, because teams register their own device
-// types and a wrong guess would report a collision that is not there.
-
-// Flavor is which set of ports on a hub a device occupies. Ports only collide
-// within a flavor: a motor on port 0 and a servo on port 0 are both fine.
+// Flavor is which set of ports on a hub a device occupies.
 type Flavor int
 
+// The port groups a device can occupy. Unclassified is a tag this table does not know.
 const (
-	// Unclassified is a tag this table does not know. Its ports are not
-	// checked; third-party and OnBotJava drivers land here.
 	Unclassified Flavor = iota
 	Motor
 	Servo
@@ -24,6 +14,7 @@ const (
 	PWM
 )
 
+// String names the flavor for showing a person.
 func (f Flavor) String() string {
 	switch f {
 	case Motor:
@@ -42,7 +33,7 @@ func (f Flavor) String() string {
 	return "device"
 }
 
-// Ports is how many of that flavor a single REV hub has, from LynxConstants.
+// Ports is how many of that flavor a single REV hub has.
 func (f Flavor) Ports() int {
 	switch f {
 	case Motor:
@@ -62,17 +53,17 @@ func (f Flavor) Ports() int {
 // Buses is how many I2C buses a single REV hub has.
 const Buses = 4
 
-// ControlHubAddress is the RS-485 address reserved for the Control Hub's
-// built-in module. An Expansion Hub configured at this address is the error the
-// SDK calls out by name.
+// ControlHubAddress is the RS-485 address reserved for the Control Hub.
 const ControlHubAddress = 173
 
 // MaxUnreservedAddress is the highest address a hub should be set to by hand.
-// Above it the SDK warns that addresses are reserved for system use.
 const MaxUnreservedAddress = 10
 
+// Read out of the FTC SDK 11.1.0 jars: the xmlTag on each driver's device
+// annotation, and the port counts in LynxConstants. A tag that is not listed is
+// left unchecked rather than guessed at, because teams register their own.
 var flavors = map[string]Flavor{
-	// Motors.
+
 	"Motor":                               Motor,
 	"Matrix12vMotor":                      Motor,
 	"NeveRest20Gearmotor":                 Motor,
@@ -89,23 +80,19 @@ var flavors = map[string]Flavor{
 	"goBILDA5201SeriesMotor":              Motor,
 	"goBILDA5202SeriesMotor":              Motor,
 
-	// Servos.
 	"Servo":                   Servo,
 	"ContinuousRotationServo": Servo,
 	"RevSPARKMini":            Servo,
 	"ServoFullRange":          Servo,
 
-	// Analog inputs.
 	"AnalogInput":                     Analog,
 	"ModernRoboticsAnalogTouchSensor": Analog,
 	"OpticalDistanceSensor":           Analog,
 
-	// Digital I/O.
 	"DigitalDevice":  Digital,
 	"Led":            Digital,
 	"RevTouchSensor": Digital,
 
-	// I2C.
 	"AdafruitBNO055IMU":              I2C,
 	"AdafruitColorSensor":            I2C,
 	"AndyMarkColor":                  I2C,
@@ -128,7 +115,6 @@ var flavors = map[string]Flavor{
 	"SparkFunOTOS":                   I2C,
 	"goBILDAPinpoint":                I2C,
 
-	// PWM.
 	"PulseWidthDevice": PWM,
 }
 
@@ -137,8 +123,7 @@ func FlavorOf(tag string) Flavor {
 	return flavors[tag]
 }
 
-// KnownTags lists every device type this table recognises. Only used to tell
-// somebody what a near-miss might have meant.
+// KnownTags lists every device type this table recognises.
 func KnownTags() []string {
 	tags := make([]string, 0, len(flavors))
 	for tag := range flavors {

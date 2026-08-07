@@ -6,10 +6,6 @@ import (
 	"testing"
 )
 
-// This is the property the whole editor rests on. If reading and writing a file
-// unchanged does not return the original bytes, then every save reformats the
-// configuration, every diff against the robot becomes unreadable, and there is
-// no way to tell a real edit from a round trip.
 func TestWritingBackWhatWasReadIsByteIdentical(t *testing.T) {
 	for _, tc := range []struct{ name, xml string }{
 		{"a configuration the Driver Station wrote", realConfig},
@@ -49,7 +45,6 @@ func TestWritingBackWhatWasReadIsByteIdentical(t *testing.T) {
 	}
 }
 
-// The same property against the file on disk, not a copy pasted into a test.
 func TestRoundTripOfTheConfigurationOnDisk(t *testing.T) {
 	const path = "testdata/real.xml"
 
@@ -68,15 +63,12 @@ func TestRoundTripOfTheConfigurationOnDisk(t *testing.T) {
 	}
 }
 
-// Attributes pusher does not model must survive a save, or editing a motor
-// would quietly strip a webcam's serial number or a Limelight's address.
 func TestUnmodelledAttributesSurviveAnEdit(t *testing.T) {
 	cfg, err := Parse([]byte(realConfig))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Rename a motor, which is the most ordinary edit there is.
 	cfg.Portals[0].Modules[0].Devices[0].Name = "renamed"
 
 	out := string(Write(cfg))
@@ -97,8 +89,6 @@ func TestUnmodelledAttributesSurviveAnEdit(t *testing.T) {
 	}
 }
 
-// The SDK's own Ethernet writer emits name= twice. Renaming has to change the
-// one the Driver Station reads, and must not append a third.
 func TestRenamingSomethingWithADuplicatedAttribute(t *testing.T) {
 	cfg, err := Parse([]byte(realConfig))
 	if err != nil {
@@ -117,8 +107,6 @@ func TestRenamingSomethingWithADuplicatedAttribute(t *testing.T) {
 	}
 }
 
-// Device names come from people, so a character that means something in XML has
-// to come back out as itself.
 func TestNamesAreEscapedAndParseBackUnchanged(t *testing.T) {
 	cfg, err := Parse([]byte(realConfig))
 	if err != nil {
@@ -151,8 +139,6 @@ func TestANewConfigurationIsValidAndParses(t *testing.T) {
 		t.Errorf("a new configuration has errors: %v", issues)
 	}
 
-	// It has to have a Control Hub to hang devices off, or the editor opens on
-	// nothing and there is nowhere to add anything.
 	if len(again.Portals) != 1 || len(again.Portals[0].Modules) != 1 {
 		t.Fatalf("got %d portals", len(again.Portals))
 	}

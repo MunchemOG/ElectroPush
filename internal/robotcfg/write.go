@@ -6,17 +6,8 @@ import (
 	"strings"
 )
 
-// Write renders a configuration back to XML.
-//
-// The output has to match what the Driver Station writes, not merely be valid
-// XML: a file that comes back reformatted turns every edit into an unreadable
-// diff and makes it impossible to tell a real change from a round trip. So the
-// declaration, the indentation and the attribute order are all reproduced from
-// the file that was read, and attributes the model does not understand are
-// carried through untouched.
-//
-// Parsing a file and writing it straight back returns the original bytes. That
-// is what TestWritingBackWhatWasReadIsByteIdentical pins down.
+// Parsing a file and writing it straight back must return the original bytes,
+// or every save reformats the configuration. Do not swap in encoding/xml.
 func Write(cfg *Config) []byte {
 	var b strings.Builder
 
@@ -60,8 +51,6 @@ func writePortal(b *strings.Builder, p Portal, indent string) {
 	b.WriteString(indent + "<" + p.Tag)
 	writeAttrs(b, portalAttrs(p))
 
-	// A portal with nothing under it keeps the shape it arrived in: the SDK
-	// writes an unpopulated webcam self-closed and a hub chain with children.
 	if len(p.Modules) == 0 && len(p.Devices) == 0 && p.SelfClosing {
 		b.WriteString(" />\n")
 		return
@@ -99,8 +88,6 @@ func writeModule(b *strings.Builder, m Module, indent string) {
 	b.WriteString(prefix + "</" + m.Tag + ">\n")
 }
 
-// writeDevice always self-closes. Every device element the Driver Station
-// writes is a leaf.
 func writeDevice(b *strings.Builder, d Device, prefix string) {
 	b.WriteString(prefix + "<" + d.Tag)
 	writeAttrs(b, deviceAttrs(d))
@@ -113,9 +100,6 @@ func writeAttrs(b *strings.Builder, list []Attr) {
 	}
 }
 
-// escapeAttr covers what can legally appear in an attribute written with double
-// quotes. Device names come from people, so an ampersand in one is not
-// far-fetched.
 func escapeAttr(value string) string {
 	return strings.NewReplacer(
 		"&", "&amp;",
@@ -125,12 +109,6 @@ func escapeAttr(value string) string {
 	).Replace(value)
 }
 
-// deviceAttrs rebuilds the attribute list from the edited fields, keeping every
-// attribute that was there in its original position.
-//
-// Editing a name must change the name attribute in place rather than appending
-// a second one, and an attribute the model knows nothing about - a webcam's
-// serial number, an Ethernet device's IP - has to survive untouched.
 func deviceAttrs(d Device) []Attr {
 	known := map[string]string{}
 	if d.Name != "" || has(d.Attrs, "name") {
@@ -167,12 +145,6 @@ func portalAttrs(p Portal) []Attr {
 	return merge(p.Attrs, known, []string{"name", "serialNumber", "parentModuleAddress"})
 }
 
-// merge overwrites the modelled attributes where they already appear and
-// appends the ones that do not, in the order given.
-//
-// Only the first occurrence of a name is updated: the SDK's Ethernet writer
-// emits name= twice, and the Driver Station reads the first, so rewriting both
-// would change which value wins if they ever differed.
 func merge(original []Attr, values map[string]string, order []string) []Attr {
 	out := make([]Attr, 0, len(original)+len(order))
 	seen := map[string]bool{}

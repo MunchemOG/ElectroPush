@@ -18,7 +18,7 @@ func TestCredentialFieldParsesGitOutput(t *testing.T) {
 	if got := credentialField(out, "nothing"); got != "" {
 		t.Errorf("got %q for an absent key", got)
 	}
-	// A helper that declines answers with nothing useful.
+
 	if got := credentialField("", "password"); got != "" {
 		t.Errorf("got %q", got)
 	}
@@ -42,8 +42,6 @@ func TestReadEnvPrefersGHToken(t *testing.T) {
 	}
 }
 
-// A stored token is used as-is; a discovered one is read back from its source
-// rather than having been copied into pusher's own file.
 func TestSecretResolvesFromItsSource(t *testing.T) {
 	t.Setenv("GH_TOKEN", "from_the_environment")
 
@@ -68,8 +66,6 @@ func TestSecretResolvesFromItsSource(t *testing.T) {
 	}
 }
 
-// A discovered token must not be written into the credentials file, or pusher
-// becomes a second place a GitHub token lives.
 func TestDiscoveredCredentialsStoreNoSecret(t *testing.T) {
 	isolate(t)
 	t.Setenv("GH_TOKEN", "from_the_environment")
@@ -85,8 +81,6 @@ func TestDiscoveredCredentialsStoreNoSecret(t *testing.T) {
 	}
 }
 
-// Removing the token has to stick. Without the declined marker the next lookup
-// would find the machine's own GitHub login and silently put it straight back.
 func TestClearIsNotUndoneByDiscovery(t *testing.T) {
 	isolate(t)
 	t.Setenv("GH_TOKEN", "from_the_environment")
@@ -95,8 +89,6 @@ func TestClearIsNotUndoneByDiscovery(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Resolve must short-circuit before discovery, so this makes no network
-	// call despite a token being visible in the environment.
 	status, creds := Resolve()
 	if status != NoToken {
 		t.Errorf("got %v, want NoToken after Clear", status)
@@ -106,8 +98,6 @@ func TestClearIsNotUndoneByDiscovery(t *testing.T) {
 	}
 }
 
-// Setting a token explicitly has to clear the declined marker, or the machine
-// stays opted out forever.
 func TestSetTokenClearsTheDeclinedMarker(t *testing.T) {
 	isolate(t)
 
@@ -118,8 +108,6 @@ func TestSetTokenClearsTheDeclinedMarker(t *testing.T) {
 		t.Fatal("setup: expected declined")
 	}
 
-	// SetToken builds fresh credentials rather than editing the stored ones,
-	// so the marker cannot survive.
 	fresh := Credentials{Token: "x", Login: "someone", CheckedAt: time.Now().Unix()}
 	if err := Save(fresh); err != nil {
 		t.Fatal(err)

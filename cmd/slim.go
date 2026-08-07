@@ -6,6 +6,7 @@ import (
 
 	"github.com/andreibanu/pusher/internal/adb"
 	"github.com/andreibanu/pusher/internal/config"
+	"github.com/andreibanu/pusher/internal/extreme"
 	"github.com/andreibanu/pusher/internal/ftcproject"
 	"github.com/andreibanu/pusher/internal/gradle"
 	"github.com/spf13/cobra"
@@ -15,6 +16,7 @@ var (
 	slimUndo       bool
 	slimABI        string
 	slimSourceMaps bool
+	slimStoreLibs  bool
 )
 
 var slimCmd = &cobra.Command{
@@ -35,6 +37,7 @@ func init() {
 	slimCmd.Flags().BoolVar(&slimUndo, "undo", false, "Restore the gradle files pusher patched")
 	slimCmd.Flags().StringVar(&slimABI, "abi", "", "ABI to keep (default: ask the connected hub)")
 	slimCmd.Flags().BoolVar(&slimSourceMaps, "strip-source-maps", false, "Also exclude JavaScript source maps from assets")
+	slimCmd.Flags().BoolVar(&slimStoreLibs, "store-libs", false, "Store native libraries uncompressed so the install does not extract them")
 }
 
 func runSlim(cmd *cobra.Command, args []string) error {
@@ -45,9 +48,21 @@ func runSlim(cmd *cobra.Command, args []string) error {
 	fmt.Printf("[OK] FTC project: %s\n", project.Root)
 
 	if slimUndo {
+		// Undo restores whole files from backups, and Pusher Extreme keeps a
+		// block in one of them. A backup taken before that block was added
+		// would silently remove it, turning extreme off without saying so.
+		wasExcluded := extreme.Excluded(project.Root)
+
 		restored, err := project.Undo()
 		if err != nil {
 			return err
+		}
+
+		if wasExcluded && !extreme.Excluded(project.Root) {
+			if err := extreme.Exclude(project.Root); err != nil {
+				return fmt.Errorf("restoring the Pusher Extreme block failed: %w", err)
+			}
+			fmt.Println("[*] Kept the Pusher Extreme block; undo it from `pusher settings`")
 		}
 		fmt.Printf("\n[OK] Restored: %s\n", strings.Join(restored, ", "))
 		fmt.Println("    Your next build will package everything again.")
@@ -90,6 +105,20 @@ func runSlim(cmd *cobra.Command, args []string) error {
 			fmt.Println("[OK] TeamCode/build.gradle now excludes *.map source maps")
 		} else {
 			fmt.Println("[=] Source maps already excluded")
+		}
+	}
+
+	if slimStoreLibs || config.GetStoreLibs() {
+		libsChanged, err := project.StoreLibs(false)
+		if err != nil {
+			return err
+		}
+		if libsChanged {
+			changed = true
+			fmt.Println("[OK] Native libraries are now stored, not compressed")
+			fmt.Println("    The APK gets bigger; the install stops extracting them.")
+		} else {
+			fmt.Println("[=] Native libraries already stored")
 		}
 	}
 

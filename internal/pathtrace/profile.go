@@ -2,30 +2,22 @@ package pathtrace
 
 import "math"
 
-// Limits describes what the drivetrain can physically do. Defaults are sane for
-// a goBILDA mecanum base; override them once and the estimate tracks reality.
+// Limits is the drivetrain model speeds are estimated against.
 type Limits struct {
-	// TopSpeed at maxPower 1.0, inches/sec.
 	TopSpeed float64
-	// Accel and Decel, inches/sec^2.
+
 	Accel float64
 	Decel float64
-	// LatAccel is the sideways grip budget, inches/sec^2. It is what forces the
-	// robot to slow for a tight curve rather than pretending corners are free.
+
 	LatAccel float64
 }
 
+// DefaultLimits is a reasonable starting model for an FTC drivetrain.
 func DefaultLimits() Limits {
 	return Limits{TopSpeed: 55, Accel: 80, Decel: 90, LatAccel: 70}
 }
 
-// Profile computes a speed at every point of every curve, plus per-segment
-// length, peak speed and estimated duration.
-//
-// It is the standard forward/backward sweep: cap by maxPower and by curvature,
-// then make the result reachable given the acceleration limit, then make it
-// stoppable given the deceleration limit. Each segment starts and ends at rest,
-// because blob settles onto every target before the auto advances.
+// Profile estimates speed along a segment under the drivetrain limits.
 func (t *Trace) Profile(lim Limits) {
 	for i := range t.Segments {
 		seg := &t.Segments[i]
@@ -39,7 +31,6 @@ func profileCurve(curve [][]float64, maxPower float64, lim Limits) (speeds []flo
 		return []float64{0}, 0, 0, 0
 	}
 
-	// Arc length between consecutive samples.
 	ds := make([]float64, n-1)
 	for i := 0; i < n-1; i++ {
 		ds[i] = math.Hypot(curve[i+1][0]-curve[i][0], curve[i+1][1]-curve[i][1])
@@ -54,7 +45,6 @@ func profileCurve(curve [][]float64, maxPower float64, lim Limits) (speeds []flo
 		return make([]float64, n), length, 0, 0
 	}
 
-	// Ceiling at each point: the power cap, tightened by how hard the curve bends.
 	v := make([]float64, n)
 	for i := 0; i < n; i++ {
 		v[i] = vCap
@@ -65,17 +55,14 @@ func profileCurve(curve [][]float64, maxPower float64, lim Limits) (speeds []flo
 		}
 	}
 
-	// Start and end at rest.
 	v[0] = 0
 	v[n-1] = 0
 
-	// Forward: you cannot be going faster than you could have accelerated to.
 	for i := 1; i < n; i++ {
 		reachable := math.Sqrt(v[i-1]*v[i-1] + 2*lim.Accel*ds[i-1])
 		v[i] = math.Min(v[i], reachable)
 	}
 
-	// Backward: you cannot be going faster than you could still stop from.
 	for i := n - 2; i >= 0; i-- {
 		stoppable := math.Sqrt(v[i+1]*v[i+1] + 2*lim.Decel*ds[i])
 		v[i] = math.Min(v[i], stoppable)
@@ -97,8 +84,6 @@ func profileCurve(curve [][]float64, maxPower float64, lim Limits) (speeds []flo
 	return v, length, seconds, peak
 }
 
-// curvature at a point, from the circle through it and its two neighbours.
-// 1/R = 4*area / (a*b*c), which degenerates to 0 for collinear points.
 func curvature(pts [][]float64, i int) float64 {
 	if i == 0 || i >= len(pts)-1 {
 		return 0
@@ -122,7 +107,7 @@ func curvature(pts [][]float64, i int) float64 {
 	return 4 * area / (a * b * c)
 }
 
-// Totals returns estimated and measured durations, in seconds.
+// Totals is the estimated and measured duration of the whole run.
 func (t *Trace) Totals() (estimated, actual float64) {
 	for _, s := range t.Segments {
 		estimated += s.EstSeconds
@@ -131,7 +116,7 @@ func (t *Trace) Totals() (estimated, actual float64) {
 	return estimated, actual
 }
 
-// SpeedRange is the span of profiled speeds, used to scale the colour ramp.
+// SpeedRange is the slowest and fastest modelled speed, for colouring.
 func (t *Trace) SpeedRange() (lo, hi float64) {
 	hi = 0
 	for _, s := range t.Segments {
@@ -145,7 +130,7 @@ func (t *Trace) SpeedRange() (lo, hi float64) {
 	return 0, hi
 }
 
-// Bounds is the field extent covered by the trace, padded a little.
+// Bounds is the field area the run covers.
 func (t *Trace) Bounds() (minX, minY, maxX, maxY float64) {
 	minX, minY = math.Inf(1), math.Inf(1)
 	maxX, maxY = math.Inf(-1), math.Inf(-1)

@@ -1,5 +1,3 @@
-// Package visual ties the robot, the trace format and the renderer together, so
-// `pusher visualiser` and the settings menu drive exactly the same code.
 package visual
 
 import (
@@ -14,7 +12,7 @@ import (
 	"github.com/andreibanu/pusher/internal/pathtrace"
 )
 
-// Device picks the robot to talk to. USB wins over Wi-Fi, matching deploy.
+// Device picks the robot to talk to.
 func Device() (string, error) {
 	return adb.Target()
 }
@@ -69,7 +67,7 @@ func RenderLocal(local, projectRoot, out string, lim pathtrace.Limits) (string, 
 	return out, nil
 }
 
-// Summary is a one-line description of a rendered trace, for menus and logs.
+// Summary is the one-line description of a rendered run.
 func Summary(local string) string {
 	trace, err := pathtrace.Load(local)
 	if err != nil {
@@ -92,7 +90,7 @@ func safe(s string) string {
 	}, s)
 }
 
-// Open shows the rendered page in the default browser.
+// Open shows a rendered page in the browser.
 func Open(path string) {
 	var c *exec.Cmd
 	switch runtime.GOOS {

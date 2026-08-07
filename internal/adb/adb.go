@@ -9,6 +9,7 @@ import (
 	"time"
 )
 
+// The robot's fixed address on its own network.
 const (
 	RobotIP   = "192.168.43.1"
 	RobotPort = "5555"
@@ -16,14 +17,17 @@ const (
 	remoteAPKPath = "/data/local/tmp/pusher_app.apk"
 )
 
+// Transport is how a device is attached.
 type Transport string
 
+// How a device is attached.
 const (
 	TransportUSB Transport = "usb"
 
 	TransportTCP Transport = "tcp"
 )
 
+// Device is one attached device as adb reports it.
 type Device struct {
 	Serial    string
 	State     string
@@ -31,10 +35,12 @@ type Device struct {
 	Transport Transport
 }
 
+// IsOnline reports whether the device is ready for commands.
 func (d Device) IsOnline() bool {
 	return d.State == "device"
 }
 
+// Label is the device's model and serial, for showing a person.
 func (d Device) Label() string {
 	if d.Model != "" {
 		return fmt.Sprintf("%s (%s)", d.Model, d.Serial)
@@ -42,15 +48,18 @@ func (d Device) Label() string {
 	return d.Serial
 }
 
+// RobotAddr is the robot's adb address over Wi-Fi.
 func RobotAddr() string {
 	return fmt.Sprintf("%s:%s", RobotIP, RobotPort)
 }
 
+// IsInstalled reports whether adb is on the path.
 func IsInstalled() bool {
 	_, err := exec.LookPath("adb")
 	return err == nil
 }
 
+// Devices lists what adb can currently see.
 func Devices() ([]Device, error) {
 	if !IsInstalled() {
 		return nil, fmt.Errorf("adb not found - please install Android SDK Platform-Tools")
@@ -101,6 +110,7 @@ func parseDevices(output string) []Device {
 	return devices
 }
 
+// FindUSBDevice returns an attached hub, if one is plugged in.
 func FindUSBDevice() (*Device, bool) {
 	devices, err := Devices()
 	if err != nil {
@@ -117,6 +127,7 @@ func FindUSBDevice() (*Device, bool) {
 	return nil, false
 }
 
+// ABIList is the CPU architectures a device supports, most preferred first.
 func ABIList(serial string) ([]string, error) {
 	out, err := run(serial, "shell", "getprop", "ro.product.cpu.abilist")
 	if err != nil {
@@ -161,6 +172,7 @@ func run(serial string, args ...string) (string, error) {
 	return string(out), nil
 }
 
+// Connect establishes an adb connection to the robot over Wi-Fi, retrying.
 func Connect() error {
 	if !IsInstalled() {
 		return fmt.Errorf("adb not found - please install Android SDK Platform-Tools")
@@ -198,6 +210,7 @@ func Connect() error {
 	return fmt.Errorf("ADB connection failed after %d attempts: %w\n\n[!] Troubleshooting:\n  1. Ensure you're connected to the robot's Wi-Fi\n  2. Enable ADB debugging on Robot Controller\n  3. Try 'adb connect %s' manually\n  4. Check robot app is running", maxRetries, lastErr, addr)
 }
 
+// Disconnect drops every adb network connection.
 func Disconnect() error {
 	if !IsInstalled() {
 		return fmt.Errorf("adb not found")
@@ -212,6 +225,7 @@ func Disconnect() error {
 	return nil
 }
 
+// IsConnected reports whether adb currently holds the robot.
 func IsConnected() bool {
 	if !IsInstalled() {
 		return false
@@ -226,6 +240,119 @@ func IsConnected() bool {
 	return strings.Contains(string(output), RobotAddr())
 }
 
+// Options is how a deploy is allowed to install.
+type Options struct {
+	Delta bool
+
+	SkipUnchanged bool
+
+	Stream bool
+
+	Splits []string
+}
+
+// InstallWith installs an APK and reports what it actually did.
+func InstallWith(serial, apkPath string, opt Options) (InstallPlan, error) {
+	plan := InstallPlan{}
+
+	if !IsInstalled() {
+		return plan, fmt.Errorf("adb not found")
+	}
+
+	// What was installed is recorded whatever the settings say. Skipping an
+	// unchanged install is only one reader of that record: Pusher Extreme uses
+	// it to decide whether a reload is equivalent to an install, and without it
+	// it can never tell and always installs.
+	pkg := PackageName(apkPath)
+
+	fingerprint := ""
+	if pkg != "" {
+		if sum, err := APKFingerprint(apkPath); err == nil {
+			fingerprint = sum
+
+			if opt.SkipUnchanged && alreadyInstalled(serial, sum, pkg) {
+				plan.Skipped = true
+				plan.Reason = "the robot already has this exact build"
+				return plan, nil
+			}
+		}
+	}
+
+	if len(opt.Splits) > 1 && pkg != "" {
+		count, err := SplitInstall(serial, pkg, opt.Splits)
+		switch {
+		case err != nil:
+			fmt.Printf("\n[!] Split install failed: %v\n", err)
+			fmt.Println("[*] Falling back to installing the whole APK.")
+		case count == 0:
+			plan.Skipped = true
+			plan.Reason = "no split changed"
+			return plan, nil
+		default:
+			recordSplits(serial, opt.Splits)
+			plan.Splits = count
+			return plan, nil
+		}
+	}
+
+	// Transfer first, install second. They are separate choices: delta decides
+	// how the bytes get to the robot, streaming decides how they are installed.
+	// Trying streaming first sent the whole APK and left delta as dead code.
+	remote := ""
+	if opt.Delta {
+		result, err := deltaInstall(serial, apkPath)
+		if err == nil {
+			remote = remoteDeltaAPK
+			defer pruneCache(serial, result.chunks)
+		} else {
+			var unavailable ErrDeltaUnavailable
+			if errors.As(err, &unavailable) {
+				fmt.Printf("\n[!] Delta transfer unavailable: %s\n", unavailable.Reason)
+			} else {
+				fmt.Printf("\n[!] Delta transfer failed: %v\n", err)
+			}
+			fmt.Println("[*] Sending the whole APK instead.")
+		}
+	}
+
+	forgetInstalled(serial)
+
+	if opt.Stream {
+		// Binary on a device shell's stdin is not uniformly reliable on older
+		// Android, so a failure here is expected and must not end the deploy.
+		err := streamFrom(serial, apkPath, remote)
+		if err == nil {
+			plan.Streamed, plan.Delta = true, remote != ""
+			if fingerprint != "" {
+				recordInstalled(serial, fingerprint, pkg)
+			}
+			return plan, nil
+		}
+
+		fmt.Printf("\n[!] Streaming install unavailable: %v\n", err)
+		fmt.Println("[*] Falling back to a staged install.")
+	}
+
+	var err error
+	if remote != "" {
+		fmt.Println("[*] Installing...")
+		err = runInstall(serial, remote)
+	} else {
+		err = tryInstall(serial, apkPath)
+	}
+	if err != nil {
+		return plan, err
+	}
+
+	plan.Delta = remote != ""
+	if fingerprint != "" {
+		recordInstalled(serial, fingerprint, pkg)
+	}
+
+	return plan, nil
+}
+
+// Install transfers and installs an APK, optionally sending only what changed.
 func Install(serial, apkPath string, useDelta bool) error {
 	if !IsInstalled() {
 		return fmt.Errorf("adb not found")

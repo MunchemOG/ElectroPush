@@ -7,7 +7,6 @@ import (
 	"os"
 )
 
-// viewBox is the SVG drawing space. Field coordinates are mapped into it.
 const viewSize = 1000.0
 
 type renderSegment struct {
@@ -68,7 +67,7 @@ type gridLine struct {
 	Major          bool
 }
 
-// Render writes a self-contained HTML visualiser to path.
+// Render writes the trace as a standalone HTML page.
 func (t *Trace) Render(path string, lim Limits) error {
 	data := t.buildRenderData(lim)
 
@@ -89,7 +88,6 @@ func (t *Trace) buildRenderData(lim Limits) renderData {
 	minX, minY, maxX, maxY := t.Bounds()
 	_, vMax := t.SpeedRange()
 
-	// Uniform scale so the field is not distorted, centred in the viewBox.
 	spanX, spanY := maxX-minX, maxY-minY
 	span := math.Max(spanX, spanY)
 	if span <= 0 {
@@ -99,7 +97,6 @@ func (t *Trace) buildRenderData(lim Limits) renderData {
 	offX := (viewSize - spanX*scale) / 2
 	offY := (viewSize - spanY*scale) / 2
 
-	// Field y grows up, SVG y grows down.
 	tx := func(x float64) float64 { return offX + (x-minX)*scale }
 	ty := func(y float64) float64 { return viewSize - (offY + (y-minY)*scale) }
 
@@ -194,7 +191,6 @@ func (t *Trace) buildRenderData(lim Limits) renderData {
 	}
 }
 
-// gridFor draws a 24 inch tile grid, which is the FTC field's natural unit.
 func gridFor(minX, minY, maxX, maxY float64, tx, ty func(float64) float64) []gridLine {
 	var lines []gridLine
 	start := math.Floor(minX/24) * 24
@@ -208,16 +204,15 @@ func gridFor(minX, minY, maxX, maxY float64, tx, ty func(float64) float64) []gri
 	return lines
 }
 
-// heatColour maps 0..1 to blue -> cyan -> green -> yellow -> red. Slow is cold.
 func heatColour(f float64) string {
 	f = math.Max(0, math.Min(1, f))
 
 	stops := [][3]float64{
-		{56, 108, 255}, // blue
-		{0, 190, 210},  // cyan
-		{54, 179, 126}, // green
-		{255, 190, 60}, // amber
-		{255, 86, 48},  // red
+		{56, 108, 255},
+		{0, 190, 210},
+		{54, 179, 126},
+		{255, 190, 60},
+		{255, 86, 48},
 	}
 
 	x := f * float64(len(stops)-1)

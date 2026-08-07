@@ -27,8 +27,6 @@ func writeWrapper(t *testing.T, dir string) string {
 	return path
 }
 
-// A bare "gradlew" sends exec looking through $PATH, so the result has to be
-// absolute no matter which directory the wrapper was found in.
 func TestDetectWrapperIsAbsolute(t *testing.T) {
 	for _, depth := range []int{0, 1, 3} {
 		root := t.TempDir()

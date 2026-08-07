@@ -1,11 +1,3 @@
-// The interactive side of `pusher hwconfig`.
-//
-// Everything the subcommands do is reachable from here, plus a structured
-// editor. The editor works on parsed devices rather than raw XML on purpose: a
-// hardware configuration is a list of ports with names on them, and a menu that
-// knows what a port is can offer the device types that exist, the ports that
-// are free, and a warning the moment two things collide - none of which a text
-// editor can do.
 package tui
 
 import (
@@ -28,7 +20,6 @@ const (
 	hwScreenSummary
 )
 
-// hwEntry is one row of the configuration list.
 type hwEntry struct {
 	Name    string
 	InLocal bool
@@ -64,7 +55,6 @@ func (e hwEntry) status() string {
 	}
 }
 
-// hwRowKind is what a row of the device editor represents.
 type hwRowKind int
 
 const (
@@ -86,12 +76,10 @@ type hwRow struct {
 	HasIss bool
 }
 
-// selectable keeps the cursor off the headings that do nothing.
 func (r hwRow) selectable() bool {
 	return r.Kind != hwRowPortal
 }
 
-// hwField is a field of the device form.
 type hwField int
 
 const (
@@ -101,7 +89,6 @@ const (
 	hwFieldBus
 )
 
-// hwForm is the device editor.
 type hwForm struct {
 	field   hwField
 	adding  bool
@@ -117,14 +104,12 @@ type hwForm struct {
 	problem string
 }
 
-// hwPrompt is a one-line text question.
 type hwPrompt struct {
 	title  string
 	value  string
 	action string
 }
 
-// hwConfirm is a yes/no question about something that cannot be undone.
 type hwConfirm struct {
 	title  string
 	detail string
@@ -166,7 +151,6 @@ type hwModel struct {
 	quit    bool
 }
 
-// hwLoadedMsg carries what the robot answered.
 type hwLoadedMsg struct {
 	serial string
 	names  []string
@@ -175,7 +159,6 @@ type hwLoadedMsg struct {
 	err    error
 }
 
-// hwOpMsg is the result of something that talked to the robot.
 type hwOpMsg struct {
 	status string
 	err    error
@@ -197,10 +180,9 @@ func RunHWConfig(dir string) error {
 	return err
 }
 
+// Init satisfies tea.Model.
 func (m *hwModel) Init() tea.Cmd { return hwLoad }
 
-// hwLoad asks the robot what it has. It runs as a command so the menu opens
-// immediately rather than after an adb round trip over the robot's Wi-Fi.
 func hwLoad() tea.Msg {
 	serial, err := adb.Target()
 	if err != nil {
@@ -271,6 +253,7 @@ func (m *hwModel) rebuildEntries() {
 	}
 }
 
+// Update satisfies tea.Model.
 func (m *hwModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -284,8 +267,7 @@ func (m *hwModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.robot = msg.names
 		m.hashes = msg.hashes
 		m.active = msg.active
-		// Not being able to reach the robot is normal - the project side of
-		// the menu works without one - so it is a note, not an error.
+
 		if msg.err != nil {
 			m.status = "No robot connected. " + msg.err.Error()
 		}
@@ -317,8 +299,6 @@ func (m *hwModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 
-	// Anything talking to the robot blocks the keys that would start a second
-	// one, or two adb calls end up interleaved on one connection.
 	if m.busy != "" {
 		return m, nil
 	}

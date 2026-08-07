@@ -5,8 +5,6 @@ import (
 	"testing"
 )
 
-// wrap puts device elements inside a Control Hub, so each case only has to
-// spell out the part under test.
 func wrap(devices string) string {
 	return `<Robot type="FirstInspires-FTC">
     <LynxUsbDevice name="Control Hub Portal" serialNumber="(embedded)" parentModuleAddress="173">
@@ -46,8 +44,6 @@ func mustBeClean(t *testing.T, issues Issues) {
 	}
 }
 
-// Two motors on one port is the mistake that produces a robot where half the
-// drivetrain does nothing, and the Driver Station shows no complaint.
 func TestTwoDevicesOnOnePort(t *testing.T) {
 	issues := check(t, wrap(`
             <Motor name="left" port="0" />
@@ -56,7 +52,6 @@ func TestTwoDevicesOnOnePort(t *testing.T) {
 	mustFind(t, issues, Error, "motor port 0")
 }
 
-// Different flavours are independent sets of connectors.
 func TestSamePortNumberOnDifferentFlavoursIsFine(t *testing.T) {
 	mustBeClean(t, check(t, wrap(`
             <Motor name="drive" port="0" />
@@ -94,7 +89,6 @@ func TestPortsBeyondWhatTheHubHas(t *testing.T) {
 	}
 }
 
-// hardwareMap is flat, so a name reused on a second hub still collides.
 func TestOneNameOnTwoHubs(t *testing.T) {
 	issues := check(t, `<Robot type="FirstInspires-FTC">
     <LynxUsbDevice name="Control Hub Portal" serialNumber="(embedded)" parentModuleAddress="173">
@@ -110,8 +104,6 @@ func TestOneNameOnTwoHubs(t *testing.T) {
 	mustFind(t, issues, Error, `two devices are called "arm"`)
 }
 
-// The address the Control Hub answers on cannot be given to an Expansion Hub.
-// The SDK's own message says the same thing.
 func TestAnExpansionHubOnTheControlHubAddress(t *testing.T) {
 	issues := check(t, `<Robot type="FirstInspires-FTC">
     <LynxUsbDevice name="portal" serialNumber="1234-5678" parentModuleAddress="1">
@@ -124,7 +116,6 @@ func TestAnExpansionHubOnTheControlHubAddress(t *testing.T) {
 	mustFind(t, issues, Error, "reserved for the Control Hub")
 }
 
-// The same address on a Control Hub portal is the Control Hub itself.
 func TestTheControlHubsOwnAddressIsFine(t *testing.T) {
 	mustBeClean(t, check(t, wrap(`            <Motor name="drive" port="0" />`)))
 }
@@ -155,15 +146,11 @@ func TestAnAddressAboveTheUnreservedRangeWarns(t *testing.T) {
 	}
 }
 
-// A name with a stray space looks identical on the Driver Station and fails at
-// runtime, which is the worst combination to debug at a competition.
 func TestWhitespaceAroundAName(t *testing.T) {
 	mustFind(t, check(t, wrap(`            <Motor name="drive " port="0" />`)),
 		Error, "whitespace")
 }
 
-// Teams register their own device types through OnBotJava and external
-// libraries. Reporting those as broken would make this useless.
 func TestAnUnknownDeviceTypeIsNotAnError(t *testing.T) {
 	issues := check(t, wrap(`
             <SomeTeamsCustomSensor name="custom" port="0" bus="0" />
@@ -172,7 +159,6 @@ func TestAnUnknownDeviceTypeIsNotAnError(t *testing.T) {
 	mustBeClean(t, issues)
 }
 
-// An unknown type still occupies a name.
 func TestAnUnknownDeviceTypeStillNeedsAUniqueName(t *testing.T) {
 	mustFind(t, check(t, wrap(`
             <SomeTeamsCustomSensor name="thing" port="0" bus="0" />
@@ -203,7 +189,6 @@ func TestCheckNameRejectsWhatTheRobotControllerWould(t *testing.T) {
 		}
 	}
 
-	// Spaces inside a name are ordinary; most teams have one.
 	for _, name := range []string{"Tuttifrutii ca la mondiale", "comp", "Robot-2026_v2"} {
 		if err := CheckName(name); err != nil {
 			t.Errorf("%q was rejected: %v", name, err)

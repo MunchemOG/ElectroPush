@@ -6,8 +6,7 @@ import (
 	"strings"
 )
 
-// Summary renders a configuration the way you would read it off the Driver
-// Station: hubs, then what is plugged into each port.
+// Summary renders a configuration the way you would read it off the Driver Station.
 func Summary(cfg *Config) string {
 	var b strings.Builder
 
@@ -35,8 +34,6 @@ func Summary(cfg *Config) string {
 	return b.String()
 }
 
-// summariseModule groups a hub's devices by port flavour, so the ports read in the
-// order they are laid out on the hub rather than the order they were added.
 func summariseModule(b *strings.Builder, m Module) {
 	groups := map[Flavor][]Device{}
 	var order []Flavor
@@ -96,8 +93,7 @@ func label(tag, name string) string {
 	return name
 }
 
-// Diff describes what changed between two configurations, in terms of devices
-// rather than lines. A reformatted file with the same wiring reports nothing.
+// Diff describes what changed between two configurations, in devices rather than lines.
 func Diff(before, after *Config) []string {
 	oldDevices := index(before)
 	newDevices := index(after)

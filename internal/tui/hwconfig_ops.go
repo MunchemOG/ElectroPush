@@ -8,9 +8,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// Everything here talks to the robot, so it runs as a command. Over the robot's
-// Wi-Fi a pull takes long enough that doing it inline would look like a hang.
-
 func (m *hwModel) pull(name string) tea.Cmd {
 	m.busy = "Pulling " + name
 
@@ -57,8 +54,6 @@ func (m *hwModel) pullAll() tea.Cmd {
 	}
 }
 
-// push refuses to send something the robot would reject, and keeps the robot's
-// own copy first when it differs from what is about to replace it.
 func (m *hwModel) push(name string) tea.Cmd {
 	if m.serial == "" {
 		m.err = fmt.Errorf("no robot connected")
@@ -100,8 +95,7 @@ func (m *hwModel) push(name string) tea.Cmd {
 
 		status := "Pushed " + name
 		if name == active {
-			// The robot controller reads a configuration when it is selected,
-			// not while it is running one.
+
 			status += " - re-select it on the Driver Station to apply it"
 		}
 
@@ -109,8 +103,6 @@ func (m *hwModel) push(name string) tea.Cmd {
 	}
 }
 
-// compare reports the difference in devices rather than in lines, so a file
-// that was reformatted but wires the same things reads as unchanged.
 func (m *hwModel) compare(name string) tea.Cmd {
 	if m.serial == "" {
 		m.err = fmt.Errorf("no robot connected")
@@ -160,7 +152,7 @@ func (m *hwModel) deleteFromRobot(name string) tea.Cmd {
 	serial, store := m.serial, m.store
 
 	return func() tea.Msg {
-		// Keep a copy: this is the one action here the robot cannot undo.
+
 		if data, err := robotcfg.Fetch(serial, name); err == nil {
 			if _, err := store.Backup(name, data); err != nil {
 				return hwOpMsg{err: err}
@@ -265,9 +257,6 @@ func (m *hwModel) runPrompt(name string) tea.Cmd {
 			return nil
 		}
 
-		// Renaming only moves the project's copy. The robot keeps the old name
-		// until something is pushed under the new one, which is worth saying
-		// rather than leaving to be discovered.
 		m.status = fmt.Sprintf("Renamed to %s (the robot still has %s)", name, m.sel)
 		if !m.entry(m.sel).OnRobot {
 			m.status = "Renamed to " + name

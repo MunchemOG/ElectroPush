@@ -14,17 +14,12 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// blobState is everything the blob screens need, refreshed on entry.
 type blobState struct {
-	// pickerOnly is set when the runs list was opened directly by
-	// `pusher visualiser`, so esc leaves the program instead of walking up into
-	// settings the user never asked for.
 	pickerOnly bool
 
 	auth  ghauth.Status
 	creds ghauth.Credentials
-	// checking and busy keep the screen honest while a command is out, since
-	// every one of these touches the network.
+
 	checking bool
 	busy     bool
 
@@ -34,13 +29,9 @@ type blobState struct {
 	serial  string
 	tracErr error
 
-	// limits the renderer runs with. Defaults unless `pusher visualiser` was
-	// given tuning flags to pass down.
 	limits pathtrace.Limits
 }
 
-// Menu rows, which depend on whether access resolved and whether the library is
-// already in the project.
 var (
 	blobItems        = []string{"Build variant", "Version", "GitHub token", "Recorded runs", "Back"}
 	blobMissingItems = []string{"Add blob to the project", "GitHub token", "Back"}
@@ -69,9 +60,7 @@ func blobOp(run func() (string, error)) tea.Cmd {
 	}
 }
 
-// RunTracePicker opens the recorded-runs list on its own, for `pusher visualiser`
-// with no arguments. projectRoot and lim carry the command's flags, which would
-// otherwise be dropped on the way into the picker.
+// RunTracePicker opens the menu for choosing a run to render.
 func RunTracePicker(projectRoot string, lim pathtrace.Limits) error {
 	m, err := NewSettingsModel()
 	if err != nil {
@@ -90,7 +79,6 @@ func RunTracePicker(projectRoot string, lim pathtrace.Limits) error {
 	return err
 }
 
-// enterBlob opens the blob menu and starts the access check.
 func (m *SettingsModel) enterBlob() tea.Cmd {
 	m.refreshBlob()
 	m.blob.latest = ""
@@ -102,8 +90,7 @@ func (m *SettingsModel) enterBlob() tea.Cmd {
 func (m *SettingsModel) refreshBlob() {
 	dep, err := blobdep.Detect(m.projectRoot())
 	if err != nil {
-		// Not an FTC project, or no TeamCode/build.gradle. Treat as "not
-		// installed" rather than an error: the menu still offers to add it.
+
 		m.blob.dep = nil
 		return
 	}
@@ -120,7 +107,6 @@ func (m *SettingsModel) blobMenuItems() []string {
 	return blobItems
 }
 
-// blobLabel is the value shown next to "blob library" on the main menu.
 func (m *SettingsModel) blobLabel() string {
 	if m.blob.dep == nil {
 		return "not installed"
@@ -138,8 +124,7 @@ func (m *SettingsModel) tokenLabel() string {
 	}
 
 	who := m.blob.creds.Login
-	// Say where a token came from when it was not typed in here, so nobody has
-	// to wonder why they were never asked for one.
+
 	if m.blob.creds.Discovered() {
 		if from := ghauth.SourceLabel(m.blob.creds.Source); from != "" {
 			who += " via " + from
@@ -177,8 +162,6 @@ func (m *SettingsModel) updateBlob(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// chooseBlob dispatches on the row's label rather than its index, because the
-// menu has three shapes and the indices do not line up between them.
 func (m *SettingsModel) chooseBlob(item string) (tea.Model, tea.Cmd) {
 	switch item {
 	case "GitHub token":
@@ -206,12 +189,6 @@ func (m *SettingsModel) chooseBlob(item string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// ensureLibrary puts the AAR for a variant in the project, downloading it only
-// when it is not already there.
-//
-// It refuses outright if git is already tracking a blob AAR. FTC team repos are
-// usually public, and a committed AAR publishes the library to everyone; adding
-// a .gitignore rule afterwards does not take it back.
 func ensureLibrary(root, token, artifact, version string) error {
 	if tracked := blobdep.TrackedAARs(root); len(tracked) > 0 {
 		return fmt.Errorf("git is already tracking %s.\n"+
@@ -295,8 +272,7 @@ func (m *SettingsModel) addBlob() tea.Cmd {
 	return blobOp(func() (string, error) {
 		version, err := blobrel.LatestTag(token)
 		if err != nil {
-			// Offline is not a reason to refuse outright, but the download will
-			// still need network, so say what happened.
+
 			return "", err
 		}
 
@@ -311,7 +287,6 @@ func (m *SettingsModel) addBlob() tea.Cmd {
 	})
 }
 
-// saveToken stores the token only if GitHub accepts it.
 func (m *SettingsModel) saveToken(token string) tea.Cmd {
 	return func() tea.Msg {
 		if strings.TrimSpace(token) == "" {
@@ -346,8 +321,7 @@ func (m *SettingsModel) updateBlobToken(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyEnter:
 		token := m.input
-		// Never keep the token in model state: it would end up on screen the
-		// next time any screen renders m.input.
+
 		m.input = ""
 		m.maskInput = false
 		m.blob.busy = true

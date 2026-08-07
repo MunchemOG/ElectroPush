@@ -49,8 +49,6 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// wifiBackend names the tool driving Wi-Fi, so a report from a user makes
-// clear which code path was in play.
 func wifiBackend() string {
 	switch runtime.GOOS {
 	case "darwin":

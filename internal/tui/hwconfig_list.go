@@ -8,8 +8,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// hwListExtras sit under the configurations, so everything is reachable by
-// moving the cursor rather than by knowing a key.
 var hwListExtras = []string{
 	"New configuration",
 	"Pull everything from the robot",
@@ -66,9 +64,6 @@ func (m *hwModel) entry(name string) hwEntry {
 	return hwEntry{Name: name}
 }
 
-// actionItems is built per configuration, so nothing offers an action that
-// cannot work: pushing something the project does not have, or pulling
-// something the robot does not have.
 func (m *hwModel) actionItems() []string {
 	e := m.entry(m.sel)
 
@@ -191,7 +186,7 @@ func (m *hwModel) viewHWList() string {
 	if len(m.entries) == 0 {
 		b.WriteString("  " + unsetStyle.Render("No configurations yet.") + "\n\n")
 	} else {
-		// Two spaces, matching the width of the cursor on the rows below.
+
 		fmt.Fprintf(&b, "  %-28s %-18s %s\n",
 			helpStyle.Render("CONFIGURATION"), helpStyle.Render("WHERE"), helpStyle.Render("STATUS"))
 	}
@@ -204,8 +199,6 @@ func (m *hwModel) viewHWList() string {
 			continue
 		}
 
-		// A blank line between the configurations and the actions below them.
-		// Printed rather than counted, so it cannot shift the cursor.
 		if i == len(m.entries) && len(m.entries) > 0 {
 			b.WriteString("\n")
 		}

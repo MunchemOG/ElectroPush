@@ -1,12 +1,3 @@
-// Package blobdep manages the blob library inside an FTC project: the AAR in
-// TeamCode/libs and the dependency line in TeamCode/build.gradle that points at
-// it.
-//
-// The library is carried as a file rather than resolved from a repository.
-// JitPack cannot build a private repo, and the alternative, credentials in
-// ~/.gradle/gradle.properties, would put a token in a second place and demand
-// network at build time. A vendored AAR keeps the token inside pusher and lets
-// builds work offline, which is the case that actually matters at competitions.
 package blobdep
 
 import (
@@ -18,36 +9,33 @@ import (
 	"strings"
 )
 
+// The library artifacts and the version used when none is pinned.
 const (
-	// ArtifactComp is the competition build: no path-recording code at all.
 	ArtifactComp = "blob-competition"
-	// ArtifactDev is the practice build: records traces for `pusher visualiser`.
+
 	ArtifactDev = "blob-dev"
 
-	// FallbackVersion is used when GitHub cannot be reached.
 	FallbackVersion = "v1.4.0"
 
-	// ignoreRule keeps the AAR out of a team repository. FTC team repos are
-	// usually public, and committing the AAR would publish the private library.
 	ignoreRule = "TeamCode/libs/*.aar"
 )
 
-// Dep is the blob dependency found in a gradle file.
+// Dep is the library dependency as the project's gradle file declares it.
 type Dep struct {
 	File     string
 	Line     int
 	Artifact string
 	Version  string
-	// Commented is true when the line is parked, which is how the variant that
-	// is not currently in use is kept.
+
 	Commented bool
-	// Present is whether the AAR the line names is actually on disk.
+
 	Present bool
 }
 
+// IsDev reports whether the dev build, which can record traces, is selected.
 func (d Dep) IsDev() bool { return d.Artifact == ArtifactDev }
 
-// VariantName is what to show a human.
+// VariantName names the selected build for showing a person.
 func (d Dep) VariantName() string {
 	if d.IsDev() {
 		return "dev (records traces)"
@@ -55,27 +43,25 @@ func (d Dep) VariantName() string {
 	return "competition (cannot log)"
 }
 
-// depRe matches a files() line naming a blob AAR, quoted either way, commented
-// or not.
 var depRe = regexp.MustCompile(
 	`^([ \t]*)(//[ \t]*)?(implementation|api|compileOnly)[ \t]+files\((['"])libs/(blob-competition|blob-dev)-(.+?)\.aar['"]\)(.*)$`)
 
-// GradleFile is where a project's dependencies live.
+// GradleFile is the project gradle file the dependency lives in.
 func GradleFile(root string) string {
 	return filepath.Join(root, "TeamCode", "build.gradle")
 }
 
-// LibsDir is where the AAR is kept.
+// LibsDir is where the library AAR is kept in the project.
 func LibsDir(root string) string {
 	return filepath.Join(root, "TeamCode", "libs")
 }
 
-// AARName is the release asset, which doubles as the on-disk filename.
+// AARName is the file name for an artifact at a version.
 func AARName(artifact, version string) string {
 	return fmt.Sprintf("%s-%s.aar", artifact, version)
 }
 
-// AARPath is where that file belongs in the project.
+// AARPath is where an artifact at a version belongs in the project.
 func AARPath(root, artifact, version string) string {
 	return filepath.Join(LibsDir(root), AARName(artifact, version))
 }
@@ -89,8 +75,7 @@ func rebuild(indent, keyword, quote, artifact, version, tail string, commented b
 	return indent + line
 }
 
-// Detect returns the blob dependency for a project, or nil if there is none.
-// An active line always wins over a parked one.
+// Detect reads the current library dependency out of the project.
 func Detect(root string) (*Dep, error) {
 	path := GradleFile(root)
 	data, err := os.ReadFile(path)
@@ -126,7 +111,6 @@ func Detect(root string) (*Dep, error) {
 	return parked, nil
 }
 
-// blobLines is the index of every blob dependency line.
 func blobLines(lines []string) []int {
 	var idx []int
 	for i, line := range lines {
@@ -149,7 +133,6 @@ func writeLines(path string, lines []string) error {
 	return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
 }
 
-// version currently in use, taken from the active line when there is one.
 func currentVersion(lines []string, idx []int) string {
 	version := ""
 	for _, i := range idx {
@@ -164,10 +147,7 @@ func currentVersion(lines []string, idx []int) string {
 	return version
 }
 
-// SetArtifact makes one variant the active dependency and parks the other.
-//
-// Exactly one line comes out active, whatever shape the file was in: two active
-// lines would give Gradle two versions of the same classes.
+// SetArtifact switches build, keeping exactly one dependency line active.
 func SetArtifact(root, artifact string) error {
 	if artifact != ArtifactComp && artifact != ArtifactDev {
 		return fmt.Errorf("unknown blob variant %q", artifact)
@@ -186,8 +166,6 @@ func SetArtifact(root, artifact string) error {
 
 	version := currentVersion(lines, idx)
 
-	// Prefer a line that already names the wanted variant, so a parked line is
-	// revived rather than a second one appearing.
 	target := idx[0]
 	for _, i := range idx {
 		if depRe.FindStringSubmatch(lines[i])[5] == artifact {
@@ -215,8 +193,7 @@ func other(artifact string) string {
 	return ArtifactDev
 }
 
-// SetVersion rewrites the version on every blob line, parked ones included, so
-// the variant that is not in use cannot drift to a different release.
+// SetVersion moves every dependency line to a new version.
 func SetVersion(root, version string) error {
 	version = strings.TrimSpace(version)
 	if version == "" {
@@ -247,7 +224,7 @@ func SetVersion(root, version string) error {
 
 var depBlockRe = regexp.MustCompile(`(?m)^dependencies\s*\{`)
 
-// Add inserts a blob dependency into the project's dependencies block.
+// Add writes a dependency line into a project that has none.
 func Add(root, artifact, version string) error {
 	path := GradleFile(root)
 	data, err := os.ReadFile(path)
@@ -256,8 +233,7 @@ func Add(root, artifact, version string) error {
 	}
 
 	content := string(data)
-	// depRe is anchored per line, so it has to be applied to lines rather than
-	// to the whole file.
+
 	if len(blobLines(strings.Split(content, "\n"))) > 0 {
 		return fmt.Errorf("blob is already in %s", path)
 	}
@@ -298,7 +274,7 @@ func closingBrace(content string, from int) int {
 	return -1
 }
 
-// Place writes an AAR into the project and makes sure git will ignore it.
+// Place writes the AAR into the project and gitignores it.
 func Place(root, artifact, version string, data []byte) error {
 	if err := os.MkdirAll(LibsDir(root), 0o755); err != nil {
 		return fmt.Errorf("cannot create %s: %w", LibsDir(root), err)
@@ -309,8 +285,7 @@ func Place(root, artifact, version string, data []byte) error {
 	return nil
 }
 
-// Prune removes blob AARs other than the one named, so switching variants or
-// versions does not leave old copies of a private library lying in the project.
+// Prune deletes AARs other than the one in use.
 func Prune(root, keepArtifact, keepVersion string) error {
 	entries, err := os.ReadDir(LibsDir(root))
 	if err != nil {
@@ -336,8 +311,7 @@ func isBlobAAR(name string) bool {
 		(strings.HasPrefix(name, ArtifactComp+"-") || strings.HasPrefix(name, ArtifactDev+"-"))
 }
 
-// EnsureIgnored adds the AAR rule to the project's .gitignore, reporting
-// whether it had to. Safe to call repeatedly.
+// EnsureIgnored adds the AAR pattern to the project's gitignore.
 func EnsureIgnored(root string) (added bool, err error) {
 	path := filepath.Join(root, ".gitignore")
 
@@ -370,14 +344,12 @@ func EnsureIgnored(root string) (added bool, err error) {
 	return true, nil
 }
 
-// TrackedAARs lists blob AARs git is already tracking. A non-empty result means
-// the library is on its way into a repository that is very likely public, which
-// .gitignore alone will not undo.
+// TrackedAARs lists AARs git already tracks, which publishing the library would leak.
 func TrackedAARs(root string) []string {
 	cmd := exec.Command("git", "-C", root, "ls-files", "--", "TeamCode/libs/*.aar")
 	out, err := cmd.Output()
 	if err != nil {
-		// Not a git repository, or no git. Nothing to warn about.
+
 		return nil
 	}
 

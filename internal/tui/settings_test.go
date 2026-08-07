@@ -177,3 +177,55 @@ func TestOnOffAndOrUnset(t *testing.T) {
 		t.Error("orUnset should pass through a real value")
 	}
 }
+
+// A screen whose height changes as the cursor moves leaves the taller frame's
+// leftovers on screen, which is what a menu breaking while scrolling looks
+// like. The Pusher Extreme screen did it worst, being both variable and taller
+// than a default terminal, but every screen with a note under the cursor had
+// the same fault.
+func TestMenuHeightDoesNotChangeAsTheCursorMoves(t *testing.T) {
+	m := &SettingsModel{height: defaultHeight, confirmDeleteIndex: -1}
+	m.refreshProfiles()
+
+	for _, screen := range []struct {
+		name  string
+		items int
+		view  func(int) string
+	}{
+		{"deploy", len(deployItems), func(i int) string {
+			m.screen, m.cursor = screenDeploy, i
+			return m.viewDeploy()
+		}},
+		{"extreme", len(extremeItems), func(i int) string {
+			m.screen, m.cursor = screenExtreme, i
+			return m.viewExtreme()
+		}},
+	} {
+		first := lineCount(screen.view(0))
+		for i := 1; i < screen.items; i++ {
+			if got := lineCount(screen.view(i)); got != first {
+				t.Errorf("%s is %d lines at row 0 and %d at row %d", screen.name, first, got, i)
+			}
+		}
+
+		// And it has to fit, with room for the title and a status line.
+		if first+4 > defaultHeight {
+			t.Errorf("%s is %d lines, which overflows a %d line terminal",
+				screen.name, first, defaultHeight)
+		}
+	}
+}
+
+func TestDevMenuHeightDoesNotChange(t *testing.T) {
+	d := &devModel{height: defaultHeight, screen: devScreenMain}
+
+	first := lineCount(d.viewDevMain())
+	for i := 1; i < len(devItems); i++ {
+		d.cursor = i
+		if got := lineCount(d.viewDevMain()); got != first {
+			t.Errorf("the dev menu is %d lines at row 0 and %d at row %d", first, got, i)
+		}
+	}
+}
+
+func lineCount(s string) int { return strings.Count(s, "\n") }

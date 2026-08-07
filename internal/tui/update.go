@@ -8,9 +8,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// updateState is everything the update screen needs. The lookup and the install
-// both run as commands rather than inline, so the menu stays responsive while a
-// release is downloading.
 type updateState struct {
 	install selfupdate.Install
 	release selfupdate.Release
@@ -51,7 +48,6 @@ func applyUpdate(install selfupdate.Install, release selfupdate.Release) tea.Cmd
 	}
 }
 
-// lastLine keeps brew's closing summary and drops the progress above it.
 func lastLine(out string) string {
 	lines := strings.Split(strings.TrimSpace(out), "\n")
 	for i := len(lines) - 1; i >= 0; i-- {
@@ -62,7 +58,6 @@ func lastLine(out string) string {
 	return ""
 }
 
-// enterUpdate resets the screen and starts the lookup.
 func (m *SettingsModel) enterUpdate() tea.Cmd {
 	install, err := selfupdate.Detect()
 
@@ -79,7 +74,7 @@ func (m *SettingsModel) updateUpdate(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch key.String() {
 	case "esc", "q", "left", "h":
 		if m.update.busy {
-			// Walking away mid-install would leave the result unreported.
+
 			return m, nil
 		}
 		m.goTo(screenMain, 0)
@@ -159,7 +154,6 @@ func renderField(label, value string) string {
 	return fmt.Sprintf("  %-16s %s\n", label, value)
 }
 
-// updateLabel is the value shown beside the menu row.
 func (m *SettingsModel) updateLabel() string {
 	return selfupdate.Current()
 }

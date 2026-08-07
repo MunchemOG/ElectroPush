@@ -8,12 +8,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 
 	"github.com/andreibanu/pusher/internal/config"
 )
 
-// wrapperName is gradlew everywhere except Windows, which needs the batch file.
 func wrapperName() string {
 	if runtime.GOOS == "windows" {
 		return "gradlew.bat"
@@ -21,8 +21,7 @@ func wrapperName() string {
 	return "gradlew"
 }
 
-// The path returned is always absolute. exec looks a bare name like "gradlew"
-// up in $PATH instead of running the file in the project directory.
+// Always absolute: exec looks a bare name like "gradlew" up in $PATH.
 func DetectWrapper() (string, error) {
 	name := wrapperName()
 
@@ -36,8 +35,6 @@ func DetectWrapper() (string, error) {
 	return "", fmt.Errorf("%s not found in current directory or parent directories", name)
 }
 
-// androidStudioJDK finds the JDK bundled with Android Studio, so a machine
-// that has only ever built through the IDE still works without JAVA_HOME set.
 func androidStudioJDK() string {
 	var candidates []string
 
@@ -53,7 +50,7 @@ func androidStudioJDK() string {
 			"/opt/android-studio/jbr",
 			"/usr/local/android-studio/jbr",
 			filepath.Join(home, "android-studio/jbr"),
-			// The JetBrains Toolbox and snap layouts.
+
 			filepath.Join(home, ".local/share/JetBrains/Toolbox/apps/android-studio/jbr"),
 			"/snap/android-studio/current/android-studio/jbr",
 		}
@@ -75,6 +72,7 @@ func androidStudioJDK() string {
 	return ""
 }
 
+// ProjectDir is the project root the wrapper sits in.
 func ProjectDir(wrapper string) string {
 	dir := filepath.Dir(wrapper)
 	if abs, err := filepath.Abs(dir); err == nil {
@@ -83,12 +81,12 @@ func ProjectDir(wrapper string) string {
 	return dir
 }
 
+// Build runs assembleDebug, streaming output to the writer.
 func Build(wrapper string, offline bool, outputWriter io.Writer) error {
 	if _, err := os.Stat(wrapper); err != nil {
 		return fmt.Errorf("gradle wrapper not found: %s", wrapper)
 	}
 
-	// Windows has no execute bit, and chmod there would be a no-op at best.
 	if runtime.GOOS != "windows" {
 		if err := os.Chmod(wrapper, 0755); err != nil {
 			return fmt.Errorf("failed to make %s executable: %w", wrapperName(), err)
@@ -155,6 +153,7 @@ func streamOutput(reader io.Reader, writer io.Writer, done chan bool) {
 	done <- true
 }
 
+// FindApk locates the debug APK the project built.
 func FindApk(wrapperDir string) (string, error) {
 
 	patterns := []string{
@@ -172,4 +171,52 @@ func FindApk(wrapperDir string) (string, error) {
 	}
 
 	return "", fmt.Errorf("debug APK not found in build outputs")
+}
+
+// FindSplits returns every debug APK a project builds, base first.
+func FindSplits(wrapperDir string) []string {
+	seen := map[string]bool{}
+	var base, splits []string
+
+	modules, err := os.ReadDir(wrapperDir)
+	if err != nil {
+		return nil
+	}
+
+	for _, module := range modules {
+		if !module.IsDir() {
+			continue
+		}
+
+		matches, err := filepath.Glob(filepath.Join(
+			wrapperDir, module.Name(), "build", "outputs", "apk", "debug", "*.apk"))
+		if err != nil {
+			continue
+		}
+
+		for _, apk := range matches {
+			if seen[apk] {
+				continue
+			}
+			seen[apk] = true
+
+			if isBaseAPK(apk) {
+				base = append(base, apk)
+				continue
+			}
+			splits = append(splits, apk)
+		}
+	}
+
+	sort.Strings(base)
+	sort.Strings(splits)
+
+	return append(base, splits...)
+}
+
+func isBaseAPK(path string) bool {
+	name := strings.ToLower(filepath.Base(path))
+	return strings.HasPrefix(name, "teamcode") ||
+		strings.HasPrefix(name, "ftcrobotcontroller") ||
+		strings.Contains(name, "base")
 }

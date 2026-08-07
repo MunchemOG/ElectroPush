@@ -1,6 +1,3 @@
-// Package feature reports which optional menu entries and commands an install
-// exposes. Everything here is presentation: nothing it gates is privileged, and
-// nothing it hides is protected.
 package feature
 
 import (
@@ -11,12 +8,8 @@ import (
 	"github.com/andreibanu/pusher/internal/ghauth"
 )
 
-// token marks a device that has turned the optional surfaces on. Opaque so the
-// config file offers nothing to flip.
 const token = "5943a6ad7bb3e150"
 
-// pattern is held encoded rather than spelled out, so reading the source does
-// not hand it over at a glance. Reversible by anyone who cares to.
 const (
 	patternMask = 0x5b
 	patternData = "2e2b772e2b773f342c35773f342c3577373e3d2f7729323c332f77373e3d2f77" +
@@ -26,11 +19,6 @@ const (
 var (
 	pattern = decode(patternData)
 
-	// prefix is the KMP prefix function for pattern. The pattern overlaps
-	// itself, so a mismatch cannot reset to zero without discarding progress
-	// that is still valid. Falling back through this table keeps step equal to
-	// the longest prefix of pattern that is also a suffix of everything entered
-	// so far, which is the only bookkeeping that survives a stutter.
 	prefix = buildPrefix(pattern)
 )
 
@@ -63,16 +51,15 @@ func buildPrefix(seq []string) []int {
 	return table
 }
 
-// Steps is how many entries the pattern has.
+// Steps is how many inputs the pattern takes.
 func Steps() int { return len(pattern) }
 
-// Holds reports whether the pattern's nth entry is value.
+// Holds reports whether the input at a position matches.
 func Holds(n int, value string) bool {
 	return n >= 0 && n < len(pattern) && pattern[n] == value
 }
 
-// Match advances one entry at a time, returning how far along the next input
-// leaves you and whether it completed the pattern.
+// Match advances the pattern by one input, reporting the next position and completion.
 func Match(step int, value string) (next int, done bool) {
 	if len(pattern) == 0 {
 		return 0, false
@@ -95,21 +82,17 @@ func Match(step int, value string) (next int, done bool) {
 	return step, step == len(pattern)
 }
 
-// Revealed reports whether the optional surfaces are shown at all. This is a
-// local flag and nothing more: it decides what appears in a menu, never what
-// anyone is allowed to do. Cheap enough to consult on every invocation.
+// Revealed reports whether this install has been unlocked.
 func Revealed() bool {
 	return config.GetInstallKey() == token
 }
 
-// Authorized reports real access to the private blob repository, which is what
-// actually gates the library. Kept separate from Revealed because a flag in a
-// config file is something anyone can set, and this is not.
+// Authorized reports whether this machine has access to the private repository.
 func Authorized() (ghauth.Status, ghauth.Credentials) {
 	return ghauth.Resolve()
 }
 
-// Grant turns them on for this device.
+// Grant unlocks this install.
 func Grant() error {
 	return config.SetInstallKey(token)
 }

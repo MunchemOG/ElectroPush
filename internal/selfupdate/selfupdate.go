@@ -1,7 +1,3 @@
-// Package selfupdate brings an install up to the newest published release. How
-// that happens depends on how pusher got onto the machine: a Homebrew install
-// has to go through brew or the next `brew upgrade` would undo the change,
-// anything else swaps its own binary.
 package selfupdate
 
 import (
@@ -21,16 +17,17 @@ import (
 
 const releaseAPI = "https://api.github.com/repos/PzmuV1517/Pusher/releases/latest"
 
+// Method is how pusher was installed.
 type Method int
 
+// How pusher was installed.
 const (
-	// Binary is a release download or a local build: pusher owns the file and
-	// can replace it.
 	Binary Method = iota
-	// Homebrew is managed by brew, which tracks its own manifest.
+
 	Homebrew
 )
 
+// String names the install method for showing a person.
 func (m Method) String() string {
 	if m == Homebrew {
 		return "Homebrew"
@@ -38,32 +35,30 @@ func (m Method) String() string {
 	return "binary"
 }
 
-// Install is how this copy of pusher was installed.
+// Install is where this copy of pusher lives and how it got there.
 type Install struct {
 	Method Method
-	// Path is the real executable, with any symlink resolved. Homebrew puts a
-	// link in bin and the file itself in the Cellar.
+
 	Path string
-	// Formula is the brew formula name, empty unless Method is Homebrew.
+
 	Formula string
 }
 
-// current is the running version, set at startup.
 var current = "dev"
 
+// SetCurrent records the running version.
 func SetCurrent(version string) { current = version }
 
+// Current is the running version.
 func Current() string { return current }
 
-// Detect works out how this copy was installed.
+// Detect works out how this copy of pusher was installed.
 func Detect() (Install, error) {
 	exe, err := os.Executable()
 	if err != nil {
 		return Install{}, fmt.Errorf("cannot locate the running binary: %w", err)
 	}
 
-	// Homebrew's bin entry is a symlink into the Cellar, so the link has to be
-	// followed before the path means anything.
 	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
 		exe = resolved
 	}
@@ -74,9 +69,6 @@ func Detect() (Install, error) {
 	return Install{Method: Binary, Path: exe}, nil
 }
 
-// cellarFormula pulls the formula name out of a Cellar path, which looks like
-// <prefix>/Cellar/<formula>/<version>/bin/pusher. The prefix differs between
-// Apple silicon, Intel and Linuxbrew, so only the Cellar segment is matched.
 func cellarFormula(path string) (string, bool) {
 	parts := strings.Split(filepath.ToSlash(path), "/")
 	for i, part := range parts {
@@ -87,19 +79,17 @@ func cellarFormula(path string) (string, bool) {
 	return "", false
 }
 
-// Release is the newest published release.
+// Release is a published version and where to download it.
 type Release struct {
 	Tag      string
 	AssetURL string
 	SumsURL  string
 }
 
-// Version is the tag without its leading v, which is what gets compared against
-// the running version.
+// Version is the tag without its leading v.
 func (r Release) Version() string { return strings.TrimPrefix(r.Tag, "v") }
 
-// Newer reports whether the release differs from what is running. A build with
-// no version stamped in cannot be compared, so it always counts as outdated.
+// Newer reports whether the release differs from what is running.
 func (r Release) Newer() bool {
 	running := strings.TrimPrefix(current, "v")
 	if running == "" || running == "dev" {
@@ -162,7 +152,7 @@ func Latest() (Release, error) {
 	return rel, nil
 }
 
-// UpgradeBrew hands the upgrade to brew and returns what it said.
+// UpgradeBrew hands the update to Homebrew.
 func UpgradeBrew(formula string) (string, error) {
 	if formula == "" {
 		formula = "pusher"
@@ -176,11 +166,7 @@ func UpgradeBrew(formula string) (string, error) {
 	return text, nil
 }
 
-// Apply replaces the running binary with the release build.
-//
-// The download lands beside the current binary rather than in the temp
-// directory, so the rename that swaps them stays on one filesystem and cannot
-// leave a half-written executable behind.
+// Apply replaces the running binary, verified against the release checksums.
 func Apply(rel Release, path string) error {
 	if rel.AssetURL == "" {
 		return fmt.Errorf("no download for this platform")
@@ -214,9 +200,6 @@ func Apply(rel Release, path string) error {
 	return nil
 }
 
-// swap puts the staged file in place. Windows will not rename over a running
-// executable, so the old one is moved aside first and left for the next run to
-// tidy up.
 func swap(staged, path string) error {
 	if runtime.GOOS == "windows" {
 		previous := path + ".old"
@@ -237,8 +220,6 @@ func swap(staged, path string) error {
 	return nil
 }
 
-// writable checks up front, because finding out after the download that the
-// binary lives somewhere root owns is a worse way to learn it.
 func writable(dir, path string) error {
 	probe := filepath.Join(dir, ".pusher-write-test")
 	f, err := os.OpenFile(probe, os.O_CREATE|os.O_WRONLY, 0o644)
@@ -282,8 +263,7 @@ func verify(blob []byte, sumsURL string) error {
 
 	want, ok := SumFor(string(sums), AssetName())
 	if !ok {
-		// The release published no checksum for this asset. Refusing would
-		// strand the user; the transfer was still over TLS.
+
 		return nil
 	}
 

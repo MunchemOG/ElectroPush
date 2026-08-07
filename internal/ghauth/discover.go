@@ -8,20 +8,14 @@ import (
 	"time"
 )
 
-// A Source is somewhere this machine may already keep a GitHub token. Most
-// people who can see the private repository are signed in to GitHub already, so
-// asking them to paste a token is usually asking for something they have.
+// Source is somewhere this machine may already keep a GitHub token.
 type Source struct {
-	// ID is recorded in the credentials file. The token itself is read back
-	// from here on demand rather than copied, so pusher does not become a
-	// second place a GitHub token lives.
 	ID    string
 	Label string
 	Read  func() string
 }
 
-// Sources are tried in order. Environment first because it is explicit and
-// costs nothing, then gh, then git's credential helper.
+// Sources are the places a token is looked for, in order.
 func Sources() []Source {
 	return []Source{
 		{"env", "GH_TOKEN in the environment", readEnv},
@@ -47,15 +41,9 @@ func SourceLabel(id string) string {
 	return ""
 }
 
-// discover is indirected so tests can run without adopting whatever GitHub
-// login the machine running them happens to be signed in to.
 var discover = Discover
 
-// Discover looks for a token this machine already has and returns the first one
-// that can actually see the repository.
-//
-// Only a token that resolves is accepted, so a machine signed in to an account
-// without access falls through to being asked rather than being told no.
+// Discover returns the first token on this machine that can see the repository.
 func Discover() (Credentials, bool) {
 	seen := map[string]bool{}
 
@@ -90,8 +78,6 @@ func readEnv() string {
 	return ""
 }
 
-// readGH asks the gh CLI for its token. gh exits non-zero when it is not
-// installed or not signed in, which is not worth reporting.
 func readGH() string {
 	out, err := run("gh", "auth", "token")
 	if err != nil {
@@ -100,11 +86,6 @@ func readGH() string {
 	return out
 }
 
-// readGitCredential asks git for the github.com credential it already stores.
-//
-// GIT_TERMINAL_PROMPT=0 matters: without it git will sit waiting for a username
-// on a machine with no helper configured, which inside a full-screen menu looks
-// like a hang.
 func readGitCredential() string {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -121,7 +102,6 @@ func readGitCredential() string {
 	return credentialField(string(out), "password")
 }
 
-// credentialField pulls one key out of git credential's key=value output.
 func credentialField(out, key string) string {
 	for _, line := range strings.Split(out, "\n") {
 		if value, ok := strings.CutPrefix(strings.TrimSpace(line), key+"="); ok {
