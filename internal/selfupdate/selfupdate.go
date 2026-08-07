@@ -193,21 +193,73 @@ func Latest() (Release, error) {
 	return rel, nil
 }
 
-// UpgradeBrew hands the update to Homebrew.
+// UpgradeBrew hands the update to Homebrew and checks that it happened.
+//
+// want is the version being upgraded to, without its leading v. Empty skips the
+// check.
 //
 // --formula stops brew resolving the name to a cask, which it will do for a
 // bare name that some cask also claims.
-func UpgradeBrew(formula string) (string, error) {
+func UpgradeBrew(formula, want string) (string, error) {
 	if formula == "" {
 		formula = "pusher"
 	}
+
+	// A tap is a cached git clone that brew only refreshes every so often, a
+	// day by default. A release published minutes ago is invisible until it is
+	// fetched, and brew then says the newest version is already installed and
+	// exits 0 having done nothing.
+	_ = exec.Command("brew", "update", "--quiet").Run()
 
 	out, err := exec.Command("brew", "upgrade", "--formula", formula).CombinedOutput()
 	text := strings.TrimSpace(string(out))
 	if err != nil {
 		return text, fmt.Errorf("brew upgrade %s failed: %w", formula, err)
 	}
+
+	// Exiting 0 is not the same as having upgraded, so the outcome is read back
+	// rather than assumed. Reporting an update that did not happen is worse
+	// than reporting a failure.
+	if want != "" && !BrewHas(formula, want) {
+		have := strings.Join(BrewVersions(formula), ", ")
+		if have == "" {
+			have = "nothing"
+		}
+		return text, fmt.Errorf("brew still has %s, not %s\n"+
+			"    The tap may not carry it yet. Try again shortly, or\n"+
+			"    brew update && brew upgrade %s", have, want, formula)
+	}
+
 	return text, nil
+}
+
+// BrewVersions is what Homebrew currently has installed for a formula.
+func BrewVersions(formula string) []string {
+	out, err := exec.Command("brew", "list", "--versions", formula).Output()
+	if err != nil {
+		return nil
+	}
+
+	return parseBrewVersions(string(out))
+}
+
+// parseBrewVersions reads "pusher 1.2.1 1.2.2": the name first, then every keg.
+func parseBrewVersions(listing string) []string {
+	fields := strings.Fields(strings.TrimSpace(listing))
+	if len(fields) < 2 {
+		return nil
+	}
+	return fields[1:]
+}
+
+// BrewHas reports whether a version is among what Homebrew installed.
+func BrewHas(formula, want string) bool {
+	for _, version := range BrewVersions(formula) {
+		if version == want {
+			return true
+		}
+	}
+	return false
 }
 
 // LastLine is the final non-empty line of some output. Homebrew says plenty and

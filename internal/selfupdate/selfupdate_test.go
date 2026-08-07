@@ -70,6 +70,34 @@ func TestATappedFormulaIsQualifiedByItsTap(t *testing.T) {
 	}
 }
 
+// brew prints the formula name first and then every keg it has, and reading
+// that wrongly would either miss an upgrade or report one that did not happen.
+func TestBrewVersionsAreReadFromTheListing(t *testing.T) {
+	cases := []struct {
+		listing string
+		want    []string
+	}{
+		{"pusher 1.2.1", []string{"1.2.1"}},
+		{"pusher 1.2.1 1.2.2", []string{"1.2.1", "1.2.2"}},
+		{"", nil},
+		{"pusher", nil},
+	}
+
+	for _, c := range cases {
+		got := parseBrewVersions(c.listing)
+		if len(got) != len(c.want) {
+			t.Errorf("%q gave %v, want %v", c.listing, got, c.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != c.want[i] {
+				t.Errorf("%q gave %v, want %v", c.listing, got, c.want)
+				break
+			}
+		}
+	}
+}
+
 func TestAssetNameMatchesPublishedNames(t *testing.T) {
 	published := map[string]bool{
 		"pusher-darwin-amd64":      true,
