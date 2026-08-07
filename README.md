@@ -317,6 +317,12 @@ the robot; the rest is compiling, which those figures may not include.
 
 - **Only `org.firstinspires.ftc.teamcode` is reloaded.** Everything else lives
   in the APK.
+- **Hardware device drivers written in team code stay in the APK.** Pusher finds
+  them and keeps them there automatically, one file at a time, so the rest of
+  the package still reloads. They cannot be reloaded: every reload builds a new
+  classloader, and a driver loaded from the reload is a different class each
+  time while the device in the hardware map was built under an earlier one. The
+  robot would report that it cannot find its own hardware.
 - **Your team code is not in the APK while this is set up.** That is what makes
   it work: a class in the APK always wins. It also means a teammate deploying
   from Android Studio gets a robot with no OpModes until pusher reloads them.

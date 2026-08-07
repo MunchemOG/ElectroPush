@@ -465,3 +465,93 @@ func TestTheSignatureSkipsBuildOutput(t *testing.T) {
 		t.Error("build output counted as a change")
 	}
 }
+
+// A hardware device driver cannot be reloaded, and that is not a preference.
+// Every reload builds a new classloader, so a reloaded driver is a different
+// class each time while the device in the hardware map was built under an
+// earlier one. hardwareMap.get then finds nothing assignable and the robot
+// cannot find its own hardware.
+func TestDeviceDriversAreFoundAndKept(t *testing.T) {
+	root := t.TempDir()
+	pkg := filepath.Join(root, SourceRoot, "org/firstinspires/ftc/teamcode/hw")
+	if err := os.MkdirAll(pkg, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	driver := "@I2cDeviceType\n@DeviceProperties(xmlTag = \"MyThing\")\npublic class MyDriver {}\n"
+	plain := "@TeleOp\npublic class Ordinary {}\n"
+
+	if err := os.WriteFile(filepath.Join(pkg, "MyDriver.java"), []byte(driver), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pkg, "Ordinary.java"), []byte(plain), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	found := FindDrivers(root)
+	if len(found) != 1 || found[0] != "org/firstinspires/ftc/teamcode/hw/MyDriver" {
+		t.Fatalf("got %v", found)
+	}
+}
+
+// A driver usually sits among ordinary code, so keeping it must not drag its
+// neighbours out of the reload with it.
+func TestKeepingOneClassLeavesItsNeighboursReloadable(t *testing.T) {
+	keep := []string{"org/firstinspires/ftc/teamcode/hw/MyDriver"}
+
+	entries := []string{
+		"org/firstinspires/ftc/teamcode/hw/MyDriver.class",
+		"org/firstinspires/ftc/teamcode/hw/MyDriver$Params.class",
+		"org/firstinspires/ftc/teamcode/hw/MyDriverHelper.class",
+		"org/firstinspires/ftc/teamcode/hw/Ordinary.class",
+	}
+
+	reload, kept := split(entries, keep)
+
+	// The class and its inner classes go, because they come from one file and
+	// share its identity.
+	if kept != 2 {
+		t.Errorf("got %d kept, want the driver and its inner class", kept)
+	}
+	// A class whose name merely starts the same must not be caught.
+	if len(reload) != 2 {
+		t.Fatalf("got %v", reload)
+	}
+	for _, entry := range reload {
+		if strings.Contains(entry, "MyDriver.class") || strings.Contains(entry, "MyDriver$") {
+			t.Errorf("%s should have been kept", entry)
+		}
+	}
+}
+
+// The gradle exclusion has to agree with the split, or a class is in both the
+// APK and the reload, or in neither.
+func TestTheGradleBlockPinsAClassToItsDot(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, Module), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(GradleFile(root), []byte("android {\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Exclude(root, "org/firstinspires/ftc/teamcode/hw/MyDriver"); err != nil {
+		t.Fatal(err)
+	}
+
+	content := string(mustRead(t, GradleFile(root)))
+
+	// The dot is what stops MyDriverHelper.java being kept too.
+	if !strings.Contains(content, "!path.startsWith('org/firstinspires/ftc/teamcode/hw/MyDriver.')") {
+		t.Errorf("a class keep is not pinned to its extension:\n%s", content)
+	}
+
+	// A package keep still uses a slash.
+	if err := Exclude(root, "org/firstinspires/ftc/teamcode/tuning"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(mustRead(t, GradleFile(root))),
+		"!path.startsWith('org/firstinspires/ftc/teamcode/tuning/')") {
+		t.Error("a package keep is not matched as a directory")
+	}
+}

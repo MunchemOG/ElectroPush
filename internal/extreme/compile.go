@@ -290,9 +290,23 @@ func split(entries []string, keep []string) (reload []string, kept int) {
 	return reload, kept
 }
 
-func inAny(entry string, prefixes []string) bool {
-	for _, prefix := range prefixes {
-		if strings.HasPrefix(entry, strings.TrimSuffix(prefix, "/")+"/") {
+// inAny reports whether a class entry is covered by a keep entry, which names
+// either a package or a single class. A class keeps its inner classes with it,
+// since they are compiled from the same file and share its identity.
+func inAny(entry string, keep []string) bool {
+	entry = strings.TrimSuffix(entry, ".class")
+
+	for _, item := range keep {
+		item = strings.TrimSuffix(item, "/")
+
+		if isClassEntry(item) {
+			if entry == item || strings.HasPrefix(entry, item+"$") {
+				return true
+			}
+			continue
+		}
+
+		if strings.HasPrefix(entry, item+"/") {
 			return true
 		}
 	}
