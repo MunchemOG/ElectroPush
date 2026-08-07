@@ -148,28 +148,28 @@ lets it help:
   `goBILDAPinpoint`; type `go` and it lists the goBILDA parts. The list is every
   type the SDK ships, read out of the FTC jars.
 - **New devices land on a free port.** Pick a type and the port is filled in
-  with the lowest one nothing is using — per bus, for I2C.
+  with the lowest one nothing is using, per bus, for I2C.
 - **Problems show up as you type**, not after a failed push: a name that is
   already taken, a port that is already used, a port the hub does not have.
 - **Nothing is written until you save.** Backing out of an edit leaves the file
   untouched, and the whole tree is marked with what is wrong before you push.
 
 Reading, saving and pushing all preserve the file byte for byte apart from what
-you actually changed — same declaration, same indentation, same attribute order
+you actually changed, same declaration, same indentation, same attribute order
 as the Driver Station writes. A rename comes out as a one-line diff.
 
 If you would rather use your own editor, `pusher hwconfig edit <name>` opens
 `$EDITOR` on the raw XML and checks it when you save.
 
-Files move byte for byte in both directions — pusher parses them to check and
+Files move byte for byte in both directions. Pusher parses them to check and
 describe them, never to rewrite them.
 
 **Before pushing**, each file is checked for what the robot controller would
 reject: two devices sharing a name, two devices on one port, a port the hub does
 not have, an Expansion Hub on the address reserved for the Control Hub. Errors
 stop the push (`--force` overrides); anything pusher is unsure about is a
-warning. Device types it does not recognise — your own OnBotJava or external
-library drivers — still have their names checked but are left alone otherwise.
+warning. Device types it does not recognise, your own OnBotJava or external
+library drivers, still have their names checked but are left alone otherwise.
 
 **Overwriting is guarded.** The robot's copy of anything about to be replaced is
 saved into `configs/.pusher-backup/` first, because it may have been changed on
@@ -220,7 +220,7 @@ release when the LED turns magenta (yellow is 2.4 GHz). Needs Control Hub OS
 
 **Only changed parts are sent.** On by default. The hub keeps the APK in pieces
 under `/data/local/tmp/pusher`, which survives reboots, so later pushes transfer
-only what differs — measured at 0.6 MB instead of 74 MB for a one-line change.
+only what differs, measured at 0.6 MB instead of 74 MB for a one-line change.
 The rebuilt APK is checksummed on the hub before installing; anything unexpected
 falls back to a full transfer.
 
@@ -376,7 +376,7 @@ Pusher needs to know which network to put you back on. How it works that out
 differs by platform. `pusher doctor` shows which backend is in use.
 
 **macOS** hides the current Wi-Fi name from command-line tools, and your
-terminal cannot be added to Location Services by hand — macOS only lists apps
+terminal cannot be added to Location Services by hand: macOS only lists apps
 that have already asked, and command-line tools have not been able to ask since
 macOS 13. Pusher instead reads the saved-network list, which macOS keeps in
 most-recently-joined order, so the network you are on is the first entry. No
@@ -390,7 +390,7 @@ connect to the robot yourself and pusher will deploy over that connection.
 
 **Windows** reports the SSID freely, so a normal push is fine. But it keeps no
 record of when each saved network was last used, so a standalone `pusher exit`
-cannot tell where you came from — set the network to return to in
+cannot tell where you came from. Set the network to return to in
 `pusher settings` → Home Wi-Fi network. Note also that `netsh` cannot take a
 password inline, so pusher generates a WPA2-PSK profile and imports it before
 connecting.

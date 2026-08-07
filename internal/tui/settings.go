@@ -154,6 +154,7 @@ var mainItems = []string{
 	"blob library",
 	"Deploy speed",
 	"Pusher Extreme",
+	"Dashboard tuning check",
 	"Update pusher",
 	"Exit",
 }
@@ -324,8 +325,10 @@ func (m *SettingsModel) updateMain(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.refreshExtreme()
 			m.goTo(screenExtreme, 0)
 		case 10:
-			return m, m.enterUpdate()
+			m.toggleDashWatch()
 		case 11:
+			return m, m.enterUpdate()
+		case 12:
 			m.quit = true
 			return m, tea.Quit
 		}
@@ -522,9 +525,9 @@ func (m *SettingsModel) toggleAutoSlim() {
 	case !enabling:
 		m.status = "Pushes will package every architecture again"
 	case config.GetHubABI() == "":
-		m.status = "On — but connect the robot and run 'pusher slim' once first"
+		m.status = "On, but connect the robot and run 'pusher slim' once first"
 	default:
-		m.status = fmt.Sprintf("On — pushes will package %s only", config.GetHubABI())
+		m.status = fmt.Sprintf("On: pushes will package %s only", config.GetHubABI())
 	}
 }
 
@@ -667,6 +670,22 @@ func (m *SettingsModel) View() string {
 	return b.String()
 }
 
+func (m *SettingsModel) toggleDashWatch() {
+	enabling := !config.GetDashWatch()
+
+	if err := config.SetDashWatch(enabling); err != nil {
+		m.err = err
+		return
+	}
+
+	m.err = nil
+	if enabling {
+		m.status = "On: every push says what dashboard tuning it overwrote"
+		return
+	}
+	m.status = "Off: `pusher dash diff` still compares on demand"
+}
+
 func (m *SettingsModel) viewMain() string {
 	values := []string{
 		m.defaultProfileLabel(),
@@ -679,6 +698,7 @@ func (m *SettingsModel) viewMain() string {
 		m.blobLabel(),
 		m.deployLabel(),
 		m.extremeLabel(),
+		onOff(config.GetDashWatch()),
 		m.updateLabel(),
 		"",
 	}
@@ -719,14 +739,14 @@ func (m *SettingsModel) viewProfiles() string {
 	b.WriteString(helpStyle.Render("  Robot profiles") + "\n\n")
 
 	if len(m.profiles) == 0 {
-		b.WriteString(unsetStyle.Render("  No profiles yet — press 'a' to add one") + "\n")
+		b.WriteString(unsetStyle.Render("  No profiles yet. Press 'a' to add one") + "\n")
 	}
 
 	b.WriteString(m.renderList(len(m.profiles), func(i int) string {
 		name := m.profiles[i]
 
 		if i == m.confirmDeleteIndex {
-			return errStyle.Render(fmt.Sprintf("  > %s — delete? (y/n)", name)) + "\n"
+			return errStyle.Render(fmt.Sprintf("  > %s: delete? (y/n)", name)) + "\n"
 		}
 
 		marker := " "
@@ -787,7 +807,7 @@ func (m *SettingsModel) viewHomeNetwork() string {
 
 	b.WriteString(m.renderList(len(m.networks)+1, func(i int) string {
 		if i == 0 {
-			return renderRow(m.cursor == 0, "(none — stay on the robot)", "", 32)
+			return renderRow(m.cursor == 0, "(none, stay on the robot)", "", 32)
 		}
 
 		ssid := m.networks[i-1]

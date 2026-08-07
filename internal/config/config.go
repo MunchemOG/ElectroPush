@@ -44,6 +44,8 @@ type Config struct {
 	SplitInstall bool `mapstructure:"split_install"`
 
 	Extreme bool `mapstructure:"extreme"`
+
+	DashWatch bool `mapstructure:"dash_watch"`
 }
 
 var (
@@ -446,3 +448,20 @@ func SetExtreme(enabled bool) error {
 	cfg.Extreme = enabled
 	return Save(cfg)
 }
+
+// GetDashWatch reports whether a deploy reads the dashboard before and after,
+// to say what tuning it threw away.
+func GetDashWatch() bool { return viper.GetBool("dash_watch") }
+
+// SetDashWatch controls the tuning check around a deploy.
+func SetDashWatch(enabled bool) error {
+	cfg, err := Load()
+	if err != nil {
+		return err
+	}
+	cfg.DashWatch = enabled
+	return Save(cfg)
+}
+
+// Dir is where pusher keeps everything it remembers.
+func Dir() string { return configDir }
