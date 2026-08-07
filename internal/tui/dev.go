@@ -33,6 +33,7 @@ var devItems = []string{
 	"Both, with a full report",
 	"Hot reload an OpMode",
 	"Benchmark Pusher Extreme",
+	"Collect the robot's own logs",
 	"Remove the hot reload proof",
 	"Exit",
 }
@@ -59,6 +60,10 @@ var devHelp = []string{
 	"Compiles and reloads your own team code several times over and times\n" +
 		"each stage. Needs Pusher Extreme set up. Writes a report you can\n" +
 		"paste numbers out of.",
+
+	"Pulls the robot controller's own log files, which survive the app dying\n" +
+		"and the hub rebooting, and shows the most recent crash in them. Use\n" +
+		"this when adb logcat comes back empty.",
 
 	"Deletes the pushed dex and tells the robot controller to rescan.",
 
@@ -227,8 +232,10 @@ func (m *devModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case 4:
 			return m, m.benchExtreme()
 		case 5:
-			return m, m.cleanReload()
+			return m, m.collectLogs()
 		case 6:
+			return m, m.cleanReload()
+		case 7:
 			m.quit = true
 			return m, tea.Quit
 		}
@@ -616,6 +623,59 @@ func extremeSummary(r extreme.BenchResult) string {
 	var b strings.Builder
 	for _, phase := range []extreme.Phase{r.Classpath, r.Compile, r.Deliver, r.Total} {
 		fmt.Fprintf(&b, "  %-22s %s\n", phase.Name, phase.Best().Round(time.Millisecond))
+	}
+	return b.String()
+}
+
+// collectLogs pulls the robot controller's own logs, which outlive the crash
+// that adb logcat loses.
+func (m *devModel) collectLogs() tea.Cmd {
+	if m.serial == "" {
+		m.err = fmt.Errorf("no robot connected - plug in USB or run `pusher connect`")
+		return nil
+	}
+
+	m.busy = "pulling the robot's logs"
+	m.started = time.Now()
+
+	serial := m.serial
+
+	return tea.Batch(func() tea.Msg {
+		path, crash, err := hotreload.CollectRobotLog(serial)
+		if err != nil {
+			return devDoneMsg{err: err}
+		}
+
+		var b strings.Builder
+		if crash == "" {
+			b.WriteString("No crash found in the robot controller's logs.\n")
+		} else {
+			b.WriteString("Most recent crash:\n\n")
+			b.WriteString(crash)
+			b.WriteString("\n")
+		}
+
+		return devDoneMsg{
+			report:  b.String(),
+			summary: logSummary(crash),
+			saved:   path,
+		}
+	}, devTick())
+}
+
+// logSummary keeps the menu to a few lines; the whole thing is in the file.
+func logSummary(crash string) string {
+	if crash == "" {
+		return "  no crash found in the robot's own logs\n"
+	}
+
+	var b strings.Builder
+	for i, line := range strings.Split(crash, "\n") {
+		if i >= 6 {
+			b.WriteString("  ...\n")
+			break
+		}
+		fmt.Fprintf(&b, "  %s\n", trim(line, 96))
 	}
 	return b.String()
 }
