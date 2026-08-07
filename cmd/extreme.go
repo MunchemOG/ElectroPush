@@ -87,6 +87,52 @@ func recordExtremeState(serial string) {
 	}
 }
 
+// reloadAfterInstall puts team code onto the robot once an APK that no longer
+// carries it has been installed.
+//
+// An install on its own leaves the robot with no OpModes at all: they are
+// excluded from the APK, and the reload that supplies them has not happened.
+// Reporting a successful deploy in that state is how somebody gets to a match
+// with an empty OpMode list.
+func reloadAfterInstall(serial string) error {
+	if !config.GetExtreme() {
+		return nil
+	}
+
+	project, err := extreme.FindProject()
+	if err != nil || !extreme.Excluded(project.Root) {
+		return nil
+	}
+
+	stranded := func(err error) error {
+		return fmt.Errorf("the APK is installed but carries no team code, so the robot "+
+			"has no OpModes: %w\n"+
+			"    Run `pusher` again, or undo the setup in `pusher settings`", err)
+	}
+
+	fmt.Println("\n[>] Pusher Extreme: that APK has no team code in it, reloading it now")
+
+	classpath, err := extreme.ResolveClasspath(project.Wrapper, extreme.Module)
+	if err != nil {
+		return stranded(err)
+	}
+
+	result, err := extreme.Reload(project, serial, classpath, extreme.Kept(project.Root))
+	for _, step := range result.Steps {
+		fmt.Printf("    %s\n", step)
+	}
+	if err != nil {
+		return stranded(err)
+	}
+
+	for _, warning := range result.Warnings {
+		fmt.Printf("[!] %s\n", warning)
+	}
+
+	fmt.Printf("[OK] Reloaded %d classes, so the robot has its OpModes\n", result.Classes)
+	return nil
+}
+
 // extremeDeploy is the deploy path when Pusher Extreme is set up.
 //
 // The APK is still built, because it is the only way to know whether anything
