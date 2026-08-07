@@ -8,6 +8,7 @@ import (
 	"github.com/andreibanu/pusher/internal/config"
 	"github.com/andreibanu/pusher/internal/extreme"
 	"github.com/andreibanu/pusher/internal/gradle"
+	"github.com/andreibanu/pusher/internal/hotreload"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -161,8 +162,19 @@ func (m *SettingsModel) undoExtreme() {
 		return
 	}
 
-	m.refreshExtreme()
+	// A hub left holding a reload has those classes named twice once team code
+	// is packaged again, and the SDK then registers no OpMode at all.
 	m.status = "Undone. Deploy once so the robot gets an APK with team code in it."
+	if serial, err := adb.Target(); err == nil {
+		if err := hotreload.Clean(serial); err != nil {
+			m.status = "Undone, but the robot still holds a reload: connect it and undo again."
+		}
+		extreme.ForgetSignature(serial)
+	} else {
+		m.status = "Undone. Connect the robot and undo again to clear the reload off it, then deploy."
+	}
+
+	m.refreshExtreme()
 }
 
 func (m *SettingsModel) viewExtreme() string {

@@ -553,6 +553,37 @@ func TestTheGradleBlockPinsAClassToItsDot(t *testing.T) {
 	}
 }
 
+// Excluding a directory prunes the subtree before any file under it is seen,
+// so without the guard the kept class is in neither the APK nor the reload and
+// the robot dies resolving it. On a real project this took the source set from
+// 0 files to exactly the one kept file.
+func TestTheGradleBlockNeverExcludesADirectory(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, Module), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(GradleFile(root), []byte("android {\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Exclude(root, "org/firstinspires/ftc/teamcode/hw/MyDriver"); err != nil {
+		t.Fatal(err)
+	}
+
+	content := string(mustRead(t, GradleFile(root)))
+
+	if !strings.Contains(content, "!details.directory") {
+		t.Fatalf("directories are not spared, so a keep cannot survive:\n%s", content)
+	}
+
+	// It has to come first, or it is only reached once the path already matched.
+	guard := strings.Index(content, "!details.directory")
+	pkg := strings.Index(content, "path.startsWith('"+TeamPackage)
+	if guard > pkg {
+		t.Errorf("the directory guard is tested after the path, so it does not guard anything:\n%s", content)
+	}
+}
+
 // The bridge must not touch anything shared. An earlier version set the thread
 // context classloader, which repointed an SDK-owned thread at a loader that is
 // discarded on the next reload and left it resolving through a dead one.
