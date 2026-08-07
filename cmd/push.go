@@ -282,7 +282,10 @@ func deployOnce(gradlePath, serial string) error {
 		fmt.Printf("\n[OK] Deployed in %.1fs\n", time.Since(start).Seconds())
 	}
 
-	return nil
+	// The APK just installed has no team code in it, so this is not finished
+	// until the reload has run. Skipping it leaves a robot that deployed
+	// successfully and has nothing to run.
+	return reloadAfterInstall(serial)
 }
 
 func robotSSIDs() []string {
