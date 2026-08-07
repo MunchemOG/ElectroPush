@@ -221,67 +221,98 @@ Do not guess which of these to turn on. `pusher dev` measures them.
 
 ## Pusher Extreme
 
-Reloads your OpModes onto a running robot instead of installing an APK. Under a
-second, against around forty for a normal deploy.
+**Experimental, and under active development.** It works, it is measured, and
+it is not finished. Read the precautions before a competition.
 
-Set it up in `pusher settings` -> **Pusher Extreme**. One marked block is added
-to `TeamCode/build.gradle` and nothing else in your project is touched. The same
-menu undoes it.
+Pusher Extreme reloads your OpModes onto a running robot instead of installing
+an APK. Only your team code is sent, so the write-run-test cycle stops being
+dominated by waiting.
 
-After that a deploy compiles your team code, pushes it to the robot and tells
-the robot controller to rescan. Nothing is installed.
+A full deploy on a Control Hub measured around **39 seconds**, and every
+transfer trick pusher has was within noise of that, because the cost is the
+install and not the transfer. Pusher Extreme does not install:
 
-**It only reloads when that is equivalent.** If anything outside team code
-changed, or the robot is not running the APK this project builds, it installs
-normally and says why. Reloading when an install was needed would leave the
-robot running stale code with everything reporting success, which is the worst
-thing it could do.
+| stage | best of 5 | spread |
+|---|---|---|
+| resolve the classpath (gradle) | 307ms | 216ms |
+| compile (javac + d8) | 1.47s | 173ms |
+| push and trigger | 1.09s | 112ms |
+| **total** | **2.89s** | 484ms |
 
-**While it is set up, your team code is not in the APK.** That is the point:
-parent-first classloading means a class in the APK always wins, so it has to be
-absent for a reloaded one to be used. The consequence is that anyone deploying
-the project from Android Studio gets a robot with no OpModes until pusher
-reloads them. Undo in the menu puts it back, then deploy once.
+204 classes, 727 KB sent. Timed from the start of the command to the robot
+being told to reload; the robot picks it up on its next event loop tick.
 
-How it works, if it matters: the FTC SDK already loads classes from outside the
-APK for OnBotJava, and already watches a file to know when to rescan. Pusher
-compiles your code on your laptop, puts the jar and dex where the SDK reads
-them, and touches that file. No `DexClassLoader` of pusher's own, and no changes
-to the robot controller app.
+**Roughly thirteen times faster than installing**, and the numbers above are
+the whole command, not the interesting part of it. Two of the three stages
+never touch the robot, and resolving the classpath is not cached yet.
 
-### What it does not get on with
+For honest comparison: Sloth advertises under a second, with a ceiling of two.
+Pusher Extreme is slower than that today. Its 1.09s is the part that reaches
+the robot; the rest is compiling, which those figures may not include.
 
-**OnBotJava.** They use the same mechanism and the same file to say where
-classes live, so whichever ran last wins. Building anything in OnBotJava points
-that file at OnBotJava's own output and your reloaded team code stops being
-found; the next deploy points it back. Pick one.
+### What it does beyond swapping the code over
 
-**`pusher dev` -> Hot reload an OpMode.** Same thing, on purpose: the proof
-replaces whatever is currently loaded, including your team code. Deploy again
-afterwards.
+- **Changes survive restarts and power cycles.** The reloaded code lives on the
+  robot, not in memory.
+- **It refuses to reload when a reload would be a lie.** If anything outside
+  team code changed, or the robot is not running the build this project
+  produces, it installs and says which. Reloading where an install was needed
+  leaves a robot running stale code with everything reporting success, and that
+  is discovered by the robot driving last week's autonomous.
+- **FtcDashboard keeps working.** Dashboard finds `@Config` classes by scanning
+  the APK, which reloaded code is not in. Pusher registers them from inside the
+  reload instead, so live tuning survives. 43 classes in the project measured
+  above.
+- **No changes to the robot controller app.** No custom classloader, no
+  bytecode rewriting, nothing installed on the robot that is not your code.
+  Pusher uses a path the SDK already supports.
+- **Nothing is triggered until it is verified.** Both files are checked on the
+  robot before anything is told to reload, because re-registration abandons
+  everything on the first failure rather than skipping one file.
+- **One marked block** is added to `TeamCode/build.gradle`. The same menu takes
+  it out.
 
-**Libraries that go looking for your classes.** Your OpModes can use pedro,
-dashboard, ftclib and the rest normally, because those live in the APK and a
-reloaded class can see them. The reverse does not hold on its own: a library in
-the APK cannot resolve your classes.
+### Precautions
 
-Pusher generates a small bridge into the reload, which the SDK runs on every
-reload through the same mechanism that finds your OpModes. It sets the thread
-context classloader, which is enough for any library that resolves classes that
-way, and hands your `@Config` classes to FtcDashboard directly, since dashboard
-scans the APK itself and would never find them. Live tuning keeps working.
+- **Only `org.firstinspires.ftc.teamcode` is reloaded.** Everything else lives
+  in the APK.
+- **Your team code is not in the APK while this is set up.** That is what makes
+  it work: a class in the APK always wins. It also means a teammate deploying
+  from Android Studio gets a robot with no OpModes until pusher reloads them.
+- **Do not reload while an OpMode is running.** A reload rebuilds the
+  classloader under a live app, and what the SDK does with that mid-OpMode has
+  not been established. Stop the OpMode first.
+- **Code can compile and still not reload.** Installing or changing a library,
+  or changing anything outside team code, needs a full install. Pusher detects
+  that and installs instead, but it cannot detect a library that reaches back
+  into your classes: that fails at runtime, not at compile time.
+- **Deleting a whole `@Config` class** leaves its entry in the dashboard until
+  the robot app restarts. Adding classes, and adding or removing fields, are
+  handled.
+- **OnBotJava cannot be used at the same time.** Both use the same mechanism to
+  say where classes live, and whichever ran last wins.
+
+### Setting it up
+
+`pusher settings` -> **Pusher Extreme** -> Set up this project, then turn on
+Use it when deploying. Deploy once to install an APK without team code in it;
+every deploy after that reloads.
+
+The same menu undoes it. Deploy once afterwards so the robot gets an APK with
+your team code back in it.
+
+### How it works, briefly
+
+The FTC SDK already loads classes from outside the APK, and already watches a
+file to know when to rescan. Pusher compiles your team code on your laptop,
+puts it where the SDK reads from, and touches that file. The SDK throws away its
+classloader, builds a new one and rediscovers your OpModes through the same path
+it uses for everything else.
 
 Checked against pedro, Panels, EasyOpenCV and blob: none of them go looking for
-classes on their own, so none of them need anything. A library that does, and
-that the bridge does not know about, can have its package kept in the APK
-instead.
-
-**`pusher slim --undo`** restores whole gradle files from backups, one of which
-holds the Pusher Extreme block. Pusher puts the block back and says so, but if
-you edit those files by hand the same trap is there.
-
-**Installing only changed splits** aims at the same cost from the other
-direction and does nothing useful once team code is out of the APK.
+classes on their own, so none of them need anything. FtcDashboard does, and is
+handled. A library that does and is not handled can have its package kept in the
+APK instead.
 
 ## pusher dev
 
