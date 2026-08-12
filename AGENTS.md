@@ -19,7 +19,7 @@ Do not commit generated binaries or `dist/` output. Hardware and deployment work
 
 Use idiomatic Go and let `gofmt` define indentation and layout. Use package names that are short, lowercase, and purpose-based (`hotreload`, `robotcfg`). Export only APIs needed across packages; exported identifiers use `PascalCase`, unexported identifiers use `camelCase`, and errors should be returned rather than causing panics. Keep OS-specific behavior in suffixed files with build tags, such as `wifi_darwin.go` and `wifi_linux.go`.
 
-## Testing Guidelines
+## Testing Guideline
 
 Write table-driven unit tests when inputs have meaningful variants. Name tests `Test<Behavior>` and keep them in the same package as the code under test. Cover successful behavior, invalid input, and error paths, particularly for configuration parsing, ADB/Gradle calls, and platform-specific logic. There is no stated coverage threshold; new behavior should include focused tests and the full suite must pass.
 
