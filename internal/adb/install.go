@@ -50,7 +50,7 @@ func APKFingerprint(path string) (string, error) {
 }
 
 // The package stamp is checked too, or an install from Android Studio in
-// between leaves the marker claiming pusher's build is present.
+// between leaves the marker claiming epsh's build is present.
 func alreadyInstalled(serial, fingerprint, pkg string) bool {
 	out, err := Shell(serial, "cat", installedMarker, "2>/dev/null")
 	if err != nil {
@@ -89,7 +89,7 @@ func forgetInstalled(serial string) {
 	_, _ = Shell(serial, "rm", "-f", installedMarker)
 }
 
-// InstalledFingerprint is the APK the robot was last given by pusher, empty
+// InstalledFingerprint is the APK the robot was last given by epsh, empty
 // when it cannot tell.
 func InstalledFingerprint(serial string) string {
 	out, err := Shell(serial, "cat", installedMarker, "2>/dev/null")

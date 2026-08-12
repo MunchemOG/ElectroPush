@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/andreibanu/pusher/internal/adb"
+	"github.com/MunchemOG/ElectroPush/internal/adb"
 	"github.com/spf13/cobra"
 )
 

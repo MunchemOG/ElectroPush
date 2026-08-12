@@ -93,7 +93,7 @@ func Path() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("cannot locate the home directory: %w", err)
 	}
-	return filepath.Join(home, ".config", "pusher", "credentials"), nil
+	return filepath.Join(home, ".config", "epsh", "credentials"), nil
 }
 
 // Load reads the stored credentials.

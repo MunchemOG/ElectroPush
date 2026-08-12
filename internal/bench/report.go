@@ -20,7 +20,7 @@ const (
 func Report(apk APK, runs []Run, reload Reload, settings map[string]bool) string {
 	var b strings.Builder
 
-	b.WriteString("# Pusher deploy report\n\n")
+	b.WriteString("# Epsh deploy report\n\n")
 	fmt.Fprintf(&b, "%s\n\n", time.Now().Format("2 January 2006, 15:04"))
 
 	writeAPK(&b, apk)
@@ -66,7 +66,7 @@ func writeRuns(b *strings.Builder, runs []Run) {
 
 	if len(runs) == 0 {
 		b.WriteString("The deploy benchmark was not run, so there is nothing here.\n")
-		b.WriteString("Run it from `pusher dev` -> Benchmark the deploy.\n\n")
+		b.WriteString("Run it from `epsh dev` -> Benchmark the deploy.\n\n")
 		return
 	}
 
@@ -171,7 +171,7 @@ func compareWithin(got, baseline, noise time.Duration) string {
 
 func writeSettingEffects(b *strings.Builder, apk APK, runs []Run, settings map[string]bool) {
 	b.WriteString("## What each setting does\n\n")
-	b.WriteString("`pusher settings` -> Deploy speed\n\n")
+	b.WriteString("`epsh settings` -> Deploy speed\n\n")
 
 	if len(runs) == 0 {
 		b.WriteString("Only the settings that can be read off the APK are covered: the rest need\n")
@@ -187,11 +187,11 @@ func writeSettingEffects(b *strings.Builder, apk APK, runs []Run, settings map[s
 		return Run{}, false
 	}
 
-	staged, hasStaged := find("pusher, staged install")
-	streamed, hasStreamed := find("pusher, streamed install")
-	delta, hasDelta := find("pusher, delta transfer")
-	skip, hasSkip := find("pusher, nothing changed")
-	split, hasSplit := find("pusher, changed split only")
+	staged, hasStaged := find("epsh, staged install")
+	streamed, hasStreamed := find("epsh, streamed install")
+	delta, hasDelta := find("epsh, delta transfer")
+	skip, hasSkip := find("epsh, nothing changed")
+	split, hasSplit := find("epsh, changed split only")
 
 	fmt.Fprintf(b, "| setting | now | effect here |\n|---|---|---|\n")
 
@@ -247,7 +247,7 @@ func writeSettingEffects(b *strings.Builder, apk APK, runs []Run, settings map[s
 	b.WriteString("lose over USB where the transfer was never the problem.\n\n")
 
 	b.WriteString("Not swept here, because changing them needs a rebuild:\n\n")
-	fmt.Fprintf(b, "- **One ABI** (`pusher slim`): the APK carries %s of native libraries. A stock\n", mb(apk.LibPacked))
+	fmt.Fprintf(b, "- **One ABI** (`epsh slim`): the APK carries %s of native libraries. A stock\n", mb(apk.LibPacked))
 	b.WriteString("  project packages two architectures and the hub runs one.\n")
 	b.WriteString("- **Gradle threads**: build time only, nothing to do with the deploy.\n\n")
 }
@@ -256,7 +256,7 @@ func writeReload(b *strings.Builder, reload Reload, runs []Run) {
 	b.WriteString("## Hot reload, if it existed\n\n")
 
 	if !reload.Measured {
-		b.WriteString("Not run. `pusher dev` -> Hot reload feasibility measures it.\n\n")
+		b.WriteString("Not run. `epsh dev` -> Hot reload feasibility measures it.\n\n")
 		return
 	}
 
@@ -265,7 +265,7 @@ func writeReload(b *strings.Builder, reload Reload, runs []Run) {
 		return
 	}
 
-	b.WriteString("Pusher does not hot reload. This is a measurement of what it would cost on\n")
+	b.WriteString("Epsh does not hot reload. This is a measurement of what it would cost on\n")
 	b.WriteString("this hub, so the decision to build it rests on numbers from the hardware\n")
 	b.WriteString("rather than on somebody else's.\n\n")
 
@@ -315,8 +315,8 @@ func writeReload(b *strings.Builder, reload Reload, runs []Run) {
 
 func writeSloth(b *strings.Builder, runs []Run) {
 	b.WriteString("## Against Sloth\n\n")
-	b.WriteString("**Pusher is not a Sloth replacement.** Sloth hot reloads: it sends only the\n")
-	b.WriteString("team's code and loads it into a running app. Pusher installs an APK faster.\n")
+	b.WriteString("**Epsh is not a Sloth replacement.** Sloth hot reloads: it sends only the\n")
+	b.WriteString("team's code and loads it into a running app. Epsh installs an APK faster.\n")
 	b.WriteString("Those are different problems, and below a few seconds they are not comparable.\n\n")
 
 	b.WriteString("Their published figures, quoted from their README rather than measured here:\n\n")
@@ -343,7 +343,7 @@ func writeSloth(b *strings.Builder, runs []Run) {
 		b.WriteString("No deploy was measured in this run, so there is nothing to compare.\n\n")
 	}
 
-	b.WriteString("Read that as a floor, not a headline. Everything pusher does still ends in a\n")
+	b.WriteString("Read that as a floor, not a headline. Everything epsh does still ends in a\n")
 	b.WriteString("package manager install, and no amount of transfer cleverness removes dexopt.\n")
 	b.WriteString("Getting into Sloth's range means not installing at all.\n")
 }

@@ -14,11 +14,11 @@ func TestCellarFormula(t *testing.T) {
 		formula string
 		ok      bool
 	}{
-		{"/opt/homebrew/Cellar/pusher/1.0.34/bin/pusher", "pusher", true},
-		{"/usr/local/Cellar/pusher/1.0.34/bin/pusher", "pusher", true},
-		{"/home/linuxbrew/.linuxbrew/Cellar/pusher/1.0.34/bin/pusher", "pusher", true},
-		{"/usr/local/bin/pusher", "", false},
-		{"/Users/someone/go/bin/pusher", "", false},
+		{"/opt/homebrew/Cellar/epsh/1.0.34/bin/epsh", "epsh", true},
+		{"/usr/local/Cellar/epsh/1.0.34/bin/epsh", "epsh", true},
+		{"/home/linuxbrew/.linuxbrew/Cellar/epsh/1.0.34/bin/epsh", "epsh", true},
+		{"/usr/local/bin/epsh", "", false},
+		{"/Users/someone/go/bin/epsh", "", false},
 
 		{"/opt/homebrew/Cellar", "", false},
 	}
@@ -31,8 +31,8 @@ func TestCellarFormula(t *testing.T) {
 	}
 }
 
-// A bare name is ambiguous. `brew upgrade pusher` resolves to the unrelated
-// NWPusher cask and fails saying a cask is not installed, so the tap the keg
+// A bare name is ambiguous. `brew upgrade epsh` resolves to the unrelated
+// NWEpsh cask and fails saying a cask is not installed, so the tap the keg
 // records has to come along.
 func TestATappedFormulaIsQualifiedByItsTap(t *testing.T) {
 	cases := []struct {
@@ -40,17 +40,17 @@ func TestATappedFormulaIsQualifiedByItsTap(t *testing.T) {
 		receipt string
 		want    string
 	}{
-		{"a tap", `{"source":{"tap":"pzmuv1517/pzmuv1517"}}`, "pzmuv1517/pzmuv1517/pusher"},
-		{"core needs no qualifying", `{"source":{"tap":"homebrew/core"}}`, "pusher"},
-		{"no tap recorded", `{"source":{}}`, "pusher"},
-		{"unreadable receipt", "not json", "pusher"},
+		{"a tap", `{"source":{"tap":"pzmuv1517/pzmuv1517"}}`, "pzmuv1517/pzmuv1517/epsh"},
+		{"core needs no qualifying", `{"source":{"tap":"homebrew/core"}}`, "epsh"},
+		{"no tap recorded", `{"source":{}}`, "epsh"},
+		{"unreadable receipt", "not json", "epsh"},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			cellar := t.TempDir()
 
-			keg := filepath.Join(cellar, "Cellar", "pusher", "1.2.0")
+			keg := filepath.Join(cellar, "Cellar", "epsh", "1.2.0")
 			if err := os.MkdirAll(filepath.Join(keg, "bin"), 0o755); err != nil {
 				t.Fatal(err)
 			}
@@ -59,7 +59,7 @@ func TestATappedFormulaIsQualifiedByItsTap(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			formula, ok := cellarFormula(filepath.Join(keg, "bin", "pusher"))
+			formula, ok := cellarFormula(filepath.Join(keg, "bin", "epsh"))
 			if !ok {
 				t.Fatal("a Cellar path was not recognised as a Homebrew install")
 			}
@@ -77,10 +77,10 @@ func TestBrewVersionsAreReadFromTheListing(t *testing.T) {
 		listing string
 		want    []string
 	}{
-		{"pusher 1.2.1", []string{"1.2.1"}},
-		{"pusher 1.2.1 1.2.2", []string{"1.2.1", "1.2.2"}},
+		{"epsh 1.2.1", []string{"1.2.1"}},
+		{"epsh 1.2.1 1.2.2", []string{"1.2.1", "1.2.2"}},
 		{"", nil},
-		{"pusher", nil},
+		{"epsh", nil},
 	}
 
 	for _, c := range cases {
@@ -100,10 +100,10 @@ func TestBrewVersionsAreReadFromTheListing(t *testing.T) {
 
 func TestAssetNameMatchesPublishedNames(t *testing.T) {
 	published := map[string]bool{
-		"pusher-darwin-amd64":      true,
-		"pusher-darwin-arm64":      true,
-		"pusher-linux-amd64":       true,
-		"pusher-windows-amd64.exe": true,
+		"epsh-darwin-amd64":      true,
+		"epsh-darwin-arm64":      true,
+		"epsh-linux-amd64":       true,
+		"epsh-windows-amd64.exe": true,
 	}
 
 	name := AssetName()
@@ -116,9 +116,9 @@ func TestAssetNameMatchesPublishedNames(t *testing.T) {
 }
 
 func TestSumFor(t *testing.T) {
-	sums := "abc123  pusher-darwin-arm64\n" +
-		"DEF456  pusher-linux-amd64\n" +
-		"789aaa *pusher-windows-amd64.exe\n" +
+	sums := "abc123  epsh-darwin-arm64\n" +
+		"DEF456  epsh-linux-amd64\n" +
+		"789aaa *epsh-windows-amd64.exe\n" +
 		"\n" +
 		"malformed-line\n"
 
@@ -127,10 +127,10 @@ func TestSumFor(t *testing.T) {
 		want  string
 		ok    bool
 	}{
-		{"pusher-darwin-arm64", "abc123", true},
-		{"pusher-linux-amd64", "def456", true},
-		{"pusher-windows-amd64.exe", "789aaa", true},
-		{"pusher-darwin-universal", "", false},
+		{"epsh-darwin-arm64", "abc123", true},
+		{"epsh-linux-amd64", "def456", true},
+		{"epsh-windows-amd64.exe", "789aaa", true},
+		{"epsh-darwin-universal", "", false},
 	}
 
 	for _, c := range cases {
@@ -180,7 +180,7 @@ func TestWritableRejectsReadOnlyDir(t *testing.T) {
 	}
 	t.Cleanup(func() { os.Chmod(dir, 0o700) })
 
-	if err := writable(dir, filepath.Join(dir, "pusher")); err == nil {
+	if err := writable(dir, filepath.Join(dir, "epsh")); err == nil {
 		t.Error("a read-only directory should be reported before anything downloads")
 	}
 }
@@ -188,7 +188,7 @@ func TestWritableRejectsReadOnlyDir(t *testing.T) {
 func TestWritableAcceptsNormalDirAndCleansUp(t *testing.T) {
 	dir := t.TempDir()
 
-	if err := writable(dir, filepath.Join(dir, "pusher")); err != nil {
+	if err := writable(dir, filepath.Join(dir, "epsh")); err != nil {
 		t.Fatalf("writable(%s): %v", dir, err)
 	}
 
@@ -203,8 +203,8 @@ func TestWritableAcceptsNormalDirAndCleansUp(t *testing.T) {
 
 func TestSwapReplacesBinary(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "pusher")
-	staged := filepath.Join(dir, ".pusher-update")
+	path := filepath.Join(dir, "epsh")
+	staged := filepath.Join(dir, ".epsh-update")
 
 	if err := os.WriteFile(path, []byte("old"), 0o755); err != nil {
 		t.Fatal(err)

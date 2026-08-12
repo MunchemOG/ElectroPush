@@ -10,10 +10,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/andreibanu/pusher/internal/adb"
-	"github.com/andreibanu/pusher/internal/gradle"
-	"github.com/andreibanu/pusher/internal/robotcfg"
-	"github.com/andreibanu/pusher/internal/tui"
+	"github.com/MunchemOG/ElectroPush/internal/adb"
+	"github.com/MunchemOG/ElectroPush/internal/gradle"
+	"github.com/MunchemOG/ElectroPush/internal/robotcfg"
+	"github.com/MunchemOG/ElectroPush/internal/tui"
 	"github.com/spf13/cobra"
 )
 
@@ -41,13 +41,13 @@ Run on its own it opens a menu covering all of it, with an editor that knows
 what a port is: pick a device type from the ones that exist, land on a free
 port, and see a clash the moment it is typed.
 
-  pusher hwconfig                open the menu
-  pusher hwconfig list           print what the robot and the project have
-  pusher hwconfig pull           copy every configuration into the project
-  pusher hwconfig view comp      show what is wired where
-  pusher hwconfig push comp      copy it back to the robot
+  epsh hwconfig                open the menu
+  epsh hwconfig list           print what the robot and the project have
+  epsh hwconfig pull           copy every configuration into the project
+  epsh hwconfig view comp      show what is wired where
+  epsh hwconfig push comp      copy it back to the robot
 
-Files move byte for byte in both directions. Pusher parses them to check and
+Files move byte for byte in both directions. Epsh parses them to check and
 describe them, and rewrites one only when you edit it - and then in the same
 format the Driver Station uses, so the diff is the change and nothing else.`,
 	RunE: runHWMenu,
@@ -157,7 +157,7 @@ func store() (*robotcfg.Store, error) {
 
 	wrapper, err := gradle.DetectWrapper()
 	if err != nil {
-		return nil, fmt.Errorf("pusher cannot tell where to keep configurations: %w\n\n"+
+		return nil, fmt.Errorf("epsh cannot tell where to keep configurations: %w\n\n"+
 			"Run this from your FTC project, or name a directory with --dir", err)
 	}
 
@@ -196,7 +196,7 @@ func runHWList(cmd *cobra.Command, args []string) error {
 	if len(localNames) == 0 && len(robotNames) == 0 {
 		fmt.Printf("[=] Nothing in %s and nothing on the robot.\n", local.Dir)
 		if serial != "" {
-			fmt.Println("    Make one on the Driver Station, then 'pusher hwconfig pull'.")
+			fmt.Println("    Make one on the Driver Station, then 'epsh hwconfig pull'.")
 		}
 		return nil
 	}
@@ -236,7 +236,7 @@ func runHWList(cmd *cobra.Command, args []string) error {
 
 	fmt.Println()
 	if active == "" && len(robotNames) > 0 {
-		fmt.Println("[*] Pusher could not read which configuration is selected.")
+		fmt.Println("[*] Epsh could not read which configuration is selected.")
 		fmt.Println("    That needs privileged adb, which a phone robot controller does not give.")
 	}
 
@@ -320,7 +320,7 @@ func runHWPush(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if len(names) == 0 {
-		return fmt.Errorf("nothing in %s to push\n\nRun 'pusher hwconfig pull' first", local.Dir)
+		return fmt.Errorf("nothing in %s to push\n\nRun 'epsh hwconfig pull' first", local.Dir)
 	}
 
 	wanted, err := pick(args, names, "in "+local.Dir)
@@ -430,7 +430,7 @@ func runHWEdit(cmd *cobra.Command, args []string) error {
 	if !local.Has(name) {
 		serial, err := adb.Target()
 		if err != nil {
-			return fmt.Errorf("%q is not in %s, and pusher cannot reach the robot to fetch it: %w",
+			return fmt.Errorf("%q is not in %s, and epsh cannot reach the robot to fetch it: %w",
 				name, local.Dir, err)
 		}
 
@@ -490,7 +490,7 @@ func runHWEdit(cmd *cobra.Command, args []string) error {
 	}
 
 	if !hwYes && !confirm(fmt.Sprintf("\nPush %s to the robot?", name)) {
-		fmt.Printf("[*] Left in %s. Push it later with 'pusher hwconfig push %s'.\n", local.Dir, name)
+		fmt.Printf("[*] Left in %s. Push it later with 'epsh hwconfig push %s'.\n", local.Dir, name)
 		return nil
 	}
 
@@ -575,7 +575,7 @@ func runHWCheck(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if len(names) == 0 {
-		return fmt.Errorf("nothing in %s to check\n\nRun 'pusher hwconfig pull' first", local.Dir)
+		return fmt.Errorf("nothing in %s to check\n\nRun 'epsh hwconfig pull' first", local.Dir)
 	}
 
 	wanted, err := pick(args, names, "in "+local.Dir)
@@ -647,7 +647,7 @@ func readAnywhere(name string) ([]byte, string, error) {
 
 	serial, err := adb.Target()
 	if err != nil {
-		return nil, "", fmt.Errorf("%q is not in the project, and pusher cannot reach the robot: %w", name, err)
+		return nil, "", fmt.Errorf("%q is not in the project, and epsh cannot reach the robot: %w", name, err)
 	}
 
 	data, err := robotcfg.Fetch(serial, name)
@@ -740,7 +740,7 @@ func openEditor(path string) error {
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("editor %s failed: %w\n\nEdit %s yourself, then run 'pusher hwconfig push %s'",
+		return fmt.Errorf("editor %s failed: %w\n\nEdit %s yourself, then run 'epsh hwconfig push %s'",
 			parts[0], err, path, strings.TrimSuffix(filepath.Base(path), robotcfg.Ext))
 	}
 

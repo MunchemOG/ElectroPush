@@ -9,10 +9,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/andreibanu/pusher/internal/adb"
-	"github.com/andreibanu/pusher/internal/config"
-	"github.com/andreibanu/pusher/internal/gradle"
-	"github.com/andreibanu/pusher/internal/wifi"
+	"github.com/MunchemOG/ElectroPush/internal/adb"
+	"github.com/MunchemOG/ElectroPush/internal/config"
+	"github.com/MunchemOG/ElectroPush/internal/gradle"
+	"github.com/MunchemOG/ElectroPush/internal/wifi"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -24,7 +24,7 @@ var pushCmd = &cobra.Command{
 	Short: "Build and deploy to the robot",
 	Long: `Builds the app and deploys it to the robot.
 
-If a hub is attached over USB, pusher uses it and leaves your Wi-Fi alone.
+If a hub is attached over USB, epsh uses it and leaves your Wi-Fi alone.
 Otherwise it joins the robot's network, deploys, and puts you back on the
 network you started on.`,
 	RunE: runPush,
@@ -66,7 +66,7 @@ func pushOverWiFi(gradlePath string) error {
 
 	profile, err := config.GetDefaultProfile()
 	if err != nil {
-		return fmt.Errorf("no robot profile configured: %w\n\nRun 'pusher settings' to add one", err)
+		return fmt.Errorf("no robot profile configured: %w\n\nRun 'epsh settings' to add one", err)
 	}
 
 	wifiMgr := wifi.NewManager()
@@ -155,9 +155,9 @@ func resolveHomeNetwork(wifiMgr *wifi.Manager, onRobot, switchBack bool, robotSS
 	}
 
 	if onRobot {
-		fmt.Println("[!] Already on the robot network, so pusher cannot tell where you")
+		fmt.Println("[!] Already on the robot network, so epsh cannot tell where you")
 		fmt.Println("    came from and will leave you here when it finishes.")
-		fmt.Println("    Set one in 'pusher settings' -> Home Wi-Fi network to change that.")
+		fmt.Println("    Set one in 'epsh settings' -> Home Wi-Fi network to change that.")
 		return "", nil
 	}
 
@@ -175,12 +175,12 @@ func resolveHomeNetwork(wifiMgr *wifi.Manager, onRobot, switchBack bool, robotSS
 		inferred, inferErr := wifiMgr.MostRecentNetwork(robotSSID)
 		if inferErr == nil && inferred != "" {
 			fmt.Printf("[*] The network name is hidden; assuming you are on %q\n", inferred)
-			fmt.Println("    (set it explicitly in 'pusher settings' if that is wrong)")
+			fmt.Println("    (set it explicitly in 'epsh settings' if that is wrong)")
 			return inferred, nil
 		}
 
-		fmt.Println("[!] Cannot tell which network you are on, so pusher will leave you")
-		fmt.Println("    on the robot's network. Set one in 'pusher settings'.")
+		fmt.Println("[!] Cannot tell which network you are on, so epsh will leave you")
+		fmt.Println("    on the robot's network. Set one in 'epsh settings'.")
 		return "", nil
 	}
 
@@ -316,7 +316,7 @@ func ensureProfile() error {
 }
 
 func firstRunSetup() error {
-	fmt.Println("\nWelcome to Pusher!")
+	fmt.Println("\nWelcome to Epsh!")
 	fmt.Println("No robot profiles found. Let's set one up.")
 	fmt.Println()
 

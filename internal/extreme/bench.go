@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/andreibanu/pusher/internal/hotreload"
+	"github.com/MunchemOG/ElectroPush/internal/hotreload"
 )
 
 // What a reload costs is three separate things, and lumping them together
@@ -93,7 +93,7 @@ func Benchmark(p *Project, serial string, keep []string, runs int, progress func
 		}
 		out.Classpath.Samples = append(out.Classpath.Samples, time.Since(start))
 
-		work, err := os.MkdirTemp("", "pusher-extreme-bench-*")
+		work, err := os.MkdirTemp("", "epsh-extreme-bench-*")
 		if err != nil {
 			out.Err = err
 			return out
@@ -132,7 +132,7 @@ func Benchmark(p *Project, serial string, keep []string, runs int, progress func
 func (r BenchResult) Report() string {
 	var b strings.Builder
 
-	b.WriteString("# Pusher Extreme reload\n\n")
+	b.WriteString("# Epsh Extreme reload\n\n")
 	fmt.Fprintf(&b, "%s\n\n", time.Now().Format("2 January 2006, 15:04"))
 
 	if r.Err != nil {

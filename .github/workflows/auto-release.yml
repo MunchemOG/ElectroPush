@@ -86,10 +86,10 @@ jobs:
         run: |
           mkdir -p dist
           VERSION=${{ steps.version.outputs.VERSION }}
-          TARBALL="pusher-${VERSION}.tar.gz"
+          TARBALL="epsh-${VERSION}.tar.gz"
           
           # Create tarball of source code (excluding .git)
-          tar --exclude='.git' --exclude='dist' --exclude='pusher' \
+          tar --exclude='.git' --exclude='dist' --exclude='epsh' \
               -czf "dist/${TARBALL}" .
           
           echo "Created tarball: dist/${TARBALL}"
@@ -100,7 +100,7 @@ jobs:
         id: sha
         run: |
           VERSION=${{ steps.version.outputs.VERSION }}
-          TARBALL="pusher-${VERSION}.tar.gz"
+          TARBALL="epsh-${VERSION}.tar.gz"
           SHA256=$(shasum -a 256 "dist/${TARBALL}" | cut -d' ' -f1)
           echo "sha256=$SHA256" >> $GITHUB_OUTPUT
           echo "tarball=$TARBALL" >> $GITHUB_OUTPUT
@@ -113,30 +113,30 @@ jobs:
           
           # macOS Intel
           GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.VERSION }}" \
-            -o dist/binaries/pusher-darwin-amd64
+            -o dist/binaries/epsh-darwin-amd64
           
           # macOS Apple Silicon
           GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.VERSION }}" \
-            -o dist/binaries/pusher-darwin-arm64
+            -o dist/binaries/epsh-darwin-arm64
           
           # Linux
           GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.VERSION }}" \
-            -o dist/binaries/pusher-linux-amd64
+            -o dist/binaries/epsh-linux-amd64
           
           # Windows
           GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.VERSION }}" \
-            -o dist/binaries/pusher-windows-amd64.exe
+            -o dist/binaries/epsh-windows-amd64.exe
           
           # Universal macOS binary
-          lipo -create -output dist/binaries/pusher-darwin-universal \
-            dist/binaries/pusher-darwin-amd64 \
-            dist/binaries/pusher-darwin-arm64
+          lipo -create -output dist/binaries/epsh-darwin-universal \
+            dist/binaries/epsh-darwin-amd64 \
+            dist/binaries/epsh-darwin-arm64
       
       - name: Calculate binary checksums
         if: steps.check_tag.outputs.exists == 'false'
         run: |
           cd dist/binaries
-          shasum -a 256 pusher-* > SHA256SUMS
+          shasum -a 256 epsh-* > SHA256SUMS
           cat SHA256SUMS
       
       - name: Create Release
@@ -149,14 +149,14 @@ jobs:
           prerelease: false
           files: |
             dist/${{ steps.sha.outputs.tarball }}
-            dist/binaries/pusher-darwin-amd64
-            dist/binaries/pusher-darwin-arm64
-            dist/binaries/pusher-darwin-universal
-            dist/binaries/pusher-linux-amd64
-            dist/binaries/pusher-windows-amd64.exe
+            dist/binaries/epsh-darwin-amd64
+            dist/binaries/epsh-darwin-arm64
+            dist/binaries/epsh-darwin-universal
+            dist/binaries/epsh-linux-amd64
+            dist/binaries/epsh-windows-amd64.exe
             dist/binaries/SHA256SUMS
           body: |
-            ## Pusher v${{ steps.version.outputs.VERSION }}
+            ## Epsh v${{ steps.version.outputs.VERSION }}
             
             FTC Robot Deployment Tool - Automated release from main branch.
             
@@ -176,33 +176,33 @@ jobs:
             
             ### macOS (Homebrew)
             ```bash
-            brew tap PzmuV1517/PzmuV1517
-            brew install pusher
+            brew tap MunchemOG/homebrew-epsh
+            brew install epsh
             ```
             
             ### Manual Binary Installation
             
             Download the appropriate binary for your system:
             
-            - **macOS (Universal)**: `pusher-darwin-universal` - Works on both Intel and Apple Silicon
-            - **macOS (Intel)**: `pusher-darwin-amd64`
-            - **macOS (Apple Silicon)**: `pusher-darwin-arm64`
-            - **Linux**: `pusher-linux-amd64`
-            - **Windows**: `pusher-windows-amd64.exe`
+            - **macOS (Universal)**: `epsh-darwin-universal` - Works on both Intel and Apple Silicon
+            - **macOS (Intel)**: `epsh-darwin-amd64`
+            - **macOS (Apple Silicon)**: `epsh-darwin-arm64`
+            - **Linux**: `epsh-linux-amd64`
+            - **Windows**: `epsh-windows-amd64.exe`
             
             #### macOS/Linux
             ```bash
             # Download and make executable
-            curl -LO https://github.com/andreibanu/pusher/releases/download/${{ steps.version.outputs.TAG }}/pusher-darwin-universal
-            chmod +x pusher-darwin-universal
-            sudo mv pusher-darwin-universal /usr/local/bin/pusher
+            curl -LO https://github.com/MunchemOG/ElectroPush/releases/download/${{ steps.version.outputs.TAG }}/epsh-darwin-universal
+            chmod +x epsh-darwin-universal
+            sudo mv epsh-darwin-universal /usr/local/bin/epsh
             
             # Verify installation
-            pusher help
+            epsh help
             ```
             
             #### Windows
-            Download `pusher-windows-amd64.exe`, rename to `pusher.exe`, and add to your PATH.
+            Download `epsh-windows-amd64.exe`, rename to `epsh.exe`, and add to your PATH.
             
             ---
             
@@ -215,14 +215,14 @@ jobs:
             
             ### Quick Start
             ```bash
-            pusher                # Full deployment (Wi-Fi + ADB + Gradle)
-            pusher dc             # Disconnect ADB only
-            pusher exit           # Disconnect and restore Wi-Fi
-            pusher profile        # Manage robot profiles
-            pusher help           # Show help
+            epsh                # Full deployment (Wi-Fi + ADB + Gradle)
+            epsh dc             # Disconnect ADB only
+            epsh exit           # Disconnect and restore Wi-Fi
+            epsh profile        # Manage robot profiles
+            epsh help           # Show help
             ```
             
-            See [README.md](https://github.com/andreibanu/pusher#readme) for full documentation.
+            See [README.md](https://github.com/MunchemOG/ElectroPush#readme) for full documentation.
             
             ---
             
@@ -239,13 +239,13 @@ jobs:
           TAG=${{ steps.version.outputs.TAG }}
           echo "Waiting for GitHub to generate archive..."
           sleep 15
-          GITHUB_SHA256=$(curl -sL "https://github.com/PzmuV1517/Pusher/archive/${TAG}.tar.gz" | shasum -a 256 | cut -d' ' -f1)
+          GITHUB_SHA256=$(curl -sL "https://github.com/MunchemOG/ElectroPush/archive/${TAG}.tar.gz" | shasum -a 256 | cut -d' ' -f1)
           echo "github_sha256=$GITHUB_SHA256" >> $GITHUB_OUTPUT
           echo "GitHub Archive SHA256: $GITHUB_SHA256"
           
           # Update release body with correct SHA256
           gh release edit "${TAG}" --notes-file - <<EOF
-          ## Pusher ${{ steps.version.outputs.VERSION }}
+          ## Epsh ${{ steps.version.outputs.VERSION }}
           
           FTC Robot Deployment Tool - Automated release from main branch.
           
@@ -255,10 +255,10 @@ jobs:
           
           ## Homebrew Installation
           
-          Update your Homebrew tap formula at https://github.com/PzmuV1517/homebrew-PzmuV1517 with:
+          Update your Homebrew tap formula at https://github.com/MunchemOG/homebrew-epsh with:
           
           \`\`\`ruby
-          url "https://github.com/PzmuV1517/Pusher/archive/${TAG}.tar.gz"
+          url "https://github.com/MunchemOG/ElectroPush/archive/${TAG}.tar.gz"
           sha256 "${GITHUB_SHA256}"
           version "${{ steps.version.outputs.VERSION }}"
           \`\`\`
@@ -274,33 +274,33 @@ jobs:
           
           ### macOS (Homebrew)
           \`\`\`bash
-          brew tap PzmuV1517/PzmuV1517
-          brew install pusher
+          brew tap MunchemOG/homebrew-epsh
+          brew install epsh
           \`\`\`
           
           ### Manual Binary Installation
           
           Download the appropriate binary for your system:
           
-          - **macOS (Universal)**: \`pusher-darwin-universal\` - Works on both Intel and Apple Silicon
-          - **macOS (Intel)**: \`pusher-darwin-amd64\`
-          - **macOS (Apple Silicon)**: \`pusher-darwin-arm64\`
-          - **Linux**: \`pusher-linux-amd64\`
-          - **Windows**: \`pusher-windows-amd64.exe\`
+          - **macOS (Universal)**: \`epsh-darwin-universal\` - Works on both Intel and Apple Silicon
+          - **macOS (Intel)**: \`epsh-darwin-amd64\`
+          - **macOS (Apple Silicon)**: \`epsh-darwin-arm64\`
+          - **Linux**: \`epsh-linux-amd64\`
+          - **Windows**: \`epsh-windows-amd64.exe\`
           
           #### macOS/Linux
           \`\`\`bash
           # Download and make executable
-          curl -LO https://github.com/PzmuV1517/Pusher/releases/download/${TAG}/pusher-darwin-universal
-          chmod +x pusher-darwin-universal
-          sudo mv pusher-darwin-universal /usr/local/bin/pusher
+          curl -LO https://github.com/MunchemOG/ElectroPush/releases/download/${TAG}/epsh-darwin-universal
+          chmod +x epsh-darwin-universal
+          sudo mv epsh-darwin-universal /usr/local/bin/epsh
           
           # Verify installation
-          pusher help
+          epsh help
           \`\`\`
           
           #### Windows
-          Download \`pusher-windows-amd64.exe\`, rename to \`pusher.exe\`, and add to your PATH.
+          Download \`epsh-windows-amd64.exe\`, rename to \`epsh.exe\`, and add to your PATH.
           
           ---
           
@@ -313,14 +313,14 @@ jobs:
           
           ### Quick Start
           \`\`\`bash
-          pusher                # Full deployment (Wi-Fi + ADB + Gradle)
-          pusher dc             # Disconnect ADB only
-          pusher exit           # Disconnect and restore Wi-Fi
-          pusher profile        # Manage robot profiles
-          pusher help           # Show help
+          epsh                # Full deployment (Wi-Fi + ADB + Gradle)
+          epsh dc             # Disconnect ADB only
+          epsh exit           # Disconnect and restore Wi-Fi
+          epsh profile        # Manage robot profiles
+          epsh help           # Show help
           \`\`\`
           
-          See [README.md](https://github.com/PzmuV1517/Pusher#readme) for full documentation.
+          See [README.md](https://github.com/MunchemOG/ElectroPush#readme) for full documentation.
           
           ---
           
@@ -342,8 +342,8 @@ jobs:
             curl -X POST \
               -H "Accept: application/vnd.github.v3+json" \
               -H "Authorization: token ${TAP_TOKEN}" \
-              https://api.github.com/repos/PzmuV1517/homebrew-PzmuV1517/dispatches \
-              -d "{\"event_type\":\"pusher-release\",\"client_payload\":{\"tag\":\"${TAG}\"}}"
+              https://api.github.com/repos/MunchemOG/homebrew-epsh/dispatches \
+              -d "{\"event_type\":\"epsh-release\",\"client_payload\":{\"tag\":\"${TAG}\"}}"
           else
             echo "TAP_UPDATE_TOKEN not set, skipping tap notification"
           fi

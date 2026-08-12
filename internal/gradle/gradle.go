@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/andreibanu/pusher/internal/config"
+	"github.com/MunchemOG/ElectroPush/internal/config"
 )
 
 func wrapperName() string {

@@ -12,12 +12,12 @@ import (
 // the output readable rather than the line shapes.
 func TestClasspathIsReadFromTheMarkedBlock(t *testing.T) {
 	output := `Downloading gradle...
-> Task :TeamCode:pusherClasspath
-PUSHER_CP_BEGIN
+> Task :TeamCode:epshClasspath
+EPSH_CP_BEGIN
 CP /a/one.jar
 CP /a/two.jar
 BOOT /sdk/android.jar
-PUSHER_CP_END
+EPSH_CP_END
 
 BUILD SUCCESSFUL in 763ms
 CP /this/is/not/in/the/block.jar`
@@ -68,7 +68,7 @@ func TestAnEmptyClasspathIsAnError(t *testing.T) {
 }
 
 // The exclusion is marked rather than backed up: slim already keeps a
-// .pusher-bak of the same file, and two features sharing one backup means
+// .epsh-bak of the same file, and two features sharing one backup means
 // undoing either undoes both.
 func TestExclusionIsAddedAndRemovedExactly(t *testing.T) {
 	root := t.TempDir()

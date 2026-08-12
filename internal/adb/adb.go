@@ -14,7 +14,7 @@ const (
 	RobotIP   = "192.168.43.1"
 	RobotPort = "5555"
 
-	remoteAPKPath = "/data/local/tmp/pusher_app.apk"
+	remoteAPKPath = "/data/local/tmp/epsh_app.apk"
 )
 
 // Transport is how a device is attached.
@@ -260,7 +260,7 @@ func InstallWith(serial, apkPath string, opt Options) (InstallPlan, error) {
 	}
 
 	// What was installed is recorded whatever the settings say. Skipping an
-	// unchanged install is only one reader of that record: Pusher Extreme uses
+	// unchanged install is only one reader of that record: Epsh Extreme uses
 	// it to decide whether a reload is equivalent to an install, and without it
 	// it can never tell and always installs.
 	pkg := PackageName(apkPath)

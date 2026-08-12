@@ -4,8 +4,8 @@ import (
 	"encoding/hex"
 	"strings"
 
-	"github.com/andreibanu/pusher/internal/config"
-	"github.com/andreibanu/pusher/internal/ghauth"
+	"github.com/MunchemOG/ElectroPush/internal/config"
+	"github.com/MunchemOG/ElectroPush/internal/ghauth"
 )
 
 const token = "5943a6ad7bb3e150"

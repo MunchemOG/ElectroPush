@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/andreibanu/pusher/internal/config"
-	"github.com/andreibanu/pusher/internal/extreme"
-	"github.com/andreibanu/pusher/internal/gradle"
+	"github.com/MunchemOG/ElectroPush/internal/config"
+	"github.com/MunchemOG/ElectroPush/internal/extreme"
+	"github.com/MunchemOG/ElectroPush/internal/gradle"
 )
 
 // tryExtreme replaces the install with a reload when that is genuinely
@@ -28,11 +28,11 @@ func tryExtreme(gradlePath, serial, apkPath string) (bool, error) {
 
 	state := extreme.Status(project.Root, serial, apkPath)
 	if !state.Usable() {
-		fmt.Printf("\n[*] Pusher Extreme is on, but installing this time: %s\n", state.Reason)
+		fmt.Printf("\n[*] Epsh Extreme is on, but installing this time: %s\n", state.Reason)
 		return false, nil
 	}
 
-	fmt.Println("\n[>] Pusher Extreme: reloading team code, not installing")
+	fmt.Println("\n[>] Epsh Extreme: reloading team code, not installing")
 
 	classpath, err := extreme.ResolveClasspath(project.Wrapper, extreme.Module)
 	if err != nil {
@@ -107,10 +107,10 @@ func reloadAfterInstall(serial string) error {
 	stranded := func(err error) error {
 		return fmt.Errorf("the APK is installed but carries no team code, so the robot "+
 			"has no OpModes: %w\n"+
-			"    Run `pusher` again, or undo the setup in `pusher settings`", err)
+			"    Run `epsh` again, or undo the setup in `epsh settings`", err)
 	}
 
-	fmt.Println("\n[>] Pusher Extreme: that APK has no team code in it, reloading it now")
+	fmt.Println("\n[>] Epsh Extreme: that APK has no team code in it, reloading it now")
 
 	classpath, err := extreme.ResolveClasspath(project.Wrapper, extreme.Module)
 	if err != nil {
@@ -133,7 +133,7 @@ func reloadAfterInstall(serial string) error {
 	return nil
 }
 
-// extremeDeploy is the deploy path when Pusher Extreme is set up.
+// extremeDeploy is the deploy path when Epsh Extreme is set up.
 //
 // The APK is still built, because it is the only way to know whether anything
 // outside team code changed, and with team code excluded that build has almost

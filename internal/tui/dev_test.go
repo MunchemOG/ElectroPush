@@ -12,12 +12,12 @@ import (
 func TestProgressReachesTheMenu(t *testing.T) {
 	m := &devModel{height: 40, busy: "starting", started: time.Now()}
 
-	post("pusher, delta transfer (2/3)")
+	post("epsh, delta transfer (2/3)")
 
 	msg := waitForProgress()
 	model, cmd := m.Update(msg)
 
-	if got := model.(*devModel).busy; got != "pusher, delta transfer (2/3)" {
+	if got := model.(*devModel).busy; got != "epsh, delta transfer (2/3)" {
 		t.Errorf("got %q", got)
 	}
 	if cmd == nil {

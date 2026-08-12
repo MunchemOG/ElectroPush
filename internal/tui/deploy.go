@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/andreibanu/pusher/internal/config"
-	"github.com/andreibanu/pusher/internal/ftcproject"
-	"github.com/andreibanu/pusher/internal/gradle"
+	"github.com/MunchemOG/ElectroPush/internal/config"
+	"github.com/MunchemOG/ElectroPush/internal/ftcproject"
+	"github.com/MunchemOG/ElectroPush/internal/gradle"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -35,7 +35,7 @@ var deployHelp = []string{
 
 	"Stop compressing native libraries in the APK, so the install does not\n" +
 		"extract them. Removes over 20 MB of writes; makes the APK bigger.\n" +
-		"Applied by `pusher slim`.",
+		"Applied by `epsh slim`.",
 
 	"When the project builds a base plus a feature module, install only the\n" +
 		"module that changed. Needs the project set up that way first.",
@@ -108,7 +108,7 @@ func (m *SettingsModel) toggleStoreLibs() {
 
 	project, err := m.ftcProject()
 	if err != nil {
-		m.status = "Saved. Run `pusher slim` from your FTC project to apply it."
+		m.status = "Saved. Run `epsh slim` from your FTC project to apply it."
 		return
 	}
 
@@ -152,7 +152,7 @@ func (m *SettingsModel) viewDeploy() string {
 
 	b.WriteString(helpBlock(deployHelp, m.cursor, deployHelpLines))
 
-	b.WriteString("\n" + helpStyle.Render("  enter toggle · esc back · `pusher dev` measures the difference") + "\n")
+	b.WriteString("\n" + helpStyle.Render("  enter toggle · esc back · `epsh dev` measures the difference") + "\n")
 	return b.String()
 }
 

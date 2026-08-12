@@ -17,9 +17,9 @@ const tracksRecency = false
 const LocationHint = `Windows reports the current network name freely, so no permission is needed.
 
 Because Windows keeps no record of when each saved network was last used,
-'pusher exit' on its own cannot tell where you came from. Set the network to
+'epsh exit' on its own cannot tell where you came from. Set the network to
 return to explicitly:
-  pusher settings -> Home Wi-Fi network`
+  epsh settings -> Home Wi-Fi network`
 
 func netsh(args ...string) (string, error) {
 	out, err := exec.Command("netsh", args...).CombinedOutput()
@@ -135,7 +135,7 @@ func (m *Manager) addProfile(ssid, password string) error {
 		return err
 	}
 
-	file, err := os.CreateTemp("", "pusher-wlan-*.xml")
+	file, err := os.CreateTemp("", "epsh-wlan-*.xml")
 	if err != nil {
 		return fmt.Errorf("cannot create Wi-Fi profile: %w", err)
 	}

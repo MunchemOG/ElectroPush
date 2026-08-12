@@ -10,16 +10,16 @@ BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
 
 LDFLAGS="-s -w -X main.version=${VERSION}"
 
-echo "Building pusher..."
+echo "Building epsh..."
 echo "Version: ${VERSION}"
 echo "Commit: ${COMMIT}"
 echo "Build Time: ${BUILD_TIME}"
 echo ""
 
 # Build for current platform
-go build -ldflags="${LDFLAGS}" -o pusher
+go build -ldflags="${LDFLAGS}" -o epsh
 
-echo "[OK] Build complete: ./pusher"
+echo "[OK] Build complete: ./epsh"
 echo ""
 echo "To install globally, run:"
-echo "  sudo cp pusher /usr/local/bin/"
+echo "  sudo cp epsh /usr/local/bin/"

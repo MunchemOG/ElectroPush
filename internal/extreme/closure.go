@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/andreibanu/pusher/internal/javasrc"
+	"github.com/MunchemOG/ElectroPush/internal/javasrc"
 )
 
 // Keeping a class in the APK keeps it in the source set, and excluding the rest

@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/andreibanu/pusher/internal/adb"
+	"github.com/MunchemOG/ElectroPush/internal/adb"
 )
 
 // Re-registration is not per class. An exception anywhere in it empties the

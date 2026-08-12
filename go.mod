@@ -1,4 +1,4 @@
-module github.com/andreibanu/pusher
+module github.com/MunchemOG/ElectroPush
 
 go 1.21
 

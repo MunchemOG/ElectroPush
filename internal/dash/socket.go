@@ -16,7 +16,7 @@ import (
 
 // FtcDashboard talks to its web UI over a WebSocket and nothing else, so that
 // is the only way to ask it what it currently holds. The client here is written
-// out rather than pulled in: pusher needs one text frame out and one back, and
+// out rather than pulled in: epsh needs one text frame out and one back, and
 // a dependency for that is not worth carrying.
 
 // Port is where the dashboard listens on the robot.

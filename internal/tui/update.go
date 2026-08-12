@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/andreibanu/pusher/internal/selfupdate"
+	"github.com/MunchemOG/ElectroPush/internal/selfupdate"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -116,7 +116,7 @@ func (m *SettingsModel) viewUpdate() string {
 		b.WriteString(okStyle.Render("  Updating, this can take a moment...") + "\n")
 	case m.update.done:
 		b.WriteString(okStyle.Render("  "+m.update.result) + "\n")
-		b.WriteString(helpStyle.Render("  Restart pusher to run the new version.") + "\n")
+		b.WriteString(helpStyle.Render("  Restart epsh to run the new version.") + "\n")
 	case m.update.checking:
 		b.WriteString(helpStyle.Render("  Looking for a newer release...") + "\n")
 	case !m.update.release.Newer():

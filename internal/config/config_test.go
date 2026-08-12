@@ -32,7 +32,7 @@ func TestInitialize(t *testing.T) {
 	cleanup := setupTest(t)
 	defer cleanup()
 
-	configPath := filepath.Join(os.Getenv("HOME"), ".config", "pusher")
+	configPath := filepath.Join(os.Getenv("HOME"), ".config", "epsh")
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		t.Errorf("Config directory was not created: %s", configPath)
 	}

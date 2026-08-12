@@ -44,7 +44,7 @@ func TestBothTheJarAndTheDexAreBuilt(t *testing.T) {
 	}
 	defer tc.Cleanup()
 
-	files, err := buildAll(tc, t.TempDir(), "Pusher Reload test", "m1")
+	files, err := buildAll(tc, t.TempDir(), "Epsh Reload test", "m1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestTheOpModeCompilesToADex(t *testing.T) {
 
 	work := t.TempDir()
 
-	dex, err := buildDex(tc, work, "Pusher Reload test", "m1")
+	dex, err := buildDex(tc, work, "Epsh Reload test", "m1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestTheOpModeCompilesToADex(t *testing.T) {
 
 	// The marker has to survive into the dex, or a second run cannot be told
 	// from the first on the Driver Station.
-	if !strings.Contains(string(data), "Pusher Reload test") {
+	if !strings.Contains(string(data), "Epsh Reload test") {
 		t.Error("the OpMode name is not in the dex")
 	}
 }
@@ -233,7 +233,7 @@ func TestTheMotorNameEndsUpInTheDex(t *testing.T) {
 	defer tc.Cleanup()
 
 	for _, motor := range Motors {
-		files, err := buildAll(tc, t.TempDir(), "Pusher Reload test", motor)
+		files, err := buildAll(tc, t.TempDir(), "Epsh Reload test", motor)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -313,7 +313,7 @@ func TestABadDexIsCaughtBeforeAnythingIsSent(t *testing.T) {
 	defer tc.Cleanup()
 
 	work := t.TempDir()
-	files, err := buildAll(tc, work, "Pusher Reload test", "m1")
+	files, err := buildAll(tc, work, "Epsh Reload test", "m1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,7 +344,7 @@ func TestWhatIsBuiltPassesVerification(t *testing.T) {
 	}
 	defer tc.Cleanup()
 
-	files, err := buildAll(tc, t.TempDir(), "Pusher Reload test", "m1")
+	files, err := buildAll(tc, t.TempDir(), "Epsh Reload test", "m1")
 	if err != nil {
 		t.Fatal(err)
 	}

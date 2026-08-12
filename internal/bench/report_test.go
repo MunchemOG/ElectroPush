@@ -19,11 +19,11 @@ func sample() (APK, []Run, Reload, map[string]bool) {
 
 	runs := []Run{
 		{Name: "Android Studio equivalent", What: "baseline", Install: 40 * time.Second},
-		{Name: "pusher, staged install", What: "staged", Install: 44 * time.Second},
-		{Name: "pusher, streamed install", What: "streamed", Install: 32 * time.Second},
-		{Name: "pusher, delta transfer", What: "delta", Install: 20 * time.Second},
-		{Name: "pusher, delta + streamed", What: "both", Install: 18 * time.Second},
-		{Name: "pusher, nothing changed", What: "skip", Install: 300 * time.Millisecond, Skipped: true},
+		{Name: "epsh, staged install", What: "staged", Install: 44 * time.Second},
+		{Name: "epsh, streamed install", What: "streamed", Install: 32 * time.Second},
+		{Name: "epsh, delta transfer", What: "delta", Install: 20 * time.Second},
+		{Name: "epsh, delta + streamed", What: "both", Install: 18 * time.Second},
+		{Name: "epsh, nothing changed", What: "skip", Install: 300 * time.Millisecond, Skipped: true},
 	}
 
 	reload := Reload{
@@ -96,7 +96,7 @@ func TestComparisonsAreRelativeToAndroidStudio(t *testing.T) {
 
 func TestFailedRunsAppearInTheReport(t *testing.T) {
 	apk, runs, reload, settings := sample()
-	runs = append(runs, Run{Name: "pusher, changed split only", Err: errString("no splits")})
+	runs = append(runs, Run{Name: "epsh, changed split only", Err: errString("no splits")})
 
 	report := Report(apk, runs, reload, settings)
 
@@ -169,7 +169,7 @@ type errString string
 
 func (e errString) Error() string { return string(e) }
 
-// Running only half of `pusher dev` used to render the other half as a row of
+// Running only half of `epsh dev` used to render the other half as a row of
 // zeros, which reads as a measurement of nothing rather than as nothing
 // measured. Both real reports hit this.
 func TestSectionsThatWereNotRunSaySo(t *testing.T) {
@@ -275,8 +275,8 @@ func TestDifferencesInsideTheSpreadAreNotClaimed(t *testing.T) {
 
 	runs := []Run{
 		{Name: "Android Studio equivalent", Install: 43 * time.Second, Spread: 3 * time.Second, Samples: 3},
-		{Name: "pusher, streamed install", Install: 44 * time.Second, Spread: 3 * time.Second, Samples: 3},
-		{Name: "pusher, delta transfer", Install: 20 * time.Second, Spread: 2 * time.Second, Samples: 3},
+		{Name: "epsh, streamed install", Install: 44 * time.Second, Spread: 3 * time.Second, Samples: 3},
+		{Name: "epsh, delta transfer", Install: 20 * time.Second, Spread: 2 * time.Second, Samples: 3},
 	}
 
 	report := Report(apk, runs, reload, settings)

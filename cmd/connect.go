@@ -4,9 +4,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/andreibanu/pusher/internal/adb"
-	"github.com/andreibanu/pusher/internal/config"
-	"github.com/andreibanu/pusher/internal/wifi"
+	"github.com/MunchemOG/ElectroPush/internal/adb"
+	"github.com/MunchemOG/ElectroPush/internal/config"
+	"github.com/MunchemOG/ElectroPush/internal/wifi"
 	"github.com/spf13/cobra"
 )
 
@@ -24,7 +24,7 @@ func runConnect(cmd *cobra.Command, args []string) error {
 
 	if device, ok := adb.FindUSBDevice(); ok {
 		fmt.Printf("[OK] Hub already attached over USB: %s\n", device.Label())
-		fmt.Println("[*] Run 'pusher' to build and deploy.")
+		fmt.Println("[*] Run 'epsh' to build and deploy.")
 		return nil
 	}
 
@@ -44,7 +44,7 @@ func runConnect(cmd *cobra.Command, args []string) error {
 
 		profile, err := config.GetDefaultProfile()
 		if err != nil {
-			return fmt.Errorf("no robot profile configured: %w\n\nRun 'pusher settings' to add one", err)
+			return fmt.Errorf("no robot profile configured: %w\n\nRun 'epsh settings' to add one", err)
 		}
 
 		ssid, ssidErr := wifiMgr.CurrentSSID()
@@ -71,7 +71,7 @@ func runConnect(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println("[OK] Connected via ADB")
-	fmt.Println("[*] Run 'pusher' to build and deploy, or 'pusher exit' when you're done.")
+	fmt.Println("[*] Run 'epsh' to build and deploy, or 'epsh exit' when you're done.")
 
 	return nil
 }

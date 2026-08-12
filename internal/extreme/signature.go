@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/andreibanu/pusher/internal/adb"
+	"github.com/MunchemOG/ElectroPush/internal/adb"
 )
 
 // Deciding whether a reload is equivalent to an install means asking whether
@@ -26,7 +26,7 @@ import (
 // whatever the two files hash to.
 
 // signatureFile is where the robot records which project state it holds.
-const signatureFile = "/data/local/tmp/pusher/extreme-signature"
+const signatureFile = "/data/local/tmp/epsh/extreme-signature"
 
 // signatureInputs are what the APK is made of, other than team code.
 //
@@ -115,7 +115,7 @@ func Signature(root string) (string, error) {
 func RecordSignature(serial, signature string) {
 	_, _ = adb.Shell(serial, "mkdir", "-p", filepath.Dir(signatureFile))
 
-	local, err := os.CreateTemp("", "pusher-signature-*")
+	local, err := os.CreateTemp("", "epsh-signature-*")
 	if err != nil {
 		return
 	}
@@ -147,13 +147,13 @@ func ForgetSignature(serial string) {
 // configsFile records which config classes the bridge registered, so the next
 // reload can take away the ones it stops registering rather than leaving them
 // pointing into a classloader that no longer exists.
-const configsFile = "/data/local/tmp/pusher/extreme-configs"
+const configsFile = "/data/local/tmp/epsh/extreme-configs"
 
 // RecordRegisteredConfigs notes what the bridge put into the dashboard.
 func RecordRegisteredConfigs(serial string, names []string) {
 	_, _ = adb.Shell(serial, "mkdir", "-p", filepath.Dir(configsFile))
 
-	local, err := os.CreateTemp("", "pusher-configs-*")
+	local, err := os.CreateTemp("", "epsh-configs-*")
 	if err != nil {
 		return
 	}

@@ -1,7 +1,7 @@
 .PHONY: build clean test install release help
 
 # Variables
-BINARY_NAME=pusher
+BINARY_NAME=epsh
 # The series in VERSION with a local marker, so a hand-built binary is never
 # mistaken for a release and does not offer to update itself sideways.
 VERSION?=$(shell cat VERSION 2>/dev/null || echo 0.0).0-dev
@@ -13,7 +13,7 @@ LDFLAGS=-s -w -X main.version=$(VERSION)
 GO_BUILD=go build -ldflags="$(LDFLAGS)"
 
 help: ## Show this help
-	@echo "Pusher - FTC Robot Deployment Tool"
+	@echo "Epsh - FTC Robot Deployment Tool"
 	@echo ""
 	@echo "Available targets:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'

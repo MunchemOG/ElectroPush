@@ -18,7 +18,7 @@ import (
 // initScript asks Gradle what the module compiles against.
 //
 // An init script rather than a change to the project: this has to work on a
-// repository pusher has never touched, and leave nothing behind if it fails.
+// repository epsh has never touched, and leave nothing behind if it fails.
 //
 // The android-classes-jar view matters. The raw artifacts include AARs, which
 // javac cannot read; asking for that attribute makes AGP hand over the jars it
@@ -26,9 +26,9 @@ import (
 const initScript = `import org.gradle.api.attributes.Attribute
 
 allprojects { p ->
-    p.tasks.register("pusherClasspath") {
+    p.tasks.register("epshClasspath") {
         doLast {
-            println "PUSHER_CP_BEGIN"
+            println "EPSH_CP_BEGIN"
             def cfg = p.configurations.findByName("debugCompileClasspath")
             if (cfg != null) {
                 def view = cfg.incoming.artifactView { av ->
@@ -42,7 +42,7 @@ allprojects { p ->
             if (p.extensions.findByName("android") != null) {
                 p.extensions.android.bootClasspath.each { f -> println "BOOT " + f.absolutePath }
             }
-            println "PUSHER_CP_END"
+            println "EPSH_CP_END"
         }
     }
 }
@@ -76,7 +76,7 @@ func (c Classpath) Args() []string {
 func ResolveClasspath(wrapper, module string) (Classpath, error) {
 	var out Classpath
 
-	script, err := os.CreateTemp("", "pusher-classpath-*.gradle")
+	script, err := os.CreateTemp("", "epsh-classpath-*.gradle")
 	if err != nil {
 		return out, err
 	}
@@ -90,7 +90,7 @@ func ResolveClasspath(wrapper, module string) (Classpath, error) {
 		return out, err
 	}
 
-	cmd := exec.Command(wrapper, "-I", script.Name(), ":"+module+":pusherClasspath")
+	cmd := exec.Command(wrapper, "-I", script.Name(), ":"+module+":epshClasspath")
 	cmd.Dir = filepath.Dir(wrapper)
 	cmd.Env = gradleEnv()
 
@@ -121,9 +121,9 @@ func parseClasspath(output string) Classpath {
 		line := strings.TrimSpace(scanner.Text())
 
 		switch {
-		case line == "PUSHER_CP_BEGIN":
+		case line == "EPSH_CP_BEGIN":
 			inside = true
-		case line == "PUSHER_CP_END":
+		case line == "EPSH_CP_END":
 			inside = false
 		case !inside:
 		case strings.HasPrefix(line, "CP "):

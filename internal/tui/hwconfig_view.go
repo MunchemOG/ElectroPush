@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/andreibanu/pusher/internal/robotcfg"
+	"github.com/MunchemOG/ElectroPush/internal/robotcfg"
 )
 
 // View satisfies tea.Model.
@@ -165,7 +165,7 @@ func (m *hwModel) viewHWDevice() string {
 	} else if flavor := robotcfg.FlavorOf(m.form.typed); flavor != robotcfg.Unclassified {
 		fmt.Fprintf(&b, "         %s\n", helpStyle.Render("uses a "+flavor.String()+" port"))
 	} else if m.form.typed != "" {
-		fmt.Fprintf(&b, "         %s\n", helpStyle.Render("not a type pusher knows - its ports are not checked"))
+		fmt.Fprintf(&b, "         %s\n", helpStyle.Render("not a type epsh knows - its ports are not checked"))
 	}
 
 	b.WriteString(m.field("Name", m.form.name, hwFieldName))

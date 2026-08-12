@@ -81,11 +81,11 @@ func TestFingerprintTracksContent(t *testing.T) {
 }
 
 func TestInstallPathsAgainstADevice(t *testing.T) {
-	serial := os.Getenv("PUSHER_TEST_DEVICE")
-	apk := os.Getenv("PUSHER_TEST_APK")
+	serial := os.Getenv("EPSH_TEST_DEVICE")
+	apk := os.Getenv("EPSH_TEST_APK")
 
 	if serial == "" || apk == "" {
-		t.Skip("set PUSHER_TEST_DEVICE and PUSHER_TEST_APK to run this")
+		t.Skip("set EPSH_TEST_DEVICE and EPSH_TEST_APK to run this")
 	}
 
 	forgetInstalled(serial)
@@ -114,11 +114,11 @@ func TestInstallPathsAgainstADevice(t *testing.T) {
 // the whole file was sent and delta never ran. Both are on by default, which
 // made delta dead for everyone who had not changed a setting.
 func TestDeltaAndStreamingCompose(t *testing.T) {
-	serial := os.Getenv("PUSHER_TEST_DEVICE")
-	apk := os.Getenv("PUSHER_TEST_APK")
+	serial := os.Getenv("EPSH_TEST_DEVICE")
+	apk := os.Getenv("EPSH_TEST_APK")
 
 	if serial == "" || apk == "" {
-		t.Skip("set PUSHER_TEST_DEVICE and PUSHER_TEST_APK to run this")
+		t.Skip("set EPSH_TEST_DEVICE and EPSH_TEST_APK to run this")
 	}
 
 	forgetInstalled(serial)
@@ -136,16 +136,16 @@ func TestDeltaAndStreamingCompose(t *testing.T) {
 	}
 }
 
-// The record of what is installed is not only for skipping. Pusher Extreme
+// The record of what is installed is not only for skipping. Epsh Extreme
 // reads it to decide whether a reload is equivalent to an install, and when it
 // was only written with skipping enabled, turning that setting off made extreme
 // silently never activate.
 func TestTheInstalledRecordIsKeptRegardlessOfSkipping(t *testing.T) {
-	serial := os.Getenv("PUSHER_TEST_DEVICE")
-	apk := os.Getenv("PUSHER_TEST_APK")
+	serial := os.Getenv("EPSH_TEST_DEVICE")
+	apk := os.Getenv("EPSH_TEST_APK")
 
 	if serial == "" || apk == "" {
-		t.Skip("set PUSHER_TEST_DEVICE and PUSHER_TEST_APK to run this")
+		t.Skip("set EPSH_TEST_DEVICE and EPSH_TEST_APK to run this")
 	}
 
 	forgetInstalled(serial)

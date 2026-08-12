@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/andreibanu/pusher/internal/adb"
+	"github.com/MunchemOG/ElectroPush/internal/adb"
 )
 
 // The dashboard listens on the robot's own network interface, so over Wi-Fi it

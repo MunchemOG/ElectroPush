@@ -13,13 +13,13 @@ const tracksRecency = true
 
 // LocationHint explains the permission this platform needs to read the network name.
 const LocationHint = `Wi-Fi control needs NetworkManager, which is standard on Debian and Ubuntu
-desktops. pusher drives it through nmcli.
+desktops. epsh drives it through nmcli.
 
 If nmcli is missing:
   sudo apt install network-manager
 
-On a machine managed by ifupdown or systemd-networkd instead, pusher cannot
-switch networks. Connect to the robot yourself and pusher will deploy over the
+On a machine managed by ifupdown or systemd-networkd instead, epsh cannot
+switch networks. Connect to the robot yourself and epsh will deploy over the
 existing connection.`
 
 func nmcli(args ...string) (string, error) {

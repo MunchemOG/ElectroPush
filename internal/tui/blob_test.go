@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/andreibanu/pusher/internal/blobdep"
-	"github.com/andreibanu/pusher/internal/ghauth"
+	"github.com/MunchemOG/ElectroPush/internal/blobdep"
+	"github.com/MunchemOG/ElectroPush/internal/ghauth"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

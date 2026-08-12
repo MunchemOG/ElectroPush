@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/andreibanu/pusher/cmd"
+	"github.com/MunchemOG/ElectroPush/cmd"
 )
 
 var version = "dev"

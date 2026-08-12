@@ -1,5 +1,5 @@
 // Package javasrc holds the bits of java source handling that more than one
-// part of pusher needs to get right the same way.
+// part of epsh needs to get right the same way.
 package javasrc
 
 // Mask blanks out comments and literals, keeping every other byte where it was.

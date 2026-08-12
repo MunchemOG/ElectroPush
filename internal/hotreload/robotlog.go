@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/andreibanu/pusher/internal/adb"
+	"github.com/MunchemOG/ElectroPush/internal/adb"
 )
 
 // The robot controller runs its own logcat into a file on /sdcard, rotating
@@ -50,7 +50,7 @@ func CollectRobotLog(serial string) (path, crash string, err error) {
 	for i := len(robotLogFiles) - 1; i >= 0; i-- {
 		remote := robotLogFiles[i]
 
-		local, err := os.CreateTemp("", "pusher-rclog-*")
+		local, err := os.CreateTemp("", "epsh-rclog-*")
 		if err != nil {
 			continue
 		}
@@ -77,7 +77,7 @@ func CollectRobotLog(serial string) (path, crash string, err error) {
 		return "", "", fmt.Errorf("no robot controller logs on the hub")
 	}
 
-	saved, err := os.CreateTemp("", "pusher-robot-log-*.txt")
+	saved, err := os.CreateTemp("", "epsh-robot-log-*.txt")
 	if err != nil {
 		return "", "", err
 	}

@@ -21,7 +21,7 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 
-@TeleOp(name = "%s", group = "pusher")
+@TeleOp(name = "%s", group = "epsh")
 public class ` + ClassName + ` extends LinearOpMode {
 
     private static final String MOTOR = "%s";
@@ -139,7 +139,7 @@ func buildAll(tc Toolchain, work, opModeName, motor string) (built, error) {
 	entry := strings.ReplaceAll(Package, ".", "/") + "/" + ClassName + ".class"
 	classFile := filepath.Join(work, "classes", filepath.FromSlash(entry))
 
-	jar := filepath.Join(work, "pusher-reload-proof.jar")
+	jar := filepath.Join(work, "epsh-reload-proof.jar")
 	if err := writeJar(jar, entry, classFile); err != nil {
 		return built{}, err
 	}
@@ -194,7 +194,7 @@ func classesJar(aarPath string) (string, error) {
 		}
 		defer reader.Close()
 
-		out, err := os.CreateTemp("", "pusher-ftc-*.jar")
+		out, err := os.CreateTemp("", "epsh-ftc-*.jar")
 		if err != nil {
 			return "", err
 		}

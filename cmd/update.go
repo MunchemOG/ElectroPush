@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/andreibanu/pusher/internal/selfupdate"
+	"github.com/MunchemOG/ElectroPush/internal/selfupdate"
 	"github.com/spf13/cobra"
 )
 
@@ -11,13 +11,13 @@ var updateCheckOnly bool
 
 var updateCmd = &cobra.Command{
 	Use:   "update",
-	Short: "Update pusher to the latest release",
-	Long: `Updates pusher itself to the newest published release.
+	Short: "Update epsh to the latest release",
+	Long: `Updates epsh itself to the newest published release.
 
 A Homebrew install is handed to 'brew upgrade'. Anything else is replaced in
 place, after checking the download against the release's published checksum.
 
-The same thing is available in 'pusher settings' -> Update.`,
+The same thing is available in 'epsh settings' -> Update.`,
 	RunE: runUpdate,
 }
 
@@ -52,7 +52,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	if updateCheckOnly {
-		fmt.Printf("\n[!] %s is available. Run 'pusher update' to install it.\n", release.Tag)
+		fmt.Printf("\n[!] %s is available. Run 'epsh update' to install it.\n", release.Tag)
 		return nil
 	}
 
@@ -75,6 +75,6 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Printf("\n[OK] Updated to %s. Run pusher again to use it.\n", release.Tag)
+	fmt.Printf("\n[OK] Updated to %s. Run epsh again to use it.\n", release.Tag)
 	return nil
 }

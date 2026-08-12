@@ -5,12 +5,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/andreibanu/pusher/internal/adb"
-	"github.com/andreibanu/pusher/internal/bench"
-	"github.com/andreibanu/pusher/internal/config"
-	"github.com/andreibanu/pusher/internal/extreme"
-	"github.com/andreibanu/pusher/internal/gradle"
-	"github.com/andreibanu/pusher/internal/hotreload"
+	"github.com/MunchemOG/ElectroPush/internal/adb"
+	"github.com/MunchemOG/ElectroPush/internal/bench"
+	"github.com/MunchemOG/ElectroPush/internal/config"
+	"github.com/MunchemOG/ElectroPush/internal/extreme"
+	"github.com/MunchemOG/ElectroPush/internal/gradle"
+	"github.com/MunchemOG/ElectroPush/internal/hotreload"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -32,7 +32,7 @@ var devItems = []string{
 	"Hot reload feasibility",
 	"Both, with a full report",
 	"Hot reload an OpMode",
-	"Benchmark Pusher Extreme",
+	"Benchmark Epsh Extreme",
 	"Collect the robot's own logs",
 	"Remove the hot reload proof",
 	"Exit",
@@ -55,10 +55,10 @@ var devHelp = []string{
 	"Compiles an OpMode here, pushes it to the hub and tells the robot\n" +
 		"controller to rescan. Binds a motor by name and shows its encoder,\n" +
 		"alternating m1 and m2 so a reload is proved by the binding changing.\n" +
-		"Replaces anything Pusher Extreme reloaded: deploy again afterwards.",
+		"Replaces anything Epsh Extreme reloaded: deploy again afterwards.",
 
 	"Compiles and reloads your own team code several times over and times\n" +
-		"each stage. Needs Pusher Extreme set up. Writes a report you can\n" +
+		"each stage. Needs Epsh Extreme set up. Writes a report you can\n" +
 		"paste numbers out of.",
 
 	"Pulls the robot controller's own log files, which survive the app dying\n" +
@@ -246,11 +246,11 @@ func (m *devModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *devModel) run(deploy, reload bool) tea.Cmd {
 	if m.serial == "" {
-		m.err = fmt.Errorf("no robot connected - plug in USB or run `pusher connect`")
+		m.err = fmt.Errorf("no robot connected - plug in USB or run `epsh connect`")
 		return nil
 	}
 	if m.apk == "" {
-		m.err = fmt.Errorf("no APK built yet - run `pusher` once first")
+		m.err = fmt.Errorf("no APK built yet - run `epsh` once first")
 		return nil
 	}
 
@@ -323,7 +323,7 @@ func (m *devModel) View() string {
 	}
 
 	var b strings.Builder
-	b.WriteString(titleStyle.Render("Pusher developer tools"))
+	b.WriteString(titleStyle.Render("Epsh developer tools"))
 	b.WriteString("\n\n")
 
 	switch m.screen {
@@ -402,7 +402,7 @@ func (m *devModel) viewDevReport() string {
 		b.WriteString("  " + helpStyle.Render("The report could not be saved to the project.") + "\n")
 	}
 
-	b.WriteString("\n  " + helpStyle.Render("Pusher is not a Sloth replacement. The report says why.") + "\n")
+	b.WriteString("\n  " + helpStyle.Render("Epsh is not a Sloth replacement. The report says why.") + "\n")
 	b.WriteString("\n" + helpStyle.Render("  esc back") + "\n")
 
 	return b.String()
@@ -430,7 +430,7 @@ func DevTargets() (project, apk string, splits []string) {
 // change, not merely be present.
 func (m *devModel) tryReload() tea.Cmd {
 	if m.serial == "" {
-		m.err = fmt.Errorf("no robot connected - plug in USB or run `pusher connect`")
+		m.err = fmt.Errorf("no robot connected - plug in USB or run `epsh connect`")
 		return nil
 	}
 
@@ -438,7 +438,7 @@ func (m *devModel) tryReload() tea.Cmd {
 	m.started = time.Now()
 	m.elapsed = 0
 
-	// The marker is the clock, not a counter: `pusher dev` is a fresh process
+	// The marker is the clock, not a counter: `epsh dev` is a fresh process
 	// every launch, so a counter restarts at one and two runs look identical
 	// on the Driver Station.
 	serial, marker := m.serial, time.Now().Format("15:04:05")
@@ -577,7 +577,7 @@ func wrapAt(s string, width int) []string {
 // benchExtreme times a real reload of the project's own team code.
 func (m *devModel) benchExtreme() tea.Cmd {
 	if m.serial == "" {
-		m.err = fmt.Errorf("no robot connected - plug in USB or run `pusher connect`")
+		m.err = fmt.Errorf("no robot connected - plug in USB or run `epsh connect`")
 		return nil
 	}
 
@@ -587,7 +587,7 @@ func (m *devModel) benchExtreme() tea.Cmd {
 		return nil
 	}
 	if !extreme.Excluded(project.Root) {
-		m.err = fmt.Errorf("set Pusher Extreme up first: `pusher settings` -> Pusher Extreme")
+		m.err = fmt.Errorf("set Epsh Extreme up first: `epsh settings` -> Epsh Extreme")
 		return nil
 	}
 
@@ -597,7 +597,7 @@ func (m *devModel) benchExtreme() tea.Cmd {
 	// them. A measuring tool must not be able to do that.
 	apk, _ := gradle.FindApk(project.Root)
 	if state := extreme.Status(project.Root, m.serial, apk); !state.Usable() {
-		m.err = fmt.Errorf("cannot reload yet: %s\n    run `pusher` first", state.Reason)
+		m.err = fmt.Errorf("cannot reload yet: %s\n    run `epsh` first", state.Reason)
 		return nil
 	}
 
@@ -641,7 +641,7 @@ func extremeSummary(r extreme.BenchResult) string {
 // that adb logcat loses.
 func (m *devModel) collectLogs() tea.Cmd {
 	if m.serial == "" {
-		m.err = fmt.Errorf("no robot connected - plug in USB or run `pusher connect`")
+		m.err = fmt.Errorf("no robot connected - plug in USB or run `epsh connect`")
 		return nil
 	}
 

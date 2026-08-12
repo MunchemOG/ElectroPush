@@ -5,12 +5,12 @@ import (
 	"os"
 	"strings"
 
-	"github.com/andreibanu/pusher/internal/adb"
-	"github.com/andreibanu/pusher/internal/blobdep"
-	"github.com/andreibanu/pusher/internal/blobrel"
-	"github.com/andreibanu/pusher/internal/ghauth"
-	"github.com/andreibanu/pusher/internal/pathtrace"
-	"github.com/andreibanu/pusher/internal/visual"
+	"github.com/MunchemOG/ElectroPush/internal/adb"
+	"github.com/MunchemOG/ElectroPush/internal/blobdep"
+	"github.com/MunchemOG/ElectroPush/internal/blobrel"
+	"github.com/MunchemOG/ElectroPush/internal/ghauth"
+	"github.com/MunchemOG/ElectroPush/internal/pathtrace"
+	"github.com/MunchemOG/ElectroPush/internal/visual"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -386,12 +386,12 @@ func (m *SettingsModel) viewBlobToken() string {
 	b.WriteString(helpStyle.Render("  A GitHub token with read access to the private blob repository.") + "\n")
 	b.WriteString(helpStyle.Render("  Classic tokens need the repo scope. Fine-grained tokens need") + "\n")
 	b.WriteString(helpStyle.Render("  Contents: Read on that repository.") + "\n\n")
-	b.WriteString(helpStyle.Render("  Only needed if this machine has no GitHub login pusher can use.") + "\n")
+	b.WriteString(helpStyle.Render("  Only needed if this machine has no GitHub login epsh can use.") + "\n")
 	b.WriteString(helpStyle.Render("  It already tried GH_TOKEN, the gh CLI and git's credential helper.") + "\n\n")
 
 	b.WriteString(fmt.Sprintf("  Token: %s\n", strings.Repeat("*", len(m.input))))
 
-	b.WriteString("\n" + helpStyle.Render("  Stored in ~/.config/pusher/credentials, readable only by you,") + "\n")
+	b.WriteString("\n" + helpStyle.Render("  Stored in ~/.config/epsh/credentials, readable only by you,") + "\n")
 	b.WriteString(helpStyle.Render("  and never written into the FTC project.") + "\n")
 	b.WriteString("\n" + helpStyle.Render("  enter save · empty + enter removes · esc cancel") + "\n")
 	return b.String()

@@ -6,10 +6,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/andreibanu/pusher/internal/config"
-	"github.com/andreibanu/pusher/internal/feature"
-	"github.com/andreibanu/pusher/internal/pathtrace"
-	"github.com/andreibanu/pusher/internal/wifi"
+	"github.com/MunchemOG/ElectroPush/internal/config"
+	"github.com/MunchemOG/ElectroPush/internal/feature"
+	"github.com/MunchemOG/ElectroPush/internal/pathtrace"
+	"github.com/MunchemOG/ElectroPush/internal/wifi"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -153,9 +153,9 @@ var mainItems = []string{
 	"Gradle threads",
 	"blob library",
 	"Deploy speed",
-	"Pusher Extreme",
+	"Epsh Extreme",
 	"Dashboard tuning check",
-	"Update pusher",
+	"Update epsh",
 	"Exit",
 }
 
@@ -525,7 +525,7 @@ func (m *SettingsModel) toggleAutoSlim() {
 	case !enabling:
 		m.status = "Pushes will package every architecture again"
 	case config.GetHubABI() == "":
-		m.status = "On, but connect the robot and run 'pusher slim' once first"
+		m.status = "On, but connect the robot and run 'epsh slim' once first"
 	default:
 		m.status = fmt.Sprintf("On: pushes will package %s only", config.GetHubABI())
 	}
@@ -633,7 +633,7 @@ func (m *SettingsModel) View() string {
 	}
 
 	var b strings.Builder
-	b.WriteString(titleStyle.Render("Pusher Settings"))
+	b.WriteString(titleStyle.Render("Epsh Settings"))
 	b.WriteString("\n\n")
 
 	switch m.screen {
@@ -683,7 +683,7 @@ func (m *SettingsModel) toggleDashWatch() {
 		m.status = "On: every push says what dashboard tuning it overwrote"
 		return
 	}
-	m.status = "Off: `pusher dash diff` still compares on demand"
+	m.status = "Off: `epsh dash diff` still compares on demand"
 }
 
 func (m *SettingsModel) viewMain() string {

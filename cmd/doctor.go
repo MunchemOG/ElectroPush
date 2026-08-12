@@ -7,18 +7,18 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/andreibanu/pusher/internal/adb"
-	"github.com/andreibanu/pusher/internal/config"
-	"github.com/andreibanu/pusher/internal/ftcproject"
-	"github.com/andreibanu/pusher/internal/gradle"
-	"github.com/andreibanu/pusher/internal/wifi"
+	"github.com/MunchemOG/ElectroPush/internal/adb"
+	"github.com/MunchemOG/ElectroPush/internal/config"
+	"github.com/MunchemOG/ElectroPush/internal/ftcproject"
+	"github.com/MunchemOG/ElectroPush/internal/gradle"
+	"github.com/MunchemOG/ElectroPush/internal/wifi"
 	"github.com/spf13/cobra"
 )
 
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
-	Short: "Check that everything pusher needs is working",
-	Long: `Reports what pusher can and cannot see: whether the system will name your
+	Short: "Check that everything epsh needs is working",
+	Long: `Reports what epsh can and cannot see: whether the system will name your
 Wi-Fi network, whether adb is installed and what it is talking to, and how
 large the APK your project builds is.
 
@@ -27,7 +27,7 @@ Run this first when something is not behaving.`,
 }
 
 func runDoctor(cmd *cobra.Command, args []string) error {
-	fmt.Println("Pusher doctor")
+	fmt.Println("Epsh doctor")
 	fmt.Println("═════════════════════════════════════════")
 	fmt.Printf("Platform: %s/%s (Wi-Fi via %s)\n", runtime.GOOS, runtime.GOARCH, wifiBackend())
 
@@ -40,8 +40,8 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Println("═════════════════════════════════════════")
 	if !locationOK {
-		fmt.Println("[!] pusher cannot tell which network you are on, and has nothing")
-		fmt.Println("    to fall back on. Set one in 'pusher settings' -> Home Wi-Fi network.")
+		fmt.Println("[!] epsh cannot tell which network you are on, and has nothing")
+		fmt.Println("    to fall back on. Set one in 'epsh settings' -> Home Wi-Fi network.")
 	} else {
 		fmt.Println("[OK] No problems detected.")
 	}
@@ -161,7 +161,7 @@ func reportProject() {
 	wrapper, err := gradle.DetectWrapper()
 	if err != nil {
 		fmt.Println("  Gradle wrapper     : not found in this directory")
-		fmt.Println("  Run pusher from inside your FTC project.")
+		fmt.Println("  Run epsh from inside your FTC project.")
 		return
 	}
 	fmt.Printf("  Gradle wrapper     : %s\n", wrapper)
@@ -177,7 +177,7 @@ func reportProject() {
 	if analysis, err := project.Analyze(); err == nil {
 		fmt.Printf("  Packaged ABIs      : %s\n", strings.Join(analysis.ABIs, ", "))
 		if len(analysis.ABIs) > 1 {
-			fmt.Println("                       ^ the hub runs one of these; 'pusher slim' drops the rest")
+			fmt.Println("                       ^ the hub runs one of these; 'epsh slim' drops the rest")
 		}
 		fmt.Printf("  Slim backups       : %v\n", analysis.HasBackups)
 	}

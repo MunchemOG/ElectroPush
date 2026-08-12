@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const backupDir = ".pusher-backup"
+const backupDir = ".epsh-backup"
 
 // Store is a directory of configuration files in a project.
 type Store struct {

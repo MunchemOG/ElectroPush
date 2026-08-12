@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/andreibanu/pusher/internal/config"
-	"github.com/andreibanu/pusher/internal/dash"
+	"github.com/MunchemOG/ElectroPush/internal/config"
+	"github.com/MunchemOG/ElectroPush/internal/dash"
 )
 
 // A deploy puts the code's values back, whether it installs an APK or reloads

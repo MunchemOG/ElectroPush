@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/andreibanu/pusher/internal/robotcfg"
+	"github.com/MunchemOG/ElectroPush/internal/robotcfg"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

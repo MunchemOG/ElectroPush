@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/andreibanu/pusher/internal/adb"
+	"github.com/MunchemOG/ElectroPush/internal/adb"
 )
 
 // Run is one measured deploy.
@@ -127,22 +127,22 @@ func Deploy(opt Options) []Run {
 			adb.Options{Stream: true},
 		},
 		{
-			"pusher, staged install",
+			"epsh, staged install",
 			"push to a temporary file, then install from it",
 			adb.Options{},
 		},
 		{
-			"pusher, streamed install",
+			"epsh, streamed install",
 			"stream the APK into the install session",
 			adb.Options{Stream: true},
 		},
 		{
-			"pusher, delta transfer",
+			"epsh, delta transfer",
 			"send only changed chunks, then install",
 			adb.Options{Delta: true},
 		},
 		{
-			"pusher, delta + streamed",
+			"epsh, delta + streamed",
 			"changed chunks, streamed into the session",
 			adb.Options{Delta: true, Stream: true},
 		},
@@ -228,7 +228,7 @@ func measure(serial, apk string, opts adb.Options, limit time.Duration) Run {
 
 func measureSkip(serial, apk string) Run {
 	run := Run{
-		Name: "pusher, nothing changed",
+		Name: "epsh, nothing changed",
 		What: "the robot already holds this exact build",
 	}
 
@@ -252,7 +252,7 @@ func measureSkip(serial, apk string) Run {
 
 func measureSplit(serial, apk string, splits []string) Run {
 	run := Run{
-		Name: "pusher, changed split only",
+		Name: "epsh, changed split only",
 		What: "install only the feature module that changed",
 	}
 

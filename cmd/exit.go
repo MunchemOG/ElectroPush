@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/andreibanu/pusher/internal/adb"
-	"github.com/andreibanu/pusher/internal/config"
-	"github.com/andreibanu/pusher/internal/wifi"
+	"github.com/MunchemOG/ElectroPush/internal/adb"
+	"github.com/MunchemOG/ElectroPush/internal/config"
+	"github.com/MunchemOG/ElectroPush/internal/wifi"
 	"github.com/spf13/cobra"
 )
 
@@ -56,7 +56,7 @@ func runExit(cmd *cobra.Command, args []string) error {
 			return nil
 		}
 		fmt.Println("[OK] Wi-Fi cycled. Your system should auto-join its usual network.")
-		fmt.Println("    Tip: set a home network in 'pusher settings' for a clean switch back.")
+		fmt.Println("    Tip: set a home network in 'epsh settings' for a clean switch back.")
 		return nil
 	}
 

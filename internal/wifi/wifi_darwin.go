@@ -17,12 +17,12 @@ name from command-line tools. The terminal cannot be added to Location Services
 by hand, because macOS only lists apps that have already asked, and command-line
 tools have not been able to ask since macOS 13.
 
-pusher works around this by reading the saved-network list instead, which macOS
+epsh works around this by reading the saved-network list instead, which macOS
 keeps in most-recently-joined order, so the network you are on is the first
 entry. That needs no permission at all.
 
 If it ever guesses wrong, set the network to return to explicitly:
-  pusher settings -> Home Wi-Fi network`
+  epsh settings -> Home Wi-Fi network`
 
 func (m *Manager) detectInterface() string {
 	return "en0"

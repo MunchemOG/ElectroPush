@@ -10,7 +10,7 @@
 // So the experiment is: compile one OpMode here, push the dex there, touch the
 // file, and see whether it appears on the Driver Station.
 //
-// This is a measurement, not a feature. It answers whether `pusher extreme` is
+// This is a measurement, not a feature. It answers whether `epsh extreme` is
 // a gradle-and-adb problem or a classloading one.
 package hotreload
 
@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/andreibanu/pusher/internal/adb"
+	"github.com/MunchemOG/ElectroPush/internal/adb"
 )
 
 // FirstDir is the robot controller's own folder on the hub.
@@ -57,18 +57,18 @@ const OutputRoot = JavaDir + "/build/jars"
 
 // DirPrefix marks the directories this tool owns, so old ones can be cleared
 // without touching anything OnBotJava built.
-const DirPrefix = "pusher-"
+const DirPrefix = "epsh-"
 
 // Package is deliberately not one the SDK or a team project would use. The
 // classloader is parent-first, so a class that also exists in the APK would
 // resolve there and prove nothing.
-const Package = "org.firstinspires.ftc.pusherproof"
+const Package = "org.firstinspires.ftc.epshproof"
 
 // ClassName is the OpMode that gets built.
-const ClassName = "PusherReloadProof"
+const ClassName = "EpshReloadProof"
 
 // ProofName is what the pushed files are called on the hub.
-const ProofName = "pusher-reload-proof"
+const ProofName = "epsh-reload-proof"
 
 // MotorFile records which motor the deployed build binds, so the next attempt
 // can pick the other one. It lives beside the files it describes.
@@ -302,7 +302,7 @@ func exeName(name string) string {
 // reload rather than a first load.
 func Run(serial, marker, motor string) *Result {
 	out := &Result{
-		OpModeName: "Pusher Reload " + marker + " " + motor,
+		OpModeName: "Epsh Reload " + marker + " " + motor,
 		Motor:      motor,
 	}
 
@@ -320,7 +320,7 @@ func Run(serial, marker, motor string) *Result {
 	// the reload and nothing else.
 	ClearLog(serial)
 
-	work, err := os.MkdirTemp("", "pusher-reload-*")
+	work, err := os.MkdirTemp("", "epsh-reload-*")
 	if err != nil {
 		out.Err = err
 		return out
@@ -377,7 +377,7 @@ func Run(serial, marker, motor string) *Result {
 	out.step("pushed the jar and the dex in %s", out.Push.Round(time.Millisecond))
 
 	// Recorded beside the files so the next attempt knows which motor this
-	// build binds. `pusher dev` is a fresh process each time and cannot
+	// build binds. `epsh dev` is a fresh process each time and cannot
 	// remember on its own.
 	if err := pushTextAtomic(serial, motor, dir+"/"+MotorFile); err != nil {
 		out.Err = err
@@ -527,7 +527,7 @@ func pushAtomic(serial, local, remote string) error {
 // comes out differently at each layer. Pushing a file is the same route the jar
 // and the dex take, and that one demonstrably arrives intact.
 func pushTextAtomic(serial, content, remote string) error {
-	local, err := os.CreateTemp("", "pusher-write-*")
+	local, err := os.CreateTemp("", "epsh-write-*")
 	if err != nil {
 		return err
 	}

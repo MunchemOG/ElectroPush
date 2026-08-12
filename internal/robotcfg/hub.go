@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/andreibanu/pusher/internal/adb"
+	"github.com/MunchemOG/ElectroPush/internal/adb"
 )
 
 // HubDir is where the robot controller keeps its configurations.
@@ -107,7 +107,7 @@ func Hash(data []byte) string {
 
 // Fetch reads one configuration off the robot.
 func Fetch(serial, name string) ([]byte, error) {
-	local, err := os.CreateTemp("", "pusher-config-*.xml")
+	local, err := os.CreateTemp("", "epsh-config-*.xml")
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +135,7 @@ func Send(serial, name string, data []byte) error {
 		return err
 	}
 
-	local, err := os.CreateTemp("", "pusher-config-*.xml")
+	local, err := os.CreateTemp("", "epsh-config-*.xml")
 	if err != nil {
 		return err
 	}

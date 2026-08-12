@@ -15,12 +15,12 @@ import (
 	"time"
 )
 
-const releaseAPI = "https://api.github.com/repos/PzmuV1517/Pusher/releases/latest"
+const releaseAPI = "https://api.github.com/repos/MunchemOG/ElectroPush/releases/latest"
 
-// Method is how pusher was installed.
+// Method is how epsh was installed.
 type Method int
 
-// How pusher was installed.
+// How epsh was installed.
 const (
 	Binary Method = iota
 
@@ -35,7 +35,7 @@ func (m Method) String() string {
 	return "binary"
 }
 
-// Install is where this copy of pusher lives and how it got there.
+// Install is where this copy of epsh lives and how it got there.
 type Install struct {
 	Method Method
 
@@ -52,7 +52,7 @@ func SetCurrent(version string) { current = version }
 // Current is the running version.
 func Current() string { return current }
 
-// Detect works out how this copy of pusher was installed.
+// Detect works out how this copy of epsh was installed.
 func Detect() (Install, error) {
 	exe, err := os.Executable()
 	if err != nil {
@@ -73,7 +73,7 @@ func Detect() (Install, error) {
 // its tap.
 //
 // The tap matters. A bare name is ambiguous across taps and casks, and
-// `brew upgrade pusher` resolves to the unrelated NWPusher cask rather than
+// `brew upgrade epsh` resolves to the unrelated NWEpsh cask rather than
 // this formula, so the upgrade fails saying a cask is not installed.
 func cellarFormula(path string) (string, bool) {
 	parts := strings.Split(filepath.ToSlash(path), "/")
@@ -139,9 +139,9 @@ func (r Release) Newer() bool {
 	return r.Version() != running
 }
 
-// AssetName is the release asset for the platform pusher is running on.
+// AssetName is the release asset for the platform epsh is running on.
 func AssetName() string {
-	name := fmt.Sprintf("pusher-%s-%s", runtime.GOOS, runtime.GOARCH)
+	name := fmt.Sprintf("epsh-%s-%s", runtime.GOOS, runtime.GOARCH)
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}
@@ -202,7 +202,7 @@ func Latest() (Release, error) {
 // bare name that some cask also claims.
 func UpgradeBrew(formula, want string) (string, error) {
 	if formula == "" {
-		formula = "pusher"
+		formula = "epsh"
 	}
 
 	// A tap is a cached git clone that brew only refreshes every so often, a
@@ -243,7 +243,7 @@ func BrewVersions(formula string) []string {
 	return parseBrewVersions(string(out))
 }
 
-// parseBrewVersions reads "pusher 1.2.1 1.2.2": the name first, then every keg.
+// parseBrewVersions reads "epsh 1.2.1 1.2.2": the name first, then every keg.
 func parseBrewVersions(listing string) []string {
 	fields := strings.Fields(strings.TrimSpace(listing))
 	if len(fields) < 2 {
@@ -296,7 +296,7 @@ func Apply(rel Release, path string) error {
 		}
 	}
 
-	staged := filepath.Join(dir, ".pusher-update")
+	staged := filepath.Join(dir, ".epsh-update")
 	if err := os.WriteFile(staged, blob, 0o755); err != nil {
 		return fmt.Errorf("cannot write the new binary: %w", err)
 	}
@@ -329,10 +329,10 @@ func swap(staged, path string) error {
 }
 
 func writable(dir, path string) error {
-	probe := filepath.Join(dir, ".pusher-write-test")
+	probe := filepath.Join(dir, ".epsh-write-test")
 	f, err := os.OpenFile(probe, os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
-		return fmt.Errorf("%s is not writable, so pusher cannot replace itself there.\n"+
+		return fmt.Errorf("%s is not writable, so epsh cannot replace itself there.\n"+
 			"Re-run with sudo, or reinstall from the latest release", dir)
 	}
 	f.Close()

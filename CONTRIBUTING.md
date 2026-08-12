@@ -1,6 +1,6 @@
-# Contributing to Pusher
+# Contributing to Epsh
 
-Thank you for your interest in contributing to Pusher! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to Epsh! This document provides guidelines and instructions for contributing.
 
 ## Code of Conduct
 
@@ -46,11 +46,11 @@ Thank you for your interest in contributing to Pusher! This document provides gu
 
 ```bash
 # Clone your fork
-git clone https://github.com/YOUR_USERNAME/pusher
-cd pusher
+git clone https://github.com/YOUR_USERNAME/epsh
+cd epsh
 
 # Add upstream remote
-git remote add upstream https://github.com/andreibanu/pusher
+git remote add upstream https://github.com/MunchemOG/ElectroPush
 
 # Download dependencies
 make deps
@@ -103,7 +103,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed project structure.
 
 Before submitting a PR, test:
 
-- [ ] First-run experience (delete ~/.config/pusher)
+- [ ] First-run experience (delete ~/.config/epsh)
 - [ ] Default push command
 - [ ] Profile management (add, list, edit, use)
 - [ ] Disconnect command
@@ -222,4 +222,4 @@ Current priorities:
 
 By contributing, you agree that your contributions will be licensed under the MIT License.
 
-Thank you for contributing to Pusher!
+Thank you for contributing to Epsh!

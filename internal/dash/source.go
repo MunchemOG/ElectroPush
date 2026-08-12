@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/andreibanu/pusher/internal/javasrc"
+	"github.com/MunchemOG/ElectroPush/internal/javasrc"
 )
 
 // The dashboard's own documentation is the specification here: "all public,

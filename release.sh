@@ -23,25 +23,25 @@ echo ""
 
 # macOS Intel
 echo "[*] Building for macOS (Intel)..."
-GOOS=darwin GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o ${OUTPUT_DIR}/pusher-darwin-amd64
+GOOS=darwin GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o ${OUTPUT_DIR}/epsh-darwin-amd64
 
 # macOS Apple Silicon
 echo "[*] Building for macOS (Apple Silicon)..."
-GOOS=darwin GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o ${OUTPUT_DIR}/pusher-darwin-arm64
+GOOS=darwin GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o ${OUTPUT_DIR}/epsh-darwin-arm64
 
 # Linux
 echo "[*] Building for Linux..."
-GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o ${OUTPUT_DIR}/pusher-linux-amd64
+GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o ${OUTPUT_DIR}/epsh-linux-amd64
 
 # Windows
 echo "[*] Building for Windows..."
-GOOS=windows GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o ${OUTPUT_DIR}/pusher-windows-amd64.exe
+GOOS=windows GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o ${OUTPUT_DIR}/epsh-windows-amd64.exe
 
 # Create universal macOS binary
 echo "[*] Creating universal macOS binary..."
-lipo -create -output ${OUTPUT_DIR}/pusher-darwin-universal \
-  ${OUTPUT_DIR}/pusher-darwin-amd64 \
-  ${OUTPUT_DIR}/pusher-darwin-arm64
+lipo -create -output ${OUTPUT_DIR}/epsh-darwin-universal \
+  ${OUTPUT_DIR}/epsh-darwin-amd64 \
+  ${OUTPUT_DIR}/epsh-darwin-arm64
 
 echo ""
 echo "[OK] Release builds complete in ${OUTPUT_DIR}/"
@@ -50,4 +50,4 @@ ls -lh ${OUTPUT_DIR}/
 
 echo ""
 echo "SHA256 checksums:"
-shasum -a 256 ${OUTPUT_DIR}/pusher-*
+shasum -a 256 ${OUTPUT_DIR}/epsh-*

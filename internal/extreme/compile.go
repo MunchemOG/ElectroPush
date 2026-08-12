@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/andreibanu/pusher/internal/gradle"
-	"github.com/andreibanu/pusher/internal/hotreload"
+	"github.com/MunchemOG/ElectroPush/internal/gradle"
+	"github.com/MunchemOG/ElectroPush/internal/hotreload"
 )
 
 // Module is the gradle module holding the team's own code.

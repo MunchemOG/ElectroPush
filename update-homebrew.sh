@@ -12,26 +12,26 @@ if [ "$#" -ne 2 ]; then
     echo "  $0 v1.0.20260131120000 abc123def456..."
     echo ""
     echo "You can find these values in the latest GitHub release:"
-    echo "  https://github.com/andreibanu/pusher/releases/latest"
+    echo "  https://github.com/MunchemOG/ElectroPush/releases/latest"
     exit 1
 fi
 
 VERSION="$1"
 SHA256="$2"
 
-echo "[*] Updating Homebrew formula for Pusher $VERSION"
+echo "[*] Updating Homebrew formula for Epsh $VERSION"
 echo ""
 echo "Copy this to your Homebrew formula at:"
-echo "  https://github.com/PzmuV1517/homebrew-PzmuV1517"
+echo "  https://github.com/MunchemOG/homebrew-epsh"
 echo ""
 echo "---"
 echo ""
 
 cat << EOF
-class Pusher < Formula
+class Epsh < Formula
   desc "FTC Robot Deployment Tool - Connect, build, and deploy to FTC robots"
-  homepage "https://github.com/andreibanu/pusher"
-  url "https://github.com/andreibanu/pusher/archive/${VERSION}.tar.gz"
+  homepage "https://github.com/MunchemOG/ElectroPush"
+  url "https://github.com/MunchemOG/ElectroPush/archive/${VERSION}.tar.gz"
   sha256 "${SHA256}"
   version "${VERSION#v}"
   license "MIT"
@@ -43,7 +43,7 @@ class Pusher < Formula
   end
 
   test do
-    assert_match "FTC Robot Deployment Tool", shell_output("#{bin}/pusher help")
+    assert_match "FTC Robot Deployment Tool", shell_output("#{bin}/epsh help")
   end
 end
 EOF

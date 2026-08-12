@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/andreibanu/pusher/internal/config"
-	"github.com/andreibanu/pusher/internal/feature"
-	"github.com/andreibanu/pusher/internal/selfupdate"
+	"github.com/MunchemOG/ElectroPush/internal/config"
+	"github.com/MunchemOG/ElectroPush/internal/feature"
+	"github.com/MunchemOG/ElectroPush/internal/selfupdate"
 	"github.com/spf13/cobra"
 )
 
@@ -16,13 +16,13 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:          "pusher",
+	Use:          "epsh",
 	Short:        "FTC Robot deployment tool",
-	Long:         `Pusher automates connecting to FTC robots and deploying Android Studio projects.`,
+	Long:         `Epsh automates connecting to FTC robots and deploying Android Studio projects.`,
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if versionFlag {
-			fmt.Printf("Pusher version %s\n", appVersion)
+			fmt.Printf("Epsh version %s\n", appVersion)
 			return nil
 		}
 		return pushCmd.RunE(cmd, args)

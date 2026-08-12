@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/andreibanu/pusher/internal/adb"
+	"github.com/MunchemOG/ElectroPush/internal/adb"
 )
 
 // Diagnosis is what the robot says about its own ability to load classes this
@@ -41,7 +41,7 @@ func ClearLog(serial string) {
 
 // interesting are the tags and messages that explain a reload finding nothing.
 var interesting = []string{
-	"pusherproof", ClassName,
+	"epshproof", ClassName,
 	"OnBotJava", "ClassManager", "RegisteredOpModes", "OpModeMeta",
 	"NoClassDefFound", "ClassNotFound", "UnsupportedClassVersion",
 	"rejecting", "Rejecting", "dex", "Dex",
@@ -157,7 +157,7 @@ func firstException(lines []string) string {
 }
 
 func saveLog(out string) string {
-	file, err := os.CreateTemp("", "pusher-reload-log-*.txt")
+	file, err := os.CreateTemp("", "epsh-reload-log-*.txt")
 	if err != nil {
 		return ""
 	}

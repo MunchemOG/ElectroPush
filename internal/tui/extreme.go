@@ -4,15 +4,15 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/andreibanu/pusher/internal/adb"
-	"github.com/andreibanu/pusher/internal/config"
-	"github.com/andreibanu/pusher/internal/extreme"
-	"github.com/andreibanu/pusher/internal/gradle"
-	"github.com/andreibanu/pusher/internal/hotreload"
+	"github.com/MunchemOG/ElectroPush/internal/adb"
+	"github.com/MunchemOG/ElectroPush/internal/config"
+	"github.com/MunchemOG/ElectroPush/internal/extreme"
+	"github.com/MunchemOG/ElectroPush/internal/gradle"
+	"github.com/MunchemOG/ElectroPush/internal/hotreload"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// Pusher Extreme changes the shape of a team's project, so the menu has to be
+// Epsh Extreme changes the shape of a team's project, so the menu has to be
 // honest about what it did and how to get out. Everything reversible is said to
 // be reversible, in the place where somebody would look for it.
 
@@ -108,7 +108,7 @@ func (m *SettingsModel) updateExtreme(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case 1:
 			m.undoExtreme()
 		case 2:
-			m.setStatus(config.SetExtreme(!config.GetExtreme()), "Pusher Extreme updated")
+			m.setStatus(config.SetExtreme(!config.GetExtreme()), "Epsh Extreme updated")
 		case 3:
 			m.goTo(screenMain, 9)
 		}
@@ -119,7 +119,7 @@ func (m *SettingsModel) updateExtreme(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m *SettingsModel) setUpExtreme() {
 	if !m.extreme.haveRoot {
-		m.err = fmt.Errorf("run pusher from your FTC project to set this up")
+		m.err = fmt.Errorf("run epsh from your FTC project to set this up")
 		return
 	}
 
@@ -157,7 +157,7 @@ func (m *SettingsModel) setUpExtreme() {
 
 func (m *SettingsModel) undoExtreme() {
 	if !m.extreme.haveRoot {
-		m.err = fmt.Errorf("run pusher from your FTC project to undo this")
+		m.err = fmt.Errorf("run epsh from your FTC project to undo this")
 		return
 	}
 
@@ -188,7 +188,7 @@ func (m *SettingsModel) undoExtreme() {
 func (m *SettingsModel) viewExtreme() string {
 	var b strings.Builder
 
-	b.WriteString(helpStyle.Render("  Pusher Extreme") + "  " +
+	b.WriteString(helpStyle.Render("  Epsh Extreme") + "  " +
 		helpStyle.Render("reload OpModes instead of installing an APK") + "\n\n")
 
 	b.WriteString(m.extremeStatusLines())

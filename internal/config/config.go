@@ -16,7 +16,7 @@ type Profile struct {
 	Password string `mapstructure:"password"`
 }
 
-// Config is everything pusher remembers between runs.
+// Config is everything epsh remembers between runs.
 type Config struct {
 	DefaultProfile string              `mapstructure:"default_profile"`
 	Profiles       map[string]*Profile `mapstructure:"profiles"`
@@ -68,7 +68,7 @@ func Initialize() error {
 		}
 	}
 
-	configDir = filepath.Join(home, ".config", "pusher")
+	configDir = filepath.Join(home, ".config", "epsh")
 	configFile = filepath.Join(configDir, "config.yaml")
 
 	if err := os.MkdirAll(configDir, 0755); err != nil {
@@ -200,7 +200,7 @@ func SetDefaultProfile(name string) error {
 	return Save(cfg)
 }
 
-// SaveLastWiFi records the network pusher last saw.
+// SaveLastWiFi records the network epsh last saw.
 func SaveLastWiFi(ssid string) error {
 	cfg, err := Load()
 	if err != nil {
@@ -211,7 +211,7 @@ func SaveLastWiFi(ssid string) error {
 	return Save(cfg)
 }
 
-// GetLastWiFi returns the network pusher last saw.
+// GetLastWiFi returns the network epsh last saw.
 func GetLastWiFi() (string, error) {
 	cfg, err := Load()
 	if err != nil {
@@ -274,12 +274,12 @@ func SetHomeSSID(ssid string) error {
 	return Save(cfg)
 }
 
-// GetSwitchBack reports whether pusher returns to your own network after a deploy.
+// GetSwitchBack reports whether epsh returns to your own network after a deploy.
 func GetSwitchBack() bool {
 	return viper.GetBool("switch_back")
 }
 
-// SetSwitchBack controls whether pusher returns to your own network.
+// SetSwitchBack controls whether epsh returns to your own network.
 func SetSwitchBack(enabled bool) error {
 	cfg, err := Load()
 	if err != nil {
@@ -463,5 +463,5 @@ func SetDashWatch(enabled bool) error {
 	return Save(cfg)
 }
 
-// Dir is where pusher keeps everything it remembers.
+// Dir is where epsh keeps everything it remembers.
 func Dir() string { return configDir }

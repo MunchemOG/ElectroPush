@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/andreibanu/pusher/internal/ghauth"
+	"github.com/MunchemOG/ElectroPush/internal/ghauth"
 )
 
 var api = "https://api.github.com/repos/" + ghauth.Repo

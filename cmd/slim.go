@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/andreibanu/pusher/internal/adb"
-	"github.com/andreibanu/pusher/internal/config"
-	"github.com/andreibanu/pusher/internal/extreme"
-	"github.com/andreibanu/pusher/internal/ftcproject"
-	"github.com/andreibanu/pusher/internal/gradle"
+	"github.com/MunchemOG/ElectroPush/internal/adb"
+	"github.com/MunchemOG/ElectroPush/internal/config"
+	"github.com/MunchemOG/ElectroPush/internal/extreme"
+	"github.com/MunchemOG/ElectroPush/internal/ftcproject"
+	"github.com/MunchemOG/ElectroPush/internal/gradle"
 	"github.com/spf13/cobra"
 )
 
@@ -29,12 +29,12 @@ native libraries for two CPU architectures even though the hub only ever runs
 one, so roughly a third of the native code is transferred and then discarded.
 
 Changes are written to your FTC project's gradle files, with a backup of each
-file kept alongside it. Run 'pusher slim --undo' to put everything back.`,
+file kept alongside it. Run 'epsh slim --undo' to put everything back.`,
 	RunE: runSlim,
 }
 
 func init() {
-	slimCmd.Flags().BoolVar(&slimUndo, "undo", false, "Restore the gradle files pusher patched")
+	slimCmd.Flags().BoolVar(&slimUndo, "undo", false, "Restore the gradle files epsh patched")
 	slimCmd.Flags().StringVar(&slimABI, "abi", "", "ABI to keep (default: ask the connected hub)")
 	slimCmd.Flags().BoolVar(&slimSourceMaps, "strip-source-maps", false, "Also exclude JavaScript source maps from assets")
 	slimCmd.Flags().BoolVar(&slimStoreLibs, "store-libs", false, "Store native libraries uncompressed so the install does not extract them")
@@ -48,7 +48,7 @@ func runSlim(cmd *cobra.Command, args []string) error {
 	fmt.Printf("[OK] FTC project: %s\n", project.Root)
 
 	if slimUndo {
-		// Undo restores whole files from backups, and Pusher Extreme keeps a
+		// Undo restores whole files from backups, and Epsh Extreme keeps a
 		// block in one of them. A backup taken before that block was added
 		// would silently remove it, turning extreme off without saying so.
 		wasExcluded := extreme.Excluded(project.Root)
@@ -60,9 +60,9 @@ func runSlim(cmd *cobra.Command, args []string) error {
 
 		if wasExcluded && !extreme.Excluded(project.Root) {
 			if err := extreme.Exclude(project.Root); err != nil {
-				return fmt.Errorf("restoring the Pusher Extreme block failed: %w", err)
+				return fmt.Errorf("restoring the Epsh Extreme block failed: %w", err)
 			}
-			fmt.Println("[*] Kept the Pusher Extreme block; undo it from `pusher settings`")
+			fmt.Println("[*] Kept the Epsh Extreme block; undo it from `epsh settings`")
 		}
 		fmt.Printf("\n[OK] Restored: %s\n", strings.Join(restored, ", "))
 		fmt.Println("    Your next build will package everything again.")
@@ -126,8 +126,8 @@ func runSlim(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	fmt.Println("\nRun 'pusher' to rebuild and deploy the slimmer APK.")
-	fmt.Println("Undo any time with 'pusher slim --undo'.")
+	fmt.Println("\nRun 'epsh' to rebuild and deploy the slimmer APK.")
+	fmt.Println("Undo any time with 'epsh slim --undo'.")
 
 	return nil
 }
@@ -148,8 +148,8 @@ func rememberHubABI(serial string) string {
 func applyAutoSlim() {
 	abi := config.GetHubABI()
 	if abi == "" {
-		fmt.Println("\n[!] Slim-before-push is on, but pusher has not seen your hub yet.")
-		fmt.Println("    Connect the robot and run 'pusher slim' once; after that")
+		fmt.Println("\n[!] Slim-before-push is on, but epsh has not seen your hub yet.")
+		fmt.Println("    Connect the robot and run 'epsh slim' once; after that")
 		fmt.Println("    every push will slim automatically.")
 		return
 	}
@@ -167,7 +167,7 @@ func applyAutoSlim() {
 	}
 
 	if changed {
-		fmt.Printf("\n[OK] Slimmed: packaging %s only (undo with 'pusher slim --undo')\n", abi)
+		fmt.Printf("\n[OK] Slimmed: packaging %s only (undo with 'epsh slim --undo')\n", abi)
 	}
 }
 
@@ -177,7 +177,7 @@ func warnOnABIMismatch(patchedFor, actual string) {
 	}
 
 	fmt.Printf("\n[!] This APK was built for %s but the hub runs %s.\n", patchedFor, actual)
-	fmt.Println("    pusher has corrected its records; rerun 'pusher' to rebuild.")
+	fmt.Println("    epsh has corrected its records; rerun 'epsh' to rebuild.")
 }
 
 func detectFTCProject() (*ftcproject.Project, error) {
@@ -203,9 +203,9 @@ func resolveTargetABI(projectABIs []string) (string, error) {
 		serial = adb.RobotAddr()
 		fmt.Println("[*] Asking the robot which ABI it runs...")
 	} else {
-		return "", fmt.Errorf("no hub connected, so pusher cannot tell which ABI to keep\n\n" +
-			"Either connect to the robot first (USB or 'pusher connect'),\n" +
-			"or name it explicitly, e.g. 'pusher slim --abi armeabi-v7a'")
+		return "", fmt.Errorf("no hub connected, so epsh cannot tell which ABI to keep\n\n" +
+			"Either connect to the robot first (USB or 'epsh connect'),\n" +
+			"or name it explicitly, e.g. 'epsh slim --abi armeabi-v7a'")
 	}
 
 	deviceABIs, err := adb.ABIList(serial)

@@ -180,7 +180,7 @@ func TestOnOffAndOrUnset(t *testing.T) {
 
 // A screen whose height changes as the cursor moves leaves the taller frame's
 // leftovers on screen, which is what a menu breaking while scrolling looks
-// like. The Pusher Extreme screen did it worst, being both variable and taller
+// like. The Epsh Extreme screen did it worst, being both variable and taller
 // than a default terminal, but every screen with a note under the cursor had
 // the same fault.
 func TestMenuHeightDoesNotChangeAsTheCursorMoves(t *testing.T) {

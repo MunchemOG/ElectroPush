@@ -29,7 +29,7 @@ print_error() {
 print_header() {
     echo ""
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}  Pusher - FTC Robot Deployment Tool${NC}"
+    echo -e "${BLUE}  Epsh - FTC Robot Deployment Tool${NC}"
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
 }
@@ -42,7 +42,7 @@ check_os() {
         return 0
     else
         print_error "This installer currently only supports macOS"
-        print_info "For other platforms, see: https://github.com/andreibanu/pusher#installation"
+        print_info "For other platforms, see: https://github.com/MunchemOG/ElectroPush#installation"
         exit 1
     fi
 }
@@ -100,8 +100,8 @@ install_adb() {
     fi
 }
 
-build_pusher() {
-    print_info "Building Pusher..."
+build_epsh() {
+    print_info "Building Epsh..."
     
     # Tidy dependencies
     print_info "Tidying dependencies..."
@@ -109,13 +109,13 @@ build_pusher() {
     
     # Build
     print_info "Compiling binary..."
-    go build -ldflags="-s -w" -o pusher
+    go build -ldflags="-s -w" -o epsh
     
-    print_success "Pusher built successfully"
+    print_success "Epsh built successfully"
 }
 
-install_pusher() {
-    print_info "Installing Pusher..."
+install_epsh() {
+    print_info "Installing Epsh..."
     
     # Check if /usr/local/bin exists
     if [ ! -d "/usr/local/bin" ]; then
@@ -124,20 +124,20 @@ install_pusher() {
     fi
     
     # Install
-    sudo cp pusher /usr/local/bin/
-    sudo chmod +x /usr/local/bin/pusher
+    sudo cp epsh /usr/local/bin/
+    sudo chmod +x /usr/local/bin/epsh
     
-    print_success "Pusher installed to /usr/local/bin/pusher"
+    print_success "Epsh installed to /usr/local/bin/epsh"
 }
 
 verify_installation() {
     print_info "Verifying installation..."
     
-    if command -v pusher &> /dev/null; then
-        print_success "Pusher is installed and available in PATH"
+    if command -v epsh &> /dev/null; then
+        print_success "Epsh is installed and available in PATH"
         return 0
     else
-        print_error "Pusher is not in PATH"
+        print_error "Epsh is not in PATH"
         return 1
     fi
 }
@@ -153,16 +153,16 @@ show_next_steps() {
     echo "1. Navigate to your Android Studio project:"
     echo "   cd /path/to/your/ftc/project"
     echo ""
-    echo "2. Run Pusher:"
-    echo "   pusher"
+    echo "2. Run Epsh:"
+    echo "   epsh"
     echo ""
     echo "3. On first run, you'll be prompted to set up your robot profile"
     echo ""
     echo "For help:"
-    echo "   pusher help"
+    echo "   epsh help"
     echo ""
     echo "Documentation:"
-    echo "   https://github.com/andreibanu/pusher#readme"
+    echo "   https://github.com/MunchemOG/ElectroPush#readme"
     echo ""
 }
 
@@ -180,7 +180,7 @@ main() {
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             install_go
         else
-            print_error "Go is required to build Pusher"
+            print_error "Go is required to build Epsh"
             print_info "Install Go and run this script again"
             exit 1
         fi
@@ -199,14 +199,14 @@ main() {
     fi
     
     # Build
-    build_pusher
+    build_epsh
     
     # Install
-    print_info "Pusher needs to be installed to /usr/local/bin (requires sudo)"
+    print_info "Epsh needs to be installed to /usr/local/bin (requires sudo)"
     read -p "Proceed with installation? (y/n) " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        install_pusher
+        install_epsh
         
         # Verify
         if verify_installation; then
@@ -216,8 +216,8 @@ main() {
             print_info "Try running: export PATH=\"/usr/local/bin:\$PATH\""
         fi
     else
-        print_info "Binary is available at: ./pusher"
-        print_info "To install manually later, run: sudo cp pusher /usr/local/bin/"
+        print_info "Binary is available at: ./epsh"
+        print_info "To install manually later, run: sudo cp epsh /usr/local/bin/"
     fi
 }
 

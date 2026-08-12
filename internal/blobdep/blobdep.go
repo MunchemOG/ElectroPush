@@ -248,7 +248,7 @@ func Add(root, artifact, version string) error {
 		return fmt.Errorf("unterminated dependencies { } block in %s", path)
 	}
 
-	entry := fmt.Sprintf("\n    // blob path follower. `pusher settings` manages this line.\n"+
+	entry := fmt.Sprintf("\n    // blob path follower. `epsh settings` manages this line.\n"+
 		"    implementation files('libs/%s')\n", AARName(artifact, version))
 
 	updated := content[:insertAt] + entry + content[insertAt:]

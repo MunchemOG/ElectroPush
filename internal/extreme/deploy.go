@@ -6,12 +6,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/andreibanu/pusher/internal/adb"
-	"github.com/andreibanu/pusher/internal/hotreload"
+	"github.com/MunchemOG/ElectroPush/internal/adb"
+	"github.com/MunchemOG/ElectroPush/internal/hotreload"
 )
 
 // Name is what the team's files are called on the hub.
-const Name = "pusher-extreme-teamcode"
+const Name = "epsh-extreme-teamcode"
 
 // State is whether a reload can stand in for an install.
 type State struct {
@@ -41,7 +41,7 @@ func Status(root, serial, apkPath string) State {
 
 	s.Excluded = Excluded(root)
 	if !s.Excluded {
-		s.Reason = "this project is not set up yet: `pusher settings` -> Pusher Extreme -> Set up this project"
+		s.Reason = "this project is not set up yet: `epsh settings` -> Epsh Extreme -> Set up this project"
 		return s
 	}
 
@@ -61,7 +61,7 @@ func Status(root, serial, apkPath string) State {
 	s.Signature = signature
 
 	if adb.InstalledFingerprint(serial) == "" {
-		s.Reason = "the robot has not been deployed to by pusher yet, so this one installs and the next reloads"
+		s.Reason = "the robot has not been deployed to by epsh yet, so this one installs and the next reloads"
 		return s
 	}
 
@@ -95,7 +95,7 @@ func Reload(p *Project, serial string, cp Classpath, keep []string) (*Result, er
 	out := &Result{}
 	started := time.Now()
 
-	work, err := os.MkdirTemp("", "pusher-extreme-*")
+	work, err := os.MkdirTemp("", "epsh-extreme-*")
 	if err != nil {
 		return out, err
 	}

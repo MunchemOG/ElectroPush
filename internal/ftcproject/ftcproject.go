@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const backupSuffix = ".pusher-bak"
+const backupSuffix = ".epsh-bak"
 
 var abiFiltersRe = regexp.MustCompile(`(?m)^([ \t]*)abiFilters\s+(.+)$`)
 
@@ -17,7 +17,7 @@ var quotedRe = regexp.MustCompile(`["']([^"']+)["']`)
 
 var sourceMapPatternRe = regexp.MustCompile(`ignoreAssetsPatterns`)
 
-// Project is an FTC project and the gradle files pusher may patch.
+// Project is an FTC project and the gradle files epsh may patch.
 type Project struct {
 	Root string
 
@@ -124,7 +124,7 @@ func (p *Project) StripSourceMaps() (bool, error) {
 		return false, nil
 	}
 
-	block := `// pusher: source maps are debugger-only and never read on the robot.
+	block := `// epsh: source maps are debugger-only and never read on the robot.
 androidResources {
     ignoreAssetsPatterns.add('*.map')
 }`
@@ -249,7 +249,7 @@ func (p *Project) backupTargets() []string {
 	return []string{p.CommonGradle, p.TeamCodeGradle}
 }
 
-// HasBackups reports whether pusher has patched anything.
+// HasBackups reports whether epsh has patched anything.
 func (p *Project) HasBackups() bool {
 	for _, path := range p.backupTargets() {
 		if _, err := os.Stat(path + backupSuffix); err == nil {
@@ -259,7 +259,7 @@ func (p *Project) HasBackups() bool {
 	return false
 }
 
-// Undo restores every gradle file pusher patched.
+// Undo restores every gradle file epsh patched.
 func (p *Project) Undo() ([]string, error) {
 	var restored []string
 
@@ -282,7 +282,7 @@ func (p *Project) Undo() ([]string, error) {
 	}
 
 	if len(restored) == 0 {
-		return nil, fmt.Errorf("nothing to undo: no pusher backups found in %s", p.Root)
+		return nil, fmt.Errorf("nothing to undo: no epsh backups found in %s", p.Root)
 	}
 
 	return restored, nil

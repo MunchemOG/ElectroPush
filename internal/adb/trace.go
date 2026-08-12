@@ -7,7 +7,7 @@ import (
 )
 
 // TraceDir is where the blob library writes path traces on the hub.
-const TraceDir = "/sdcard/FIRST/pusher-traces"
+const TraceDir = "/sdcard/FIRST/epsh-traces"
 
 // RemoteTrace is one trace file sitting on the robot.
 type RemoteTrace struct {
@@ -44,7 +44,7 @@ func Target() (string, error) {
 	if IsConnected() {
 		return RobotAddr(), nil
 	}
-	return "", fmt.Errorf("no robot connected - plug in USB or run `pusher connect`")
+	return "", fmt.Errorf("no robot connected - plug in USB or run `epsh connect`")
 }
 
 // ListTraces returns the trace files on the device, newest first.

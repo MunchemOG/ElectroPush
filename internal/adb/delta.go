@@ -12,11 +12,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/andreibanu/pusher/internal/delta"
+	"github.com/MunchemOG/ElectroPush/internal/delta"
 )
 
 const (
-	remoteRoot     = "/data/local/tmp/pusher"
+	remoteRoot     = "/data/local/tmp/epsh"
 	remoteCacheDir = remoteRoot + "/cache"
 	remoteManifest = remoteRoot + "/manifest"
 	remoteStaging  = remoteRoot + "/incoming"
@@ -24,7 +24,7 @@ const (
 
 	spaceFactor = 3
 
-	okMarker = "PUSHER_OK"
+	okMarker = "EPSH_OK"
 )
 
 // ErrDeltaUnavailable means a delta transfer cannot be used this time.
@@ -120,7 +120,7 @@ func listCachedChunks(serial string) map[string]bool {
 }
 
 func pushChunks(serial string, data []byte, missing []delta.Chunk) error {
-	stagingDir, err := os.MkdirTemp("", "pusher-chunks-")
+	stagingDir, err := os.MkdirTemp("", "epsh-chunks-")
 	if err != nil {
 		return ErrDeltaUnavailable{"cannot create staging directory: " + err.Error()}
 	}
@@ -166,7 +166,7 @@ func pushChunks(serial string, data []byte, missing []delta.Chunk) error {
 }
 
 func pushManifest(serial string, chunks []delta.Chunk) error {
-	file, err := os.CreateTemp("", "pusher-manifest-")
+	file, err := os.CreateTemp("", "epsh-manifest-")
 	if err != nil {
 		return ErrDeltaUnavailable{"cannot create manifest: " + err.Error()}
 	}

@@ -14,14 +14,14 @@ import (
 // it.
 //
 // This is the one change made to a team's repository, and it is marked rather
-// than backed up. `pusher slim` already keeps a .pusher-bak of the same file,
+// than backed up. `epsh slim` already keeps a .epsh-bak of the same file,
 // and two features sharing one backup means undoing either undoes both. A
 // marked block can be added and removed exactly, whatever else edited the file
 // in between.
 
 const (
-	beginMarker = "// pusher extreme: begin - team code is reloaded, not packaged"
-	endMarker   = "// pusher extreme: end"
+	beginMarker = "// epsh extreme: begin - team code is reloaded, not packaged"
+	endMarker   = "// epsh extreme: end"
 )
 
 // TeamPackage is what gets excluded from the APK.

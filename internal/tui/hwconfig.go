@@ -3,8 +3,8 @@ package tui
 import (
 	"sort"
 
-	"github.com/andreibanu/pusher/internal/adb"
-	"github.com/andreibanu/pusher/internal/robotcfg"
+	"github.com/MunchemOG/ElectroPush/internal/adb"
+	"github.com/MunchemOG/ElectroPush/internal/robotcfg"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

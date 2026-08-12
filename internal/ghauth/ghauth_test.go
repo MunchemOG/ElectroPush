@@ -59,7 +59,7 @@ func TestCredentialsLiveOutsideTheConfigFile(t *testing.T) {
 		t.Errorf("stored at %s", path)
 	}
 
-	config := filepath.Join(home, ".config", "pusher", "config.yaml")
+	config := filepath.Join(home, ".config", "epsh", "config.yaml")
 	if data, err := os.ReadFile(config); err == nil {
 		if string(data) != "" && contains(string(data), "ghp_example") {
 			t.Error("the token leaked into config.yaml")

@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/andreibanu/pusher/internal/adb"
-	"github.com/andreibanu/pusher/internal/feature"
-	"github.com/andreibanu/pusher/internal/pathtrace"
-	"github.com/andreibanu/pusher/internal/tui"
-	"github.com/andreibanu/pusher/internal/visual"
+	"github.com/MunchemOG/ElectroPush/internal/adb"
+	"github.com/MunchemOG/ElectroPush/internal/feature"
+	"github.com/MunchemOG/ElectroPush/internal/pathtrace"
+	"github.com/MunchemOG/ElectroPush/internal/tui"
+	"github.com/MunchemOG/ElectroPush/internal/visual"
 	"github.com/spf13/cobra"
 )
 
@@ -33,23 +33,23 @@ time.
 
 Traces are recorded by the blob library when BlobParams.recordTrace is on, which
 requires the blob-dev build. Competition builds cannot record at all. Manage the
-build from ` + "`pusher settings` -> blob library" + `.
+build from ` + "`epsh settings` -> blob library" + `.
 
-  pusher visualiser              pick from the runs on the robot
-  pusher visualiser CloseBlue    newest run for that OpMode
-  pusher visualiser --file t.json  a trace you already have`,
+  epsh visualiser              pick from the runs on the robot
+  epsh visualiser CloseBlue    newest run for that OpMode
+  epsh visualiser --file t.json  a trace you already have`,
 	RunE: runVisualise,
 }
 
 func runVisualise(cmd *cobra.Command, args []string) error {
 
 	if !feature.Revealed() {
-		return fmt.Errorf("unknown command %q for %q", "visualiser", "pusher")
+		return fmt.Errorf("unknown command %q for %q", "visualiser", "epsh")
 	}
 
 	if status, _ := feature.Authorized(); !status.OK() {
 		return fmt.Errorf("the visualiser needs read access to the blob repository.\n" +
-			"Set a GitHub token in `pusher settings` -> blob library -> GitHub token")
+			"Set a GitHub token in `epsh settings` -> blob library -> GitHub token")
 	}
 
 	limits := pathtrace.DefaultLimits()

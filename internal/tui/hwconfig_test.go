@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/andreibanu/pusher/internal/robotcfg"
+	"github.com/MunchemOG/ElectroPush/internal/robotcfg"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -474,7 +474,7 @@ func TestDeletingFromTheProjectKeepsACopy(t *testing.T) {
 		t.Error("the file is still there")
 	}
 
-	backup := filepath.Join(m.store.Dir, ".pusher-backup", "comp.xml")
+	backup := filepath.Join(m.store.Dir, ".epsh-backup", "comp.xml")
 	if _, err := os.Stat(backup); err != nil {
 		t.Errorf("no copy was kept: %v", err)
 	}

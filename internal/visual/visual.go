@@ -8,8 +8,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/andreibanu/pusher/internal/adb"
-	"github.com/andreibanu/pusher/internal/pathtrace"
+	"github.com/MunchemOG/ElectroPush/internal/adb"
+	"github.com/MunchemOG/ElectroPush/internal/pathtrace"
 )
 
 // Device picks the robot to talk to.
@@ -59,7 +59,7 @@ func RenderLocal(local, projectRoot, out string, lim pathtrace.Limits) (string, 
 	trace.Profile(lim)
 
 	if out == "" {
-		out = filepath.Join(os.TempDir(), fmt.Sprintf("pusher-%s.html", safe(trace.OpMode)))
+		out = filepath.Join(os.TempDir(), fmt.Sprintf("epsh-%s.html", safe(trace.OpMode)))
 	}
 	if err := trace.Render(out, lim); err != nil {
 		return "", err

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/andreibanu/pusher/internal/adb"
+	"github.com/MunchemOG/ElectroPush/internal/adb"
 )
 
 // Reload is the measured cost of the pieces a hot reload would need.
@@ -59,7 +59,7 @@ func MeasureReload(serial, apkPath string) Reload {
 
 	out.DexBytes = size
 
-	const remote = "/data/local/tmp/pusher-bench.dex"
+	const remote = "/data/local/tmp/epsh-bench.dex"
 
 	start := time.Now()
 	if err := adb.Push(serial, dex, remote); err != nil {
@@ -117,7 +117,7 @@ func measureOverhead(serial, apkPath, abi string) (int64, time.Duration) {
 	}
 	defer os.Remove(dex)
 
-	const remote = "/data/local/tmp/pusher-bench-stub.dex"
+	const remote = "/data/local/tmp/epsh-bench-stub.dex"
 
 	if err := adb.Push(serial, dex, remote); err != nil {
 		return 0, 0
@@ -200,7 +200,7 @@ func extractDex(apkPath string, better func(best, entry *zip.File) bool) (string
 	}
 	defer reader.Close()
 
-	out, err := os.CreateTemp("", "pusher-bench-*.dex")
+	out, err := os.CreateTemp("", "epsh-bench-*.dex")
 	if err != nil {
 		return "", 0, err
 	}
@@ -217,7 +217,7 @@ func extractDex(apkPath string, better func(best, entry *zip.File) bool) (string
 
 // SaveReport writes a report into the project so it can be reread or compared.
 func SaveReport(projectRoot, body string) (string, error) {
-	dir := filepath.Join(projectRoot, "pusher-reports")
+	dir := filepath.Join(projectRoot, "epsh-reports")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}

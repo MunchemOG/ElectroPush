@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/andreibanu/pusher/internal/gradle"
+	"github.com/MunchemOG/ElectroPush/internal/gradle"
 	"github.com/spf13/cobra"
 )
 
@@ -13,7 +13,7 @@ var prepareCmd = &cobra.Command{
 	Short: "Warm the Gradle cache while you have internet",
 	Long: `Runs a full online build so every dependency is cached locally.
 
-pusher already builds before it switches to the robot's Wi-Fi, so this is not
+epsh already builds before it switches to the robot's Wi-Fi, so this is not
 required. It is worth running before an event, where internet may be unreliable
 and you want the build to succeed from cache alone.`,
 	RunE: runPrepare,
