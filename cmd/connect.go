@@ -23,8 +23,9 @@ func runConnect(cmd *cobra.Command, args []string) error {
 	}
 
 	if device, ok := adb.FindUSBDevice(); ok {
-		fmt.Printf("[OK] Hub already attached over USB: %s\n", device.Label())
-		fmt.Println("[*] Run 'epsh' to build and deploy.")
+		uiHeading("Connection", "Robot link")
+		uiStatus("ok", fmt.Sprintf("Hub attached over USB · %s", device.Label()))
+		uiNote("Run `epsh` to build and deploy.")
 		return nil
 	}
 
@@ -36,7 +37,8 @@ func runConnect(cmd *cobra.Command, args []string) error {
 	}
 
 	if onRobot {
-		fmt.Println("[OK] Already on the robot network")
+		uiHeading("Connection", "Robot link")
+		uiStatus("ok", "Already on the robot network")
 	} else {
 		if err := ensureProfile(); err != nil {
 			return err
@@ -50,28 +52,29 @@ func runConnect(cmd *cobra.Command, args []string) error {
 		ssid, ssidErr := wifiMgr.CurrentSSID()
 		switch {
 		case ssidErr == nil && ssid != "":
-			fmt.Printf("[OK] Currently on: %s\n", ssid)
+			uiStatus("run", fmt.Sprintf("Currently on %s", ssid))
 		case errors.Is(ssidErr, wifi.ErrSSIDUnavailable):
 			if inferred, err := wifiMgr.MostRecentNetwork(robotSSIDs()...); err == nil && inferred != "" {
-				fmt.Printf("[*] The network name is hidden; assuming you are on %q\n", inferred)
+				uiStatus("wait", fmt.Sprintf("Network name hidden · assuming %q", inferred))
 			}
 		}
 
-		fmt.Printf("\n[>] Joining robot Wi-Fi: %s\n", profile.SSID)
+		uiStatus("run", fmt.Sprintf("Joining robot Wi-Fi · %s", profile.SSID))
 		ip, err := wifiMgr.JoinAndWait(profile.SSID, profile.Password, wifi.RobotSubnet, joinTimeout)
 		if err != nil {
 			return fmt.Errorf("failed to join %q: %w", profile.SSID, err)
 		}
-		fmt.Printf("[OK] On the robot network (%s)\n", ip)
+		uiStatus("ok", fmt.Sprintf("On the robot network · %s", ip))
 	}
 
-	fmt.Println("\n[+] Connecting to robot via ADB...")
+	uiRule()
+	uiStatus("run", "Connecting to robot via ADB")
 	if err := adb.Connect(); err != nil {
 		return fmt.Errorf("failed to connect via ADB: %w", err)
 	}
 
-	fmt.Println("[OK] Connected via ADB")
-	fmt.Println("[*] Run 'epsh' to build and deploy, or 'epsh exit' when you're done.")
+	uiStatus("ok", "Connected via ADB")
+	uiNote("Run `epsh` to build and deploy, or `epsh exit` when you're done.")
 
 	return nil
 }

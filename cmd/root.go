@@ -22,7 +22,8 @@ var rootCmd = &cobra.Command{
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if versionFlag {
-			fmt.Printf("Epsh version %s\n", appVersion)
+			uiHeading("Epsh", "Version information")
+			uiStatus("ok", fmt.Sprintf("Version %s", appVersion))
 			return nil
 		}
 		return pushCmd.RunE(cmd, args)
@@ -47,6 +48,7 @@ func Execute(version string) {
 }
 
 func init() {
+	rootCmd.SetHelpFunc(runCommandHelp)
 
 	rootCmd.Flags().BoolVarP(&versionFlag, "version", "v", false, "Show version information")
 

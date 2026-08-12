@@ -41,6 +41,7 @@ func init() {
 }
 
 func runDashDiff(cmd *cobra.Command, args []string) error {
+	uiHeading("Dashboard", "Compare live tuning with source")
 	serial, err := dash.Robot()
 	if err != nil {
 		return err
@@ -52,7 +53,7 @@ func runDashDiff(cmd *cobra.Command, args []string) error {
 	}
 	project := gradle.ProjectDir(root)
 
-	fmt.Printf("[*] Reading the dashboard on %s\n", serial)
+	uiStatus("run", "Reading dashboard · "+serial)
 
 	live, err := dash.Read(serial)
 	if err != nil {
@@ -60,8 +61,8 @@ func runDashDiff(cmd *cobra.Command, args []string) error {
 	}
 
 	code := dash.FromProject(project)
-	fmt.Printf("[*] %d tunables on the robot, %d declared in %s\n",
-		len(live), len(code), project)
+	uiStatus("wait", fmt.Sprintf("%d robot tunables · %d declared in %s",
+		len(live), len(code), project))
 
 	path := dash.SnapshotPath(config.Dir(), serial)
 	previous, taken := dash.Load(path)

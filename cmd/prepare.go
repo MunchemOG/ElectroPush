@@ -20,22 +20,23 @@ and you want the build to succeed from cache alone.`,
 }
 
 func runPrepare(cmd *cobra.Command, args []string) error {
-	fmt.Println("[*] Detecting Gradle wrapper...")
+	uiHeading("Prepare", "Warm your offline build cache")
+	uiStatus("run", "Detecting Gradle wrapper")
 	wrapper, err := gradle.DetectWrapper()
 	if err != nil {
 		return fmt.Errorf("failed to detect Gradle wrapper: %w", err)
 	}
-	fmt.Printf("[OK] Found Gradle wrapper: %s\n", wrapper)
+	uiStatus("ok", fmt.Sprintf("Gradle wrapper · %s", wrapper))
 
-	fmt.Println("\n[#] Preparing Gradle cache (online build)...")
-	fmt.Println("─────────────────────────────────────────")
+	uiRule()
+	uiStatus("run", "Preparing Gradle cache · online build")
 
 	if err := gradle.Build(wrapper, false, os.Stdout); err != nil {
 		return fmt.Errorf("prepare failed: %w", err)
 	}
 
-	fmt.Println("─────────────────────────────────────────")
-	fmt.Println("\n[OK] Gradle dependencies cached. Builds will now work without internet.")
+	uiRule()
+	uiStatus("ok", "Gradle dependencies cached · builds can now run offline")
 
 	return nil
 }

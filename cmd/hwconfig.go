@@ -142,6 +142,7 @@ func init() {
 }
 
 func runHWMenu(cmd *cobra.Command, args []string) error {
+	uiHeading("Hardware config", "Robot configuration workspace")
 	local, err := store()
 	if err != nil {
 		return err
@@ -165,6 +166,7 @@ func store() (*robotcfg.Store, error) {
 }
 
 func runHWList(cmd *cobra.Command, args []string) error {
+	uiHeading("Hardware config", "Project and robot inventory")
 	local, err := store()
 	if err != nil {
 		return err

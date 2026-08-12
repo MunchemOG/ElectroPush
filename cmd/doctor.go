@@ -27,9 +27,8 @@ Run this first when something is not behaving.`,
 }
 
 func runDoctor(cmd *cobra.Command, args []string) error {
-	fmt.Println("Epsh doctor")
-	fmt.Println("═════════════════════════════════════════")
-	fmt.Printf("Platform: %s/%s (Wi-Fi via %s)\n", runtime.GOOS, runtime.GOARCH, wifiBackend())
+	uiHeading("Doctor", "System and robot readiness")
+	uiNote(fmt.Sprintf("Platform · %s/%s · Wi-Fi via %s", runtime.GOOS, runtime.GOARCH, wifiBackend()))
 
 	locationOK := reportWiFi()
 	fmt.Println()
@@ -37,13 +36,12 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	reportProject()
 
-	fmt.Println()
-	fmt.Println("═════════════════════════════════════════")
+	uiRule()
 	if !locationOK {
-		fmt.Println("[!] epsh cannot tell which network you are on, and has nothing")
-		fmt.Println("    to fall back on. Set one in 'epsh settings' -> Home Wi-Fi network.")
+		uiStatus("warn", "epsh cannot identify your current network")
+		uiNote("Set a fallback in `epsh settings` → Home Wi-Fi network.")
 	} else {
-		fmt.Println("[OK] No problems detected.")
+		uiStatus("ok", "No problems detected")
 	}
 
 	return nil
@@ -63,8 +61,7 @@ func wifiBackend() string {
 }
 
 func reportWiFi() bool {
-	fmt.Println("\nWi-Fi")
-	fmt.Println("─────────────────────────────────────────")
+	uiHeading("Wi-Fi", "Network state")
 
 	wifiMgr := wifi.NewManager()
 
@@ -122,8 +119,7 @@ func reportWiFi() bool {
 }
 
 func reportADB() {
-	fmt.Println("ADB")
-	fmt.Println("─────────────────────────────────────────")
+	uiHeading("ADB", "Android Debug Bridge")
 
 	if !adb.IsInstalled() {
 		fmt.Println("  adb                : NOT FOUND")
@@ -155,8 +151,7 @@ func reportADB() {
 }
 
 func reportProject() {
-	fmt.Println("Project")
-	fmt.Println("─────────────────────────────────────────")
+	uiHeading("Project", "FTC project readiness")
 
 	wrapper, err := gradle.DetectWrapper()
 	if err != nil {

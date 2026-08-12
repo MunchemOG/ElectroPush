@@ -28,16 +28,16 @@ func tryExtreme(gradlePath, serial, apkPath string) (bool, error) {
 
 	state := extreme.Status(project.Root, serial, apkPath)
 	if !state.Usable() {
-		fmt.Printf("\n[*] Epsh Extreme is on, but installing this time: %s\n", state.Reason)
+		uiStatus("wait", "Epsh Extreme will install this time · "+state.Reason)
 		return false, nil
 	}
 
-	fmt.Println("\n[>] Epsh Extreme: reloading team code, not installing")
+	uiStatus("run", "Epsh Extreme · reloading team code")
 
 	classpath, err := extreme.ResolveClasspath(project.Wrapper, extreme.Module)
 	if err != nil {
-		fmt.Printf("[!] Could not work out what to compile against: %v\n", err)
-		fmt.Println("[*] Installing instead.")
+		uiStatus("warn", fmt.Sprintf("Could not resolve compile classpath · %v", err))
+		uiStatus("wait", "Installing instead")
 		return false, nil
 	}
 
@@ -49,8 +49,8 @@ func tryExtreme(gradlePath, serial, apkPath string) (bool, error) {
 		// A failed reload leaves the robot with whatever it had, which may now
 		// be a directory the SDK cannot read. Installing puts it back to a
 		// state that certainly works.
-		fmt.Printf("\n[!] Reload failed: %v\n", err)
-		fmt.Println("[*] Falling back to a full install.")
+		uiStatus("warn", fmt.Sprintf("Reload failed · %v", err))
+		uiStatus("wait", "Falling back to a full install")
 		return false, nil
 	}
 
@@ -58,8 +58,8 @@ func tryExtreme(gradlePath, serial, apkPath string) (bool, error) {
 		fmt.Printf("[!] %s\n", warning)
 	}
 
-	fmt.Printf("\n[OK] Reloaded %d classes in %.1fs, without installing\n",
-		result.Classes, result.Total.Seconds())
+	uiStatus("ok", fmt.Sprintf("Reloaded %d classes in %.1fs · no install needed",
+		result.Classes, result.Total.Seconds()))
 
 	return true, nil
 }
@@ -110,7 +110,7 @@ func reloadAfterInstall(serial string) error {
 			"    Run `epsh` again, or undo the setup in `epsh settings`", err)
 	}
 
-	fmt.Println("\n[>] Epsh Extreme: that APK has no team code in it, reloading it now")
+	uiStatus("run", "Epsh Extreme · reloading team code into the new APK")
 
 	classpath, err := extreme.ResolveClasspath(project.Wrapper, extreme.Module)
 	if err != nil {
@@ -129,7 +129,7 @@ func reloadAfterInstall(serial string) error {
 		fmt.Printf("[!] %s\n", warning)
 	}
 
-	fmt.Printf("[OK] Reloaded %d classes, so the robot has its OpModes\n", result.Classes)
+	uiStatus("ok", fmt.Sprintf("Reloaded %d classes · OpModes are ready", result.Classes))
 	return nil
 }
 
@@ -151,7 +151,7 @@ func extremeDeploy(gradlePath, serial string) (bool, error) {
 		return done, err
 	}
 
-	fmt.Printf("[OK] Deployed in %.1fs\n", time.Since(start).Seconds())
+	uiStatus("ok", fmt.Sprintf("Deployed in %.1fs", time.Since(start).Seconds()))
 	return true, nil
 }
 

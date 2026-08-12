@@ -42,6 +42,7 @@ build from ` + "`epsh settings` -> blob library" + `.
 }
 
 func runVisualise(cmd *cobra.Command, args []string) error {
+	uiHeading("Visualiser", "Autonomous path telemetry")
 
 	if !feature.Revealed() {
 		return fmt.Errorf("unknown command %q for %q", "visualiser", "epsh")

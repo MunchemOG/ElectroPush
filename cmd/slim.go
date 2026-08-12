@@ -41,11 +41,12 @@ func init() {
 }
 
 func runSlim(cmd *cobra.Command, args []string) error {
+	uiHeading("Slim", "Trim your deploy payload")
 	project, err := detectFTCProject()
 	if err != nil {
 		return err
 	}
-	fmt.Printf("[OK] FTC project: %s\n", project.Root)
+	uiStatus("ok", "FTC project · "+project.Root)
 
 	if slimUndo {
 		// Undo restores whole files from backups, and Epsh Extreme keeps a
@@ -64,8 +65,8 @@ func runSlim(cmd *cobra.Command, args []string) error {
 			}
 			fmt.Println("[*] Kept the Epsh Extreme block; undo it from `epsh settings`")
 		}
-		fmt.Printf("\n[OK] Restored: %s\n", strings.Join(restored, ", "))
-		fmt.Println("    Your next build will package everything again.")
+		uiStatus("ok", "Restored · "+strings.Join(restored, ", "))
+		uiNote("Your next build will package everything again.")
 		return nil
 	}
 
@@ -74,13 +75,13 @@ func runSlim(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("[*] Currently packaging ABIs: %s\n", strings.Join(analysis.ABIs, ", "))
+	uiStatus("wait", "Currently packaging · "+strings.Join(analysis.ABIs, ", "))
 
 	abi, err := resolveTargetABI(analysis.ABIs)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("[*] Keeping: %s\n", abi)
+	uiStatus("run", "Keeping ABI · "+abi)
 
 	changed := false
 
@@ -90,9 +91,9 @@ func runSlim(cmd *cobra.Command, args []string) error {
 	}
 	if abiChanged {
 		changed = true
-		fmt.Println("\n[OK] build.common.gradle now packages one ABI")
+		uiStatus("ok", "build.common.gradle now packages one ABI")
 	} else {
-		fmt.Println("\n[=] ABI filters already set to that, nothing to do")
+		uiStatus("idle", "ABI filters already match")
 	}
 
 	if slimSourceMaps {
@@ -126,8 +127,8 @@ func runSlim(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	fmt.Println("\nRun 'epsh' to rebuild and deploy the slimmer APK.")
-	fmt.Println("Undo any time with 'epsh slim --undo'.")
+	uiNote("Run `epsh` to rebuild and deploy the slimmer APK.")
+	uiNote("Undo any time with `epsh slim --undo`.")
 
 	return nil
 }

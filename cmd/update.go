@@ -26,6 +26,7 @@ func init() {
 }
 
 func runUpdate(cmd *cobra.Command, args []string) error {
+	uiHeading("Update", "Epsh release channel")
 	install, err := selfupdate.Detect()
 	if err != nil {
 		return err
@@ -36,45 +37,45 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		via += " (formula " + install.Formula + ")"
 	}
 
-	fmt.Printf("[*] Installed via %s\n", via)
-	fmt.Printf("[*] Location: %s\n", install.Path)
-	fmt.Printf("[*] Running:  %s\n", selfupdate.Current())
+	uiStatus("run", fmt.Sprintf("Installed via %s", via))
+	uiNote("Location · " + install.Path)
+	uiNote("Running  · " + selfupdate.Current())
 
 	release, err := selfupdate.Latest()
 	if err != nil {
 		return err
 	}
-	fmt.Printf("[*] Latest:   %s\n", release.Tag)
+	uiStatus("wait", "Latest release · "+release.Tag)
 
 	if !release.Newer() {
-		fmt.Println("\n[OK] Already up to date.")
+		uiStatus("ok", "Already up to date")
 		return nil
 	}
 
 	if updateCheckOnly {
-		fmt.Printf("\n[!] %s is available. Run 'epsh update' to install it.\n", release.Tag)
+		uiStatus("warn", fmt.Sprintf("%s is available · run `epsh update` to install", release.Tag))
 		return nil
 	}
 
 	if install.Method == selfupdate.Homebrew {
-		fmt.Printf("\n[>] brew upgrade %s\n", install.Formula)
+		uiStatus("run", "brew upgrade "+install.Formula)
 
 		// Homebrew says plenty and only the end of it is the outcome, which is
 		// what somebody watching a one-line command wants to see.
 		out, err := selfupdate.UpgradeBrew(install.Formula, release.Version())
 		if line := selfupdate.LastLine(out); line != "" {
-			fmt.Printf("    %s\n", line)
+			uiNote(line)
 		}
 		if err != nil {
 			return err
 		}
 	} else {
-		fmt.Printf("\n[>] Replacing this binary with %s\n", release.Tag)
+		uiStatus("run", "Installing "+release.Tag)
 		if err := selfupdate.Apply(release, install.Path); err != nil {
 			return err
 		}
 	}
 
-	fmt.Printf("\n[OK] Updated to %s. Run epsh again to use it.\n", release.Tag)
+	uiStatus("ok", fmt.Sprintf("Updated to %s · run epsh again to use it", release.Tag))
 	return nil
 }

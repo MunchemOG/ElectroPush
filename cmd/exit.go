@@ -18,12 +18,13 @@ var exitCmd = &cobra.Command{
 }
 
 func runExit(cmd *cobra.Command, args []string) error {
-	fmt.Println("[+] Disconnecting ADB...")
+	uiHeading("Connection", "Return to your network")
+	uiStatus("run", "Disconnecting ADB")
 	if adb.IsInstalled() {
 		if err := adb.Disconnect(); err != nil {
-			fmt.Printf("[!] Warning: failed to disconnect ADB: %v\n", err)
+			uiStatus("warn", fmt.Sprintf("Could not disconnect ADB · %v", err))
 		} else {
-			fmt.Println("[OK] ADB disconnected")
+			uiStatus("ok", "ADB disconnected")
 		}
 	}
 
@@ -34,7 +35,7 @@ func runExit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to check the current network: %w", err)
 	}
 	if !onRobot {
-		fmt.Println("[OK] Not on the robot network, leaving Wi-Fi alone")
+		uiStatus("ok", "Not on the robot network · leaving Wi-Fi alone")
 		return nil
 	}
 
@@ -43,35 +44,35 @@ func runExit(cmd *cobra.Command, args []string) error {
 
 		if inferred, err := wifiMgr.MostRecentNetwork(robotSSIDs()...); err == nil && inferred != "" {
 			home = inferred
-			fmt.Printf("\n[*] Assuming you came from %q\n", home)
+			uiStatus("wait", fmt.Sprintf("Assuming you came from %q", home))
 		}
 	}
 
 	if home == "" {
 
-		fmt.Println("\n[*] No home network known; cycling Wi-Fi so the system re-picks...")
+		uiStatus("run", "No home network known · cycling Wi-Fi")
 		if err := wifiMgr.PowerCycle(); err != nil {
-			fmt.Printf("[!] Warning: failed to power-cycle Wi-Fi: %v\n", err)
-			fmt.Println("    You may need to switch networks manually.")
+			uiStatus("warn", fmt.Sprintf("Could not cycle Wi-Fi · %v", err))
+			uiNote("You may need to switch networks manually.")
 			return nil
 		}
-		fmt.Println("[OK] Wi-Fi cycled. Your system should auto-join its usual network.")
-		fmt.Println("    Tip: set a home network in 'epsh settings' for a clean switch back.")
+		uiStatus("ok", "Wi-Fi cycled · your system should auto-join its usual network")
+		uiNote("Tip · set a home network in `epsh settings` for a clean switch back")
 		return nil
 	}
 
-	fmt.Printf("\n[<] Returning to %s...\n", home)
+	uiStatus("run", "Returning to "+home)
 	if err := wifiMgr.Join(home, ""); err != nil {
-		fmt.Printf("[!] Could not rejoin %s: %v\n", home, err)
-		fmt.Println("    You will need to switch back manually.")
+		uiStatus("warn", fmt.Sprintf("Could not rejoin %s · %v", home, err))
+		uiNote("You will need to switch back manually.")
 		return nil
 	}
 
 	if _, err := wifiMgr.WaitForIP("", 30*time.Second); err != nil {
-		fmt.Printf("[!] Rejoined %s but no IP address yet: %v\n", home, err)
+		uiStatus("warn", fmt.Sprintf("Rejoined %s but no IP address yet · %v", home, err))
 		return nil
 	}
 
-	fmt.Printf("[OK] Back on %s\n", home)
+	uiStatus("ok", "Back on "+home)
 	return nil
 }

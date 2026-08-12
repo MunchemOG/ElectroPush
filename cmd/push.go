@@ -31,12 +31,13 @@ network you started on.`,
 }
 
 func runPush(cmd *cobra.Command, args []string) error {
+	uiHeading("Deploy", "Build · connect · install")
 
 	gradlePath, err := gradle.DetectWrapper()
 	if err != nil {
 		return fmt.Errorf("failed to detect Gradle wrapper: %w", err)
 	}
-	fmt.Printf("[OK] Gradle wrapper: %s\n", gradlePath)
+	uiStatus("ok", fmt.Sprintf("Gradle wrapper · %s", gradlePath))
 
 	if !adb.IsInstalled() {
 		return fmt.Errorf("adb not found - please install Android SDK Platform-Tools")
@@ -44,8 +45,8 @@ func runPush(cmd *cobra.Command, args []string) error {
 
 	if config.GetPreferUSB() {
 		if device, ok := adb.FindUSBDevice(); ok {
-			fmt.Printf("[OK] Hub attached over USB: %s\n", device.Label())
-			fmt.Println("    Using USB - your Wi-Fi will not be touched.")
+			uiStatus("ok", fmt.Sprintf("Hub attached over USB · %s", device.Label()))
+			uiNote("Using USB · your Wi-Fi will not be touched")
 
 			rememberHubABI(device.Serial)
 			if config.GetAutoSlim() {
@@ -84,7 +85,7 @@ func pushOverWiFi(gradlePath string) error {
 	}
 
 	if home != "" {
-		fmt.Printf("[OK] Currently on: %s\n", home)
+		uiStatus("run", "Currently on · "+home)
 	}
 
 	slimmedFor := ""
@@ -98,14 +99,14 @@ func pushOverWiFi(gradlePath string) error {
 	}
 
 	if !onRobot {
-		fmt.Printf("\n[>] Joining robot Wi-Fi: %s\n", profile.SSID)
+		uiStatus("run", "Joining robot Wi-Fi · "+profile.SSID)
 		ip, err := wifiMgr.JoinAndWait(profile.SSID, profile.Password, wifi.RobotSubnet, joinTimeout)
 		if err != nil {
 			return fmt.Errorf("failed to join %q: %w", profile.SSID, err)
 		}
-		fmt.Printf("[OK] On the robot network (%s)\n", ip)
+		uiStatus("ok", fmt.Sprintf("On the robot network · %s", ip))
 	} else {
-		fmt.Println("[OK] Already on the robot network")
+		uiStatus("ok", "Already on the robot network")
 	}
 
 	deployErr := deployToRobot(gradlePath, slimmedFor)
@@ -117,15 +118,15 @@ func pushOverWiFi(gradlePath string) error {
 	}
 
 	if leavingRobot {
-		fmt.Printf("\n[<] Returning to %s...\n", home)
+		uiStatus("run", "Returning to "+home)
 		if err := wifiMgr.Rejoin(home, robotSSIDs()); err != nil {
-			fmt.Printf("[!] Could not rejoin %s: %v\n", home, err)
-			fmt.Println("    You will need to switch back manually.")
+			uiStatus("warn", fmt.Sprintf("Could not rejoin %s · %v", home, err))
+			uiNote("You will need to switch back manually.")
 		} else if _, err := wifiMgr.WaitToLeave(wifi.RobotSubnet, 45*time.Second); err != nil {
-			fmt.Printf("[!] Could not get back onto %s: %v\n", home, err)
-			fmt.Println("    You will need to switch back manually.")
+			uiStatus("warn", fmt.Sprintf("Could not get back onto %s · %v", home, err))
+			uiNote("You will need to switch back manually.")
 		} else {
-			fmt.Printf("[OK] Back on %s\n", home)
+			uiStatus("ok", "Back on "+home)
 		}
 	}
 
@@ -138,11 +139,11 @@ func disconnectADB() {
 	}
 
 	if err := adb.Disconnect(); err != nil {
-		fmt.Printf("[!] Warning: could not disconnect ADB: %v\n", err)
+		uiStatus("warn", fmt.Sprintf("Could not disconnect ADB · %v", err))
 		return
 	}
 
-	fmt.Println("[OK] ADB disconnected")
+	uiStatus("ok", "ADB disconnected")
 }
 
 func resolveHomeNetwork(wifiMgr *wifi.Manager, onRobot, switchBack bool, robotSSID string) (string, error) {
@@ -188,28 +189,28 @@ func resolveHomeNetwork(wifiMgr *wifi.Manager, onRobot, switchBack bool, robotSS
 }
 
 func buildProject(gradlePath string, offline bool) error {
-	fmt.Println("\n[#] Building...")
+	uiRule()
+	uiStatus("run", "Building project")
 	if offline {
-		fmt.Println("    (offline - on the robot network, using cached dependencies)")
+		uiNote("Offline · using cached dependencies on the robot network")
 	}
-	fmt.Println("─────────────────────────────────────────")
 
 	start := time.Now()
 	if err := gradle.Build(gradlePath, offline, os.Stdout); err != nil {
 		return fmt.Errorf("build failed: %w", err)
 	}
 
-	fmt.Println("─────────────────────────────────────────")
-	fmt.Printf("[OK] Built in %.1fs\n", time.Since(start).Seconds())
+	uiRule()
+	uiStatus("ok", fmt.Sprintf("Built in %.1fs", time.Since(start).Seconds()))
 	return nil
 }
 
 func deployToRobot(gradlePath, slimmedFor string) error {
-	fmt.Println("\n[+] Connecting to robot via ADB...")
+	uiStatus("run", "Connecting to robot via ADB")
 	if err := adb.Connect(); err != nil {
 		return fmt.Errorf("failed to connect via ADB: %w", err)
 	}
-	fmt.Println("[OK] Connected via ADB")
+	uiStatus("ok", "Connected via ADB")
 
 	warnOnABIMismatch(slimmedFor, rememberHubABI(adb.RobotAddr()))
 
@@ -252,7 +253,8 @@ func deployOnce(gradlePath, serial string) error {
 		return fmt.Errorf("failed to find APK: %w", err)
 	}
 
-	fmt.Printf("\n[*] APK: %s\n", apkPath)
+	uiRule()
+	uiStatus("wait", "APK ready · "+apkPath)
 
 	opt := adb.Options{
 		Delta:         config.GetDeltaTransfer(),
@@ -275,11 +277,11 @@ func deployOnce(gradlePath, serial string) error {
 
 	switch {
 	case plan.Skipped:
-		fmt.Printf("\n[=] Nothing to install: %s (%.1fs)\n", plan.Reason, time.Since(start).Seconds())
+		uiStatus("idle", fmt.Sprintf("Nothing to install · %s (%.1fs)", plan.Reason, time.Since(start).Seconds()))
 	case plan.Splits > 0:
-		fmt.Printf("\n[OK] Deployed %d changed split(s) in %.1fs\n", plan.Splits, time.Since(start).Seconds())
+		uiStatus("ok", fmt.Sprintf("Deployed %d changed split(s) in %.1fs", plan.Splits, time.Since(start).Seconds()))
 	default:
-		fmt.Printf("\n[OK] Deployed in %.1fs\n", time.Since(start).Seconds())
+		uiStatus("ok", fmt.Sprintf("Deployed in %.1fs", time.Since(start).Seconds()))
 	}
 
 	// The APK just installed has no team code in it, so this is not finished

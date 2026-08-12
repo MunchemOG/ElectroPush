@@ -16,7 +16,8 @@ var disconnectCmd = &cobra.Command{
 }
 
 func runDisconnect(cmd *cobra.Command, args []string) error {
-	fmt.Println("[+] Disconnecting ADB...")
+	uiHeading("Connection", "Disconnect ADB")
+	uiStatus("run", "Disconnecting ADB")
 
 	if !adb.IsInstalled() {
 		return fmt.Errorf("adb not found")
@@ -26,6 +27,6 @@ func runDisconnect(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to disconnect: %w", err)
 	}
 
-	fmt.Println("[OK] ADB disconnected")
+	uiStatus("ok", "ADB disconnected")
 	return nil
 }
