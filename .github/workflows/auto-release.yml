@@ -237,11 +237,9 @@ jobs:
         id: github_sha
         run: |
           TAG=${{ steps.version.outputs.TAG }}
-          echo "Waiting for GitHub to generate archive..."
-          sleep 15
-          GITHUB_SHA256=$(curl -sL "https://github.com/MunchemOG/ElectroPush/archive/${TAG}.tar.gz" | shasum -a 256 | cut -d' ' -f1)
-          echo "github_sha256=$GITHUB_SHA256" >> $GITHUB_OUTPUT
-          echo "GitHub Archive SHA256: $GITHUB_SHA256"
+          TARBALL="${{ steps.sha.outputs.tarball }}"
+          GITHUB_SHA256="${{ steps.sha.outputs.sha256 }}"
+          echo "Using uploaded tarball checksum: $GITHUB_SHA256"
           
           # Update release body with correct SHA256
           gh release edit "${TAG}" --notes-file - <<EOF
@@ -258,7 +256,7 @@ jobs:
           Update your Homebrew tap formula at https://github.com/MunchemOG/homebrew-epsh with:
           
           \`\`\`ruby
-          url "https://github.com/MunchemOG/ElectroPush/archive/${TAG}.tar.gz"
+          url "https://github.com/MunchemOG/ElectroPush/releases/download/${TAG}/${TARBALL}"
           sha256 "${GITHUB_SHA256}"
           version "${{ steps.version.outputs.VERSION }}"
           \`\`\`
