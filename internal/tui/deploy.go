@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/MunchemOG/ElectroPush/internal/config"
 	"github.com/MunchemOG/ElectroPush/internal/ftcproject"
@@ -16,6 +17,8 @@ var deployItems = []string{
 	"Stream the install",
 	"Store native libraries uncompressed",
 	"Install only changed splits",
+	"Reconnect attempts",
+	"Connection check timeout",
 	"Back",
 }
 
@@ -39,6 +42,12 @@ var deployHelp = []string{
 
 	"When the project builds a base plus a feature module, install only the\n" +
 		"module that changed. Needs the project set up that way first.",
+
+	"How many times one deploy reconnects after the robot drops offline.\n" +
+		"Press enter to cycle between one, two, and three attempts.",
+
+	"Maximum time for the quick connection check before a deploy starts.\n" +
+		"Press enter to cycle between 1, 3, 5, and 10 seconds.",
 
 	"",
 }
@@ -91,11 +100,35 @@ func (m *SettingsModel) updateDeploy(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case 4:
 			m.setStatus(config.SetSplitInstall(!config.GetSplitInstall()), "Split install updated")
 		case 5:
+			m.cycleReconnectAttempts()
+		case 6:
+			m.cycleConnectionTimeout()
+		case 7:
 			m.goTo(screenMain, 8)
 		}
 	}
 
 	return m, nil
+}
+
+func (m *SettingsModel) cycleReconnectAttempts() {
+	next := config.GetReconnectAttempts() + 1
+	if next > 3 {
+		next = 1
+	}
+	m.setStatus(config.SetReconnectAttempts(next), fmt.Sprintf("Reconnect attempts set to %d", next))
+}
+
+func (m *SettingsModel) cycleConnectionTimeout() {
+	current := config.GetConnectionTimeout()
+	next := 1 * time.Second
+	for _, option := range []time.Duration{1 * time.Second, 3 * time.Second, 5 * time.Second, 10 * time.Second} {
+		if option > current {
+			next = option
+			break
+		}
+	}
+	m.setStatus(config.SetConnectionTimeout(next), fmt.Sprintf("Connection check timeout set to %s", next))
 }
 
 func (m *SettingsModel) toggleStoreLibs() {
@@ -143,6 +176,8 @@ func (m *SettingsModel) viewDeploy() string {
 		onOff(config.GetStreamInstall()),
 		m.storeLibsLabel(),
 		onOff(config.GetSplitInstall()),
+		fmt.Sprintf("%d", config.GetReconnectAttempts()),
+		config.GetConnectionTimeout().String(),
 		"",
 	}
 
@@ -152,7 +187,7 @@ func (m *SettingsModel) viewDeploy() string {
 
 	b.WriteString(helpBlock(deployHelp, m.cursor, deployHelpLines))
 
-	b.WriteString("\n" + helpStyle.Render("  enter toggle · esc back · `epsh dev` measures the difference") + "\n")
+	b.WriteString("\n" + helpStyle.Render("  enter change · esc back · `epsh dev` measures the difference") + "\n")
 	return b.String()
 }
 

@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"time"
 
 	"github.com/spf13/viper"
 )
@@ -38,6 +39,10 @@ type Config struct {
 	SkipUnchanged bool `mapstructure:"skip_unchanged"`
 
 	StreamInstall bool `mapstructure:"stream_install"`
+
+	ReconnectAttempts int `mapstructure:"reconnect_attempts"`
+
+	ConnectionTimeoutSeconds int `mapstructure:"connection_timeout_seconds"`
 
 	StoreLibs bool `mapstructure:"store_libs"`
 
@@ -90,6 +95,8 @@ func Initialize() error {
 	viper.SetDefault("hub_abi", "")
 	viper.SetDefault("skip_unchanged", true)
 	viper.SetDefault("stream_install", true)
+	viper.SetDefault("reconnect_attempts", 2)
+	viper.SetDefault("connection_timeout_seconds", 3)
 	viper.SetDefault("store_libs", false)
 	viper.SetDefault("split_install", false)
 	viper.SetDefault("extreme", false)
@@ -132,6 +139,8 @@ func Save(cfg *Config) error {
 	viper.Set("hub_abi", cfg.HubABI)
 	viper.Set("skip_unchanged", cfg.SkipUnchanged)
 	viper.Set("stream_install", cfg.StreamInstall)
+	viper.Set("reconnect_attempts", cfg.ReconnectAttempts)
+	viper.Set("connection_timeout_seconds", cfg.ConnectionTimeoutSeconds)
 	viper.Set("store_libs", cfg.StoreLibs)
 	viper.Set("split_install", cfg.SplitInstall)
 	viper.Set("extreme", cfg.Extreme)
@@ -407,6 +416,41 @@ func SetStreamInstall(enabled bool) error {
 		return err
 	}
 	cfg.StreamInstall = enabled
+	return Save(cfg)
+}
+
+// GetReconnectAttempts reports how many reconnects one deploy may make.
+func GetReconnectAttempts() int { return viper.GetInt("reconnect_attempts") }
+
+// SetReconnectAttempts controls the maximum reconnects one deploy may make.
+func SetReconnectAttempts(attempts int) error {
+	if attempts < 1 {
+		return fmt.Errorf("reconnect attempts must be at least 1")
+	}
+	cfg, err := Load()
+	if err != nil {
+		return err
+	}
+	cfg.ReconnectAttempts = attempts
+	return Save(cfg)
+}
+
+// GetConnectionTimeout reports how long the connection canary may wait.
+func GetConnectionTimeout() time.Duration {
+	return time.Duration(viper.GetInt("connection_timeout_seconds")) * time.Second
+}
+
+// SetConnectionTimeout controls how long the pre-flight connection check waits.
+func SetConnectionTimeout(timeout time.Duration) error {
+	seconds := int(timeout / time.Second)
+	if seconds < 1 || timeout != time.Duration(seconds)*time.Second {
+		return fmt.Errorf("connection timeout must be a positive whole number of seconds")
+	}
+	cfg, err := Load()
+	if err != nil {
+		return err
+	}
+	cfg.ConnectionTimeoutSeconds = seconds
 	return Save(cfg)
 }
 

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/spf13/viper"
 )
@@ -40,6 +41,39 @@ func TestInitialize(t *testing.T) {
 	configFile := filepath.Join(configPath, "config.yaml")
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {
 		t.Errorf("Config file was not created: %s", configFile)
+	}
+}
+
+func TestConnectionRecoveryDefaults(t *testing.T) {
+	cleanup := setupTest(t)
+	defer cleanup()
+
+	if got := GetReconnectAttempts(); got != 2 {
+		t.Errorf("reconnect attempts = %d, want 2", got)
+	}
+	if got := GetConnectionTimeout().Seconds(); got != 3 {
+		t.Errorf("connection timeout = %gs, want 3s", got)
+	}
+}
+
+func TestConnectionRecoverySettings(t *testing.T) {
+	cleanup := setupTest(t)
+	defer cleanup()
+
+	if err := SetReconnectAttempts(3); err != nil {
+		t.Fatal(err)
+	}
+	if got := GetReconnectAttempts(); got != 3 {
+		t.Errorf("reconnect attempts = %d, want 3", got)
+	}
+	if err := SetConnectionTimeout(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if got := GetConnectionTimeout(); got != 5*time.Second {
+		t.Errorf("connection timeout = %s, want 5s", got)
+	}
+	if err := SetReconnectAttempts(0); err == nil {
+		t.Error("zero reconnect attempts was accepted")
 	}
 }
 

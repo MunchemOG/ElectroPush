@@ -257,9 +257,11 @@ func deployOnce(gradlePath, serial string) error {
 	uiStatus("wait", "APK ready · "+apkPath)
 
 	opt := adb.Options{
-		Delta:         config.GetDeltaTransfer(),
-		SkipUnchanged: config.GetSkipUnchanged(),
-		Stream:        config.GetStreamInstall(),
+		Delta:            config.GetDeltaTransfer(),
+		SkipUnchanged:    config.GetSkipUnchanged(),
+		Stream:           config.GetStreamInstall(),
+		RecoveryAttempts: config.GetReconnectAttempts(),
+		CanaryTimeout:    config.GetConnectionTimeout(),
 	}
 	if config.GetSplitInstall() {
 		opt.Splits = gradle.FindSplits(gradle.ProjectDir(gradlePath))

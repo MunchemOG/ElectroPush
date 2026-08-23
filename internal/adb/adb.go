@@ -249,6 +249,13 @@ type Options struct {
 	Stream bool
 
 	Splits []string
+
+	// RecoveryAttempts limits reconnects across the whole deploy. Zero uses
+	// the default, so API callers get recovery without extra setup.
+	RecoveryAttempts int
+
+	// CanaryTimeout bounds the quick connection check before transfer begins.
+	CanaryTimeout time.Duration
 }
 
 // InstallWith installs an APK and reports what it actually did.
@@ -257,6 +264,18 @@ func InstallWith(serial, apkPath string, opt Options) (InstallPlan, error) {
 
 	if !IsInstalled() {
 		return plan, fmt.Errorf("adb not found")
+	}
+
+	recovery := newConnectionRecovery(serial, opt.RecoveryAttempts)
+	canaryTimeout := opt.CanaryTimeout
+	if canaryTimeout <= 0 {
+		canaryTimeout = defaultCanaryTimeout
+	}
+	if err := recovery.run("checking the robot connection", func() error {
+		_, err := runTimeout(serial, canaryTimeout, "shell", "echo", "ok")
+		return err
+	}); err != nil {
+		return plan, err
 	}
 
 	// What was installed is recorded whatever the settings say. Skipping an
@@ -300,11 +319,19 @@ func InstallWith(serial, apkPath string, opt Options) (InstallPlan, error) {
 	// Trying streaming first sent the whole APK and left delta as dead code.
 	remote := ""
 	if opt.Delta {
-		result, err := deltaInstall(serial, apkPath)
+		var result *DeltaResult
+		err := recovery.run("preparing the delta transfer", func() error {
+			var err error
+			result, err = deltaInstall(serial, apkPath)
+			return err
+		})
 		if err == nil {
 			remote = remoteDeltaAPK
 			defer pruneCache(serial, result.chunks)
 		} else {
+			if isConnectionRecoveryError(err) {
+				return plan, err
+			}
 			var unavailable ErrDeltaUnavailable
 			if errors.As(err, &unavailable) {
 				fmt.Printf("\n[!] Delta transfer unavailable: %s\n", unavailable.Reason)
@@ -320,7 +347,9 @@ func InstallWith(serial, apkPath string, opt Options) (InstallPlan, error) {
 	if opt.Stream {
 		// Binary on a device shell's stdin is not uniformly reliable on older
 		// Android, so a failure here is expected and must not end the deploy.
-		err := streamFrom(serial, apkPath, remote)
+		err := recovery.run("opening the streaming install", func() error {
+			return streamFrom(serial, apkPath, remote)
+		})
 		if err == nil {
 			plan.Streamed, plan.Delta = true, remote != ""
 			if fingerprint != "" {
@@ -329,6 +358,9 @@ func InstallWith(serial, apkPath string, opt Options) (InstallPlan, error) {
 			return plan, nil
 		}
 
+		if isRecoverableConnectionError(err) || isConnectionRecoveryError(err) {
+			return plan, err
+		}
 		fmt.Printf("\n[!] Streaming install unavailable: %v\n", err)
 		fmt.Println("[*] Falling back to a staged install.")
 	}
@@ -336,9 +368,9 @@ func InstallWith(serial, apkPath string, opt Options) (InstallPlan, error) {
 	var err error
 	if remote != "" {
 		fmt.Println("[*] Installing...")
-		err = runInstall(serial, remote)
+		err = recovery.run("installing the delta APK", func() error { return runInstall(serial, remote) })
 	} else {
-		err = tryInstall(serial, apkPath)
+		err = recovery.run("transferring the APK", func() error { return tryInstall(serial, apkPath) })
 	}
 	if err != nil {
 		return plan, err
@@ -350,72 +382,6 @@ func InstallWith(serial, apkPath string, opt Options) (InstallPlan, error) {
 	}
 
 	return plan, nil
-}
-
-// Install transfers and installs an APK, optionally sending only what changed.
-func Install(serial, apkPath string, useDelta bool) error {
-	if !IsInstalled() {
-		return fmt.Errorf("adb not found")
-	}
-
-	if useDelta {
-		err := installDelta(serial, apkPath)
-		if err == nil {
-			return nil
-		}
-
-		var unavailable ErrDeltaUnavailable
-		if errors.As(err, &unavailable) {
-			fmt.Printf("\n[!] Delta transfer unavailable: %s\n", unavailable.Reason)
-			fmt.Println("[*] Falling back to a full transfer.")
-		} else {
-
-			fmt.Printf("\n[!] Delta install failed: %v\n", err)
-			fmt.Println("[*] Falling back to a full transfer.")
-		}
-	}
-
-	err := tryInstall(serial, apkPath)
-	if err == nil {
-		return nil
-	}
-
-	isWireless := serial == "" || strings.Contains(serial, ":")
-	if !isWireless {
-		return err
-	}
-
-	errLower := strings.ToLower(err.Error())
-	if strings.Contains(errLower, "device offline") ||
-		strings.Contains(errLower, "failed to install") ||
-		strings.Contains(errLower, "closed") ||
-		strings.Contains(errLower, "error:") {
-
-		fmt.Printf("\n[!] Install failed: %v\n", err)
-		fmt.Println("[*] Attempting recovery: disconnect and reconnect...")
-
-		if disconnectErr := Disconnect(); disconnectErr != nil {
-			fmt.Printf("[!] Warning: disconnect failed: %v\n", disconnectErr)
-		}
-
-		time.Sleep(2 * time.Second)
-
-		if connectErr := Connect(); connectErr != nil {
-			return fmt.Errorf("reconnect failed: %w", connectErr)
-		}
-
-		time.Sleep(1 * time.Second)
-
-		fmt.Println("[*] Retrying install...")
-		if retryErr := tryInstall(serial, apkPath); retryErr != nil {
-			return fmt.Errorf("install failed after reconnect: %w", retryErr)
-		}
-
-		fmt.Println("[OK] Install succeeded after reconnect")
-		return nil
-	}
-
-	return err
 }
 
 func tryInstall(serial, apkPath string) error {
