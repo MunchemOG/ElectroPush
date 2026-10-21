@@ -11,7 +11,7 @@ This fork numbers its own releases, from 0.0 up. The entries from 1.3.3 down
 are upstream Pusher's, under Pusher's numbers, kept because their work is what
 the fork was merged from.
 
-## 0.0.5
+## 0.0.31
 
 - **Upstream Pusher 1.3.3 merged in.** That brings `epsh relay` for putting the
   robot on your own Wi-Fi over a USB adapter, `epsh ip`, the power monitor and
