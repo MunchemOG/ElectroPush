@@ -103,9 +103,21 @@ Requires `adb` and an FTC project with a Gradle wrapper.
 | `epsh slim` | Shrink the APK (`--undo` to revert) |
 | `epsh hwconfig` | Pull, edit and push the robot's hardware configs |
 | `epsh doctor` | Diagnose Wi-Fi, adb and project problems |
-| `epsh visualiser <OpMode>` | Draw the path an auto drove, coloured by speed |
+| `epsh power` | Show what drew the most current on the last run |
+| `epsh profile` | Flame chart of what ate the loop time on the last run |
+| `epsh ip` | Where the robot is, and every port it is serving |
+| `epsh relay setup` | Put the robot on your own Wi-Fi over a USB adapter |
 | `epsh prepare` | Cache Gradle dependencies while online |
 | `epsh help` | Help |
+
+Anything that needs the robot will offer to go and get it. Run `epsh power` or
+`epsh hwconfig` with nothing attached and it names the network it would join
+and asks; say no and you get the error you would have got anyway. Nothing is
+asked when epsh is not running in a terminal, so scripts behave as before.
+
+The menus offer the same thing with a key, since a menu has nowhere to print a
+question: where a screen needs the robot and has none, `c` joins and connects,
+and the screen goes back for whatever it could not read.
 
 ## Settings
 
@@ -116,6 +128,271 @@ save immediately to `~/.config/epsh/config.yaml`.
 **Update epsh** checks for a newer release and installs it. A Homebrew install
 is handed to `brew upgrade` so the next one does not undo it; anything else
 replaces its own binary, verified against the release checksums.
+
+Epsh also looks for a newer release on its own, once a day, in the background.
+When it finds one it says so with a desktop notification rather than a line in
+the terminal, because the point is to reach somebody who has stopped reading it:
+macOS through osascript, Linux through notify-send, Windows through a toast. A
+version is announced once rather than every day until it is installed, and a
+check that cannot reach GitHub says nothing at all. Turn it off with
+**Tell me about updates**, or `EPSH_NO_NOTIFY=1` to keep the check and drop
+only the notification.
+
+## What is drawing the current
+
+Turn **Power monitor** on in `epsh settings`, deploy, drive, stop the OpMode,
+then look at what it recorded. Every run is its own file, so a practice session
+leaves one per run, newest first:
+
+```
+  One run each, newest first.
+
+   TeleOP                       15:31:57
+ > TeleOP                       15:24:57
+   TeleOP                       15:19:57
+   CloseBlue                    15:02:57
+```
+
+**Power readings** in `epsh settings` opens that list and shows any of them.
+`epsh power` prints the newest without opening a menu:
+
+```
+TeleOP, 42s
+─────────────────────────────────────────
+  motor                    peak  average   peak at
+  shooter                21.70A    6.50A     30.1s
+  left_front              8.40A    2.10A     12.3s
+  right_front             7.90A    2.00A     12.1s
+  intake                  5.20A    1.40A      8.0s
+
+                         12.00A drawn by the motors together, on average
+  Control_Hub (hub)      33.50A peak, 14.20A average
+  battery                13.40V down to 11.20V, a sag of 2.20V
+```
+
+Which turns "the battery keeps dying" into a name and a number.
+
+**Power readings** in `epsh settings` lists every run on the robot and opens
+any of them as a page. The graph is
+meant to be worked: drag across it to zoom in like an oscilloscope, double-click
+to zoom out, click a name in the legend to take that line out of the way, and
+move across it to read every value at that instant. The battery graph follows
+the same window, because the question after seeing a spike is always what the
+battery did at that moment.
+
+The table ranks by **charge** rather than peak. Peak is what trips breakers;
+charge is what flattens the battery, and a motor sitting at 4 A all match beats
+a 20 A spike that lasts a tenth of a second. Both numbers are there.
+
+### What can and cannot be measured
+
+Only two things on an FTC robot report current: motors, and the hub. There is no
+per-servo or per-sensor current sensing in the hardware, so:
+
+- **Motors** are measured individually.
+- **The servo bus** and **the I2C bus** get one number each, from the hub. That
+  is everything the hardware can say about servos and I2C sensors.
+- **The hub's own reading** is everything plugged into it, which is why it is
+  listed apart from the motors rather than ranked beside them.
+- **A Limelight cannot report current at all.** It is not on a rail the hub
+  measures, so what it draws is inside the hub's total and nowhere else. It is
+  reported as how hard it is working, which is the nearest thing there is.
+
+**Sample rate** chooses how often everything is read, from 20 ms to 500 ms. It
+is the entire cost of the feature, so pick it deliberately. The value is baked
+into the generated file, because the robot cannot read this laptop's settings,
+so changing it rewrites the monitor and needs a deploy.
+
+### It costs loop time, and is not for matches
+
+**Do not run this in an official match.** A motor's current cannot be read in a
+bulk transfer: the bulk packet carries an over-current flag but not the value,
+so every reading is its own round trip over the RS485 bus. Reading eight motors
+ten times a second is eighty round trips a second that your robot was not making
+before, and they compete with the ones your OpMode makes.
+
+Sampling runs on its own thread rather than in your loop, and at 10Hz rather
+than every iteration, so the cost is as small as it can be made. It is not zero.
+Epsh says so on **every** deploy while the monitor is installed, because the
+way this goes wrong is somebody turning it on during practice and forgetting:
+
+```
+[!] The power monitor is installed, so this build reads motor current
+    while every OpMode runs. That costs loop time: a motor's current
+    cannot be bulk read, so each reading is its own trip over the bus.
+    Turn it off in `epsh settings` before an official match.
+```
+
+## Reaching the robot without leaving your own network
+
+Switching Wi-Fi to deploy is the thing everybody puts up with: the laptop leaves
+whatever it was on, the robot's access point has no route anywhere, and getting
+back is another wait at the other end.
+
+The robot can join your network instead. Plug a USB Wi-Fi adapter into the
+Control Hub and:
+
+```
+epsh relay setup "YourWiFi" "your password"
+```
+
+The hub joins your network **and carries on serving its own access point to the
+Driver Station**, so the robot stays drivable throughout. Deploys, FtcDashboard,
+Panels and the Limelight all then work over the network you were already on.
+
+Inspired by Dhruv, FTC 32001L, whose ADB relay bridged adb from the robot's
+access point to the local network with a Raspberry Pi in between. The want is
+theirs; this reaches it from the other end, by putting the robot on your network
+rather than putting a machine on the robot's.
+
+### The adapter, and the driver for it
+
+The hub's own radio cannot join anything — it *is* the access point, and the SDK
+has no client mode for it: `RobotControllerAccessPointAssistant` reports
+`RCWIRELESSAP` and has no `connect` method at all. So this needs a second radio.
+
+A Linux driver is compiled against one exact kernel and the kernel refuses
+anything else, so a driver cannot be downloaded and cannot be built on the
+laptop that wants it. Epsh carries six, built from
+[the kernel source REV publishes](https://github.com/REVrobotics/kernel-controlhub-android),
+one per Control Hub OS release from 1.0.0 to 1.1.6. The driver is already in
+REV's own tree at `drivers/net/wireless/rockchip_wlan/rtl8822bu`; it is simply
+not enabled in the config they ship, so these are their source with one line
+turned on, plus the TP-Link device IDs Realtek never listed.
+
+It picks by OS release, and failing that by kernel release, which is what the
+hub itself checks — these kernels are built without `CONFIG_MODVERSIONS`, so
+vermagic is the whole test. A hub it has nothing for is told so by name, with a
+link to ask.
+
+**Which adapters work** is decided by that driver: RTL8822BU and RTL8812BU, the
+chipset in the TP-Link Archer T4U v3 among others. `epsh ip --adapters` says
+what your hub can see, what its kernel can drive, and what the kernel said about
+whatever is plugged in.
+
+### It stays put
+
+A boot hook rejoins on every power cycle and then watches. Unplug the adapter
+and plug it back in and the robot is on the network again within half a minute,
+with no laptop involved — which also covers the access point restarting and the
+lease expiring. `epsh relay forget` removes all of it and leaves the hub as it
+was.
+
+### Picking a network
+
+`epsh settings` -> **Reaching the robot over your own network** browses rather
+than types. **Look for networks near the robot** scans from the hub itself,
+which is the only vantage point that counts: what a laptop hears in the pit is
+not what the robot hears on the field. Signal, band, and open networks are all
+shown. Networks the robot has joined before are remembered, so a workshop and a
+venue are a choice rather than a retype.
+
+When the robot is already somewhere on your network, epsh finds it: where it
+was last, then the hub's own access point, then a sweep. A sweep only ever walks
+a subnet small enough to be somebody's own network, never a /8 or a /16, and
+something answering on the adb port is not enough to be treated as a robot —
+epsh asks the device what it is and leaves it alone if it turns out to be a
+phone.
+
+### Where everything is
+
+`epsh ip` asks the robot where it is and then knocks on every door:
+
+```
+Control Hub v1.0 (192.168.1.183:5555)
+─────────────────────────────────────────
+  addresses    192.168.1.183, 192.168.43.1
+  hostname     android-a252101d8e716898
+
+  ✓ adb                192.168.1.183:5555        what epsh deploys over
+  ✓ Robot Controller   http://192.168.1.183:8080 the hub's own manage page
+  ✓ FtcDashboard       http://192.168.1.183:8000 tuning and telemetry
+  ✓ Panels             http://192.168.1.183:8001 tuning and telemetry
+  ✓ Panels socket      192.168.1.183:8002        what `epsh dash diff` reads
+  ✓ Limelight          http://192.168.1.183:5801 through the Panels proxy
+```
+
+Only what actually answered is reported, so an address printed there is one you
+can paste into a browser rather than one epsh believes ought to work.
+
+## What is eating the loop time
+
+The power monitor answers what the battery is going into. This answers where the
+time is going, which is the other half of the same question and the one you
+cannot guess your way to.
+
+Turn **Loop profiler** on in `epsh settings`, deploy, run an OpMode, stop it,
+then `epsh profile`. It draws a flame chart:
+
+```
+  LynxModule.getBulkData        PathFollower.step
+  Blob.update                                      Spindexer.update
+  FarBlue.loop
+  EventLoopManager.run
+  all
+```
+
+Each bar is a method, as wide as the share of the run spent inside it and
+everything it called, growing upwards from the whole run at the bottom so a bar
+sits on top of the one that called it. The code that was actually executing ends
+up along the top. Click a bar to zoom into it. Your own code is drawn in blue
+so it stands out from the SDK and the libraries around it, and the table under
+the chart ranks by time spent *in* a method rather than under it, which is the
+difference between the code that was running and a list of everything that
+called it.
+
+Nothing has to be instrumented, and no OpMode has to be edited. A thread wakes
+up every few milliseconds, asks the thread running the OpMode what it is in the
+middle of, and files the answer. Time is then counted in samples: a method in
+half of them was running for half the run.
+
+The thread to sample is found by looking for your OpMode's own class in the
+stacks rather than by name, because the SDK runs an iterative OpMode's `loop()`
+on the event loop thread and a `LinearOpMode` on one of its own, and promises the
+name of neither.
+
+**Profile rate** chooses how often, from 2 ms to 50 ms. Like the power monitor's,
+the value is baked into the generated file, so changing it needs a deploy.
+
+The page says how much of the run it actually saw. A robot too busy to let the
+sampler run at its period produces a profile that is correctly shaped but stands
+for less of the run than it looks like, and that is worth knowing rather than
+hiding.
+
+### It costs loop time too, and is not for matches
+
+Reading another thread's stack stops that thread for as long as the walk takes.
+At the default rate that is small, and it is not nothing, so epsh says so on
+every deploy while the profiler is installed:
+
+```
+[!] The loop profiler is installed, so this build samples the OpMode's
+    thread while every OpMode runs. Reading a thread's stack stops it for
+    as long as the walk takes, so that costs loop time.
+    Turn it off in `epsh settings` before an official match.
+```
+
+### How it works
+
+Turning it on writes one generated file into your project, under a
+`epshpower` package, and turning it off deletes it. Nothing else in your
+project changes: no library, no dependency, and no edits to your OpModes.
+
+It attaches itself. The file carries a `@WebHandlerRegistrar` method, which the
+robot controller calls once at startup, and from there it listens for OpModes
+starting and stopping. That is the same hook FtcDashboard uses to attach, which
+is the reason to trust it. Your OpModes do not know it exists, so there is
+nothing to remember before a practice run and nothing to take out afterwards
+except the toggle.
+
+Readings are held in memory and written once when the OpMode stops, to
+`/sdcard/FIRST/epsh-power`, which is where `epsh power` reads them from.
+`epsh power --clear` deletes them.
+
+With Epsh Extreme set up, the monitor is kept in the APK rather than reloaded.
+It has to be: the startup hook is called when the robot controller's web server
+comes up, long before anything is reloaded, so a monitor that arrived in a
+reload would be found and never called. Epsh adds it to the keep list itself.
 
 ## Hardware configurations
 
@@ -171,6 +448,17 @@ stop the push (`--force` overrides); anything epsh is unsure about is a
 warning. Device types it does not recognise, your own OnBotJava or external
 library drivers, still have their names checked but are left alone otherwise.
 
+**Pushes are checked.** Every configuration is read back off the robot and
+compared byte for byte, and the robot's own list is checked for the name. A push
+that adb reported as fine but that left nothing usable behind now fails at the
+moment it happens rather than turning up as a configuration that never appears.
+
+**Not in the list on the Driver Station?** The robot controller reads that
+directory afresh whenever it is asked, but the Driver Station shows the list it
+was given when it last asked. A configuration that appeared underneath it is not
+there yet. Leave the config screen and open it again, or push with `--restart`,
+which restarts the robot controller so the list is rebuilt.
+
 **Overwriting is guarded.** The robot's copy of anything about to be replaced is
 saved into `configs/.epsh-backup/` first, because it may have been changed on
 the Driver Station since you pulled it. `--no-backup` skips that.
@@ -183,34 +471,6 @@ pick it → Activate. Epsh says so when the file you pushed is the active one.
 Reading *which* configuration is active needs privileged adb. That works on a
 Control Hub; on a phone robot controller epsh says it could not tell rather
 than guessing.
-
-## Visualising an autonomous
-
-`epsh visualiser CloseBlue` pulls a path trace off the robot and renders an HTML
-page: the whole flow of the auto, every curve coloured by modelled speed, and a
-duration estimate next to the measured time.
-
-```bash
-epsh visualiser CloseBlue     # newest trace for that OpMode
-epsh visualiser               # newest trace on the robot
-epsh visualiser --file t.json # a trace you already have
-```
-
-Segments are labelled with the `case` they came from. The blob library captures a
-stack trace on each path commit and epsh maps the line number back into your
-source, so it works whatever shape the auto is: state machine, inheritance chain,
-poses from a constants class. Nothing to annotate.
-
-Colour is modelled speed, not commanded power. Epsh runs a forward/backward
-sweep over each curve capped by `maxPower`, by acceleration, and by how hard the
-curve bends, so a leg that stays cold is usually cornering-limited and lowering
-maxPower there costs you nothing. Tune the model to your drivetrain with
-`--top-speed`, `--accel`, `--decel` and `--lat-accel`; the gap between the
-estimate and the measured time tells you how far off the defaults are.
-
-Recording requires the `blob-dev` artifact and `BlobParams.recordTrace = true`.
-Competition builds of blob contain no recording code at all, so a robot you take
-to a match cannot log even if the flag is set.
 
 ## Making deploys faster
 
@@ -228,6 +488,14 @@ falls back to a full transfer.
 which is about 10 MB of a stock FTC APK. It asks the connected hub which
 architecture it runs and refuses to guess, so connect the robot first. Files it
 edits are backed up next to themselves; `epsh slim --undo` restores them.
+
+It needs a Groovy `build.common.gradle`. On a project configured with the Kotlin
+DSL it will not work, and is not going to: the lines it patches are written by
+your team in whichever of several shapes you wrote them, so it would sit there
+matching nothing while every deploy went on packaging everything. Epsh stops
+rather than pretend. Epsh Extreme is different and supports both the Kotlin
+DSL and Kotlin source files, because it writes one block of its own rather than
+editing yours.
 
 ## Deploy speed
 
@@ -349,6 +617,91 @@ every deploy after that reloads.
 The same menu undoes it. Deploy once afterwards so the robot gets an APK with
 your team code back in it.
 
+Turning **Use it when deploying** off does not put team code back in the APK.
+Only undoing the setup does: the exclusion lives in your gradle file, and that
+is what the build obeys. Epsh deploys correctly either way, reloading after
+the install even when the setting is off, and says so when it does. The menu
+shows that state as `off (project still set up)`.
+
+### It checks that the robot agreed
+
+Delivering classes and having them registered are different things, and until
+now epsh only knew about the first. A reload that pushed every file and
+registered none of them printed the same success as one that worked.
+
+So after each reload epsh asks the robot what it actually has. Both
+FtcDashboard and Panels report the robot's own OpMode list, straight out of
+`RegisteredOpModes`, which is the same list the Driver Station shows. Compared
+against the OpModes your source declares, that turns a silent disappearance
+into a line of output:
+
+```
+[!] the robot registered 32 of 33 OpModes. Missing: RST TUNING
+    They compiled and reached the robot, so this is registration rather
+    than delivery. Usually the app never rescanned: restart the robot app,
+    since the SDK attaches its reload watch when it starts.
+```
+
+Both dashboards are asked, because a team runs one or the other and asking the
+wrong one looks exactly like a robot that registered nothing. When neither
+answers, the reload says so rather than staying quiet:
+
+```
+[!] could not check that the robot registered the 33 OpModes this reload sent.
+    No dashboard answered, and a reload can deliver every class and still
+    register none of them. Look at the Driver Station's list before you rely
+    on this build, or add FtcDashboard or Panels so epsh can look for you.
+```
+
+That used to be silence, on the grounds that a dashboard is not a requirement.
+The reasoning missed the point of the check: it exists for the deploy that did
+not work, and the one team it happened to ran Panels, so epsh had nothing to
+say while their Driver Station listed nothing at all.
+
+### It will not set up alongside Sloth
+
+Sloth reloads team code onto the robot, which is what Epsh Extreme does, and
+the two cannot share a robot. Both install a class loader and both leave a copy
+of team code on the SD card, so the robot ends up holding two and loading
+whichever it reaches first.
+
+Confirmed from a team's robot log: Sloth's loader picked up the dex epsh had
+left in the OnBotJava jars directory nine hours earlier, and every one of their
+fifteen classes failed to define, because the copy epsh ships carries team
+code alone and the library those classes extend was not reachable from that
+loader. The Driver Station listed no OpModes at all, and it survived
+uninstalling epsh, the broken copy being on the robot rather than the laptop.
+
+So setup is refused on a project that has Sloth in it, rather than warned about.
+`epsh doctor` says so too, for a project that was set up before this existed.
+
+### Kotlin
+
+Both kinds. A module configured with `build.gradle.kts` gets its exclusion
+written in that dialect, and `.kt` source files are compiled and reloaded
+alongside `.java` ones.
+
+The compiler is the one your project already builds with. Epsh reads the
+Kotlin version off the `kotlin-stdlib` on your compile classpath and takes the
+matching `kotlin-compiler-embeddable` out of the Gradle cache, where the Kotlin
+plugin put it. Nothing is downloaded, and a project that has never been built is
+told to build once rather than guessed at. Kotlin is compiled first, with your
+Java files passed alongside for their signatures, then javac compiles the Java
+against what came out, so the two halves can refer to each other in both
+directions. Measured on a real Kotlin project: 7 files, 2.0 seconds to a dex.
+
+The exclusion has a second half for Kotlin, and it is the half worth knowing
+about. Excluding from the android source set does nothing to `.kt` files,
+because the Kotlin plugin compiles from a source set of its own. Without the
+extra block, team Kotlin stayed in the APK while also being reloaded, and
+parent-first delegation means the packaged copy is the one that runs: the reload
+would report success and change nothing. Measured before the fix, six of six
+Kotlin classes survived an exclusion that reported success.
+
+`@Config` classes written as Kotlin `object`s are bridged like any other, named
+by their declaration rather than their file, since Kotlin does not require the
+two to match.
+
 ### How it works, briefly
 
 The FTC SDK already loads classes from outside the APK, and already watches a
@@ -363,9 +716,14 @@ for classes at all, so they need nothing.
 
 Two do. **FtcDashboard** scans the APK with `getPackageCodePath`, and is handled:
 epsh registers your `@Config` classes with it from inside the reload.
-**Panels** scans the same way through its own `ClassFinder`, and is **not
-handled yet**, so anything Panels discovers by scanning will not see reloaded
-classes. Panels used directly from your own code is unaffected.
+**Panels** scans the same way through its own `ClassFinder`, and **cannot be
+handled**, so anything Panels discovers by scanning will not see reloaded
+classes. Not for want of trying: its only public way in is
+`PanelsConfigurables.refreshClass(Object)`, which takes the object's class name
+and hands it to `Class.forName(String)`. That resolves against the caller's
+loader, which is the APK's, and a reloaded class is not in it. The Class object
+that would have worked is discarded on the way. Panels used directly from your
+own code is unaffected, and `epsh dash diff` reads Panels either way.
 
 A library that scans and is not handled can have its package kept in the APK
 instead.
@@ -397,6 +755,51 @@ connecting.
 
 If the network is ever guessed wrong on any platform, pin it in
 `epsh settings` → Home Wi-Fi network, which always wins.
+
+### Looking for the hub
+
+`Could not find network 14270-RC` does not mean the hub is off. It means the
+network was not in the driver's list of what is nearby at the moment the join
+asked, which is the normal state for a hub that was switched on a minute ago:
+the list is only refreshed when something scans, and nothing had.
+
+So epsh scans. It starts looking for the hub's network in the background
+before the build begins, which costs nothing because the build was going to take
+that long anyway, and by the time the join happens the hub is in the list. It
+stops scanning before the join and stays stopped for the deploy, because a scan
+hops the radio across every channel and would cost the transfer several seconds
+of throughput.
+
+The payoff is that a failed join now comes with the half the OS cannot tell you:
+
+```
+[!] 14270-RC is not broadcasting.
+    Trying anyway, but check the hub is powered on and nearby.
+Error: failed to join "14270-RC": Could not find network 14270-RC.
+    epsh never saw that network while it was looking, so the hub is
+    probably switched off, still starting up, or out of range
+```
+
+and when the hub *was* seen, epsh says so and retries the join once, which is
+usually all a hub that is sitting right there needs.
+
+`epsh doctor` answers the same question on demand, under **Robot Wi-Fi**.
+
+On macOS this works despite Location Services, which is the part worth knowing:
+the name filter is applied inside the OS, before the redaction that hides
+network names from command-line tools. Epsh never learns the names of the
+networks around you, only whether the one it asked about is among them. The
+pace is set by the radio, which takes about four seconds per scan and refuses
+another for ten. Linux asks nmcli for a rescan; Windows reads the list netsh
+keeps. Set `EPSH_NO_SCAN=1` to turn it off everywhere.
+
+## What epsh sends
+
+Nothing about you or your team. epsh has no usage counting or telemetry; the
+device counter in upstream Pusher was removed from this fork.
+
+epsh does talk to GitHub to check for a newer epsh release (turn that off with
+**Tell me about updates** in `epsh settings`).
 
 ## Credits
 

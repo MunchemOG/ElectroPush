@@ -6,6 +6,7 @@ import (
 
 	"github.com/MunchemOG/ElectroPush/internal/adb"
 	"github.com/MunchemOG/ElectroPush/internal/config"
+	"github.com/MunchemOG/ElectroPush/internal/robot"
 	"github.com/MunchemOG/ElectroPush/internal/wifi"
 	"github.com/spf13/cobra"
 )
@@ -42,7 +43,7 @@ func runExit(cmd *cobra.Command, args []string) error {
 	home := config.GetHomeSSID()
 	if home == "" {
 
-		if inferred, err := wifiMgr.MostRecentNetwork(robotSSIDs()...); err == nil && inferred != "" {
+		if inferred, err := wifiMgr.MostRecentNetwork(robot.SSIDs()...); err == nil && inferred != "" {
 			home = inferred
 			uiStatus("wait", fmt.Sprintf("Assuming you came from %q", home))
 		}

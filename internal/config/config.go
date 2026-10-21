@@ -11,6 +11,25 @@ import (
 )
 
 // Profile is one saved robot: a name, its Wi-Fi and the password.
+// Spot is somewhere the robot has been found, labelled by the network the
+// laptop was on at the time.
+//
+// The label is the laptop's network rather than the robot's, because that is
+// the one epsh can actually know: the robot does not report which access
+// point it is behind, and "the shop" or "the venue" is what somebody is
+// choosing between anyway.
+// HubNetwork is a network the robot itself can join, remembered so a team that
+// moves between a workshop and a venue chooses rather than retypes.
+type HubNetwork struct {
+	SSID     string `mapstructure:"ssid"`
+	Password string `mapstructure:"password"`
+}
+
+type Spot struct {
+	Network string `mapstructure:"network"`
+	Address string `mapstructure:"address"`
+}
+
 type Profile struct {
 	Name     string `mapstructure:"name"`
 	SSID     string `mapstructure:"ssid"`
@@ -51,6 +70,19 @@ type Config struct {
 	Extreme bool `mapstructure:"extreme"`
 
 	DashWatch bool `mapstructure:"dash_watch"`
+
+	UpdateNotify bool `mapstructure:"update_notify"`
+
+	PowerPeriod   int          `mapstructure:"power_period_ms"`
+	ProfilePeriod int          `mapstructure:"profile_period_ms"`
+	Relay         bool         `mapstructure:"relay"`
+	RobotAddress  string       `mapstructure:"robot_address"`
+	RobotSpots    []Spot       `mapstructure:"robot_spots"`
+	HubSSID       string       `mapstructure:"hub_ssid"`
+	HubPassword   string       `mapstructure:"hub_password"`
+	HubNetworks   []HubNetwork `mapstructure:"hub_networks"`
+
+	ForceInstall bool `mapstructure:"force_install"`
 }
 
 var (
@@ -100,6 +132,17 @@ func Initialize() error {
 	viper.SetDefault("store_libs", false)
 	viper.SetDefault("split_install", false)
 	viper.SetDefault("extreme", false)
+	viper.SetDefault("dash_watch", false)
+	viper.SetDefault("update_notify", true)
+	viper.SetDefault("power_period_ms", 100)
+	viper.SetDefault("profile_period_ms", 10)
+	viper.SetDefault("relay", false)
+	viper.SetDefault("robot_address", "")
+	viper.SetDefault("robot_spots", []Spot{})
+	viper.SetDefault("hub_ssid", "")
+	viper.SetDefault("hub_password", "")
+	viper.SetDefault("hub_networks", []HubNetwork{})
+	viper.SetDefault("force_install", false)
 
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {
 
@@ -144,6 +187,17 @@ func Save(cfg *Config) error {
 	viper.Set("store_libs", cfg.StoreLibs)
 	viper.Set("split_install", cfg.SplitInstall)
 	viper.Set("extreme", cfg.Extreme)
+	viper.Set("dash_watch", cfg.DashWatch)
+	viper.Set("update_notify", cfg.UpdateNotify)
+	viper.Set("power_period_ms", cfg.PowerPeriod)
+	viper.Set("profile_period_ms", cfg.ProfilePeriod)
+	viper.Set("relay", cfg.Relay)
+	viper.Set("robot_address", cfg.RobotAddress)
+	viper.Set("robot_spots", cfg.RobotSpots)
+	viper.Set("hub_ssid", cfg.HubSSID)
+	viper.Set("hub_password", cfg.HubPassword)
+	viper.Set("hub_networks", cfg.HubNetworks)
+	viper.Set("force_install", cfg.ForceInstall)
 
 	if err := viper.WriteConfig(); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
@@ -343,14 +397,253 @@ func SetDeltaTransfer(enabled bool) error {
 	return Save(cfg)
 }
 
-// GetInstallKey returns this install's key, empty on a fresh device.
-func GetInstallKey() string {
-	return viper.GetString("install_key")
+// GetUpdateNotify reports whether epsh may say that a newer version exists.
+func GetUpdateNotify() bool {
+	return viper.GetBool("update_notify")
 }
 
-// SetInstallKey records this install's key.
-func SetInstallKey(key string) error {
-	viper.Set("install_key", key)
+// SetUpdateNotify controls whether epsh checks for newer versions at all.
+func SetUpdateNotify(enabled bool) error {
+	cfg, err := Load()
+	if err != nil {
+		return err
+	}
+	cfg.UpdateNotify = enabled
+	return Save(cfg)
+}
+
+// GetForceInstall reports whether the next deploy has to install rather than
+// reload, whatever else it thinks.
+//
+// Set when something changes that a reload cannot carry, and read on the next
+// deploy wherever that happens. It lives here rather than on the robot because
+// the changes that set it are made in a menu, with no robot connected to tell.
+func GetForceInstall() bool {
+	return viper.GetBool("force_install")
+}
+
+// SetForceInstall marks the next deploy as needing a full install.
+func SetForceInstall(force bool) error {
+	cfg, err := Load()
+	if err != nil {
+		return err
+	}
+	cfg.ForceInstall = force
+	return Save(cfg)
+}
+
+// GetPowerPeriod is how often the power monitor reads every device, in
+// milliseconds. It is the whole cost of the feature, so it is worth choosing.
+func GetPowerPeriod() int {
+	period := viper.GetInt("power_period_ms")
+	if period <= 0 {
+		return 100
+	}
+	return period
+}
+
+// SetPowerPeriod changes how often the monitor reads.
+func SetPowerPeriod(ms int) error {
+	cfg, err := Load()
+	if err != nil {
+		return err
+	}
+	cfg.PowerPeriod = ms
+	return Save(cfg)
+}
+
+// GetProfilePeriod is how often the loop profiler samples the OpMode's thread,
+// in milliseconds. It is the whole cost of the feature, so it is worth choosing.
+func GetProfilePeriod() int {
+	period := viper.GetInt("profile_period_ms")
+	if period <= 0 {
+		return 10
+	}
+	return period
+}
+
+// SetProfilePeriod changes how often the profiler samples.
+func SetProfilePeriod(ms int) error {
+	cfg, err := Load()
+	if err != nil {
+		return err
+	}
+	cfg.ProfilePeriod = ms
+	return Save(cfg)
+}
+
+// GetRelay reports whether epsh should look for the robot on the network the
+// laptop is already on before taking over the radio to join the robot's own.
+func GetRelay() bool { return viper.GetBool("relay") }
+
+// SetRelay turns that on or off.
+func SetRelay(on bool) error {
+	cfg, err := Load()
+	if err != nil {
+		return err
+	}
+	cfg.Relay = on
+	return Save(cfg)
+}
+
+// GetRobotAddress is where the robot was last found, so the next run reaches it
+// in one socket rather than a sweep.
+func GetRobotAddress() string { return viper.GetString("robot_address") }
+
+// SetRobotAddress writes down where it was.
+func SetRobotAddress(addr string) error {
+	cfg, err := Load()
+	if err != nil {
+		return err
+	}
+	cfg.RobotAddress = addr
+	return Save(cfg)
+}
+
+// GetHubNetwork is the network the robot itself joins over a USB adapter, as
+// opposed to the ones this laptop joins.
+func GetHubNetwork() (string, string) {
+	return viper.GetString("hub_ssid"), viper.GetString("hub_password")
+}
+
+// SetHubNetwork records it.
+func SetHubNetwork(ssid, password string) error {
+	cfg, err := Load()
+	if err != nil {
+		return err
+	}
+	cfg.HubSSID = ssid
+	cfg.HubPassword = password
+	return Save(cfg)
+}
+
+// GetHubNetworks is every network the robot knows how to join, newest first.
+func GetHubNetworks() []HubNetwork {
+	cfg, err := Load()
+	if err != nil {
+		return nil
+	}
+	return cfg.HubNetworks
+}
+
+// RememberHubNetwork saves one, and makes it the current choice.
+//
+// One entry per name: joining the same network with a new passphrase is a
+// changed password, not a second network.
+func RememberHubNetwork(ssid, password string) error {
+	cfg, err := Load()
+	if err != nil {
+		return err
+	}
+
+	kept := []HubNetwork{{SSID: ssid, Password: password}}
+	for _, n := range cfg.HubNetworks {
+		if n.SSID != ssid {
+			kept = append(kept, n)
+		}
+	}
+
+	const most = 8
+	if len(kept) > most {
+		kept = kept[:most]
+	}
+
+	cfg.HubNetworks = kept
+	cfg.HubSSID, cfg.HubPassword = ssid, password
+	return Save(cfg)
+}
+
+// ForgetHubNetwork drops one.
+func ForgetHubNetwork(ssid string) error {
+	cfg, err := Load()
+	if err != nil {
+		return err
+	}
+
+	var out []HubNetwork
+	for _, n := range cfg.HubNetworks {
+		if n.SSID != ssid {
+			out = append(out, n)
+		}
+	}
+	cfg.HubNetworks = out
+
+	if cfg.HubSSID == ssid {
+		cfg.HubSSID, cfg.HubPassword = "", ""
+		if len(out) > 0 {
+			cfg.HubSSID, cfg.HubPassword = out[0].SSID, out[0].Password
+		}
+	}
+	return Save(cfg)
+}
+
+// GetRobotSpots is everywhere the robot has been found, newest first.
+func GetRobotSpots() []Spot {
+	cfg, err := Load()
+	if err != nil {
+		return nil
+	}
+	return cfg.RobotSpots
+}
+
+// RememberSpot writes down where the robot was found, and on which network.
+//
+// One entry per network: being found at a new address on a network already
+// listed is the robot having moved, not a second place to look.
+func RememberSpot(network, address string) error {
+	cfg, err := Load()
+	if err != nil {
+		return err
+	}
+
+	kept := []Spot{{Network: network, Address: address}}
+	for _, spot := range cfg.RobotSpots {
+		if spot.Network != network && spot.Address != address {
+			kept = append(kept, spot)
+		}
+	}
+
+	const most = 8
+	if len(kept) > most {
+		kept = kept[:most]
+	}
+
+	cfg.RobotSpots = kept
+	cfg.RobotAddress = address
+	return Save(cfg)
+}
+
+// ForgetSpots drops the list.
+func ForgetSpots() error {
+	cfg, err := Load()
+	if err != nil {
+		return err
+	}
+	cfg.RobotSpots = nil
+	cfg.RobotAddress = ""
+	return Save(cfg)
+}
+
+// GetLastUpdateCheck is when epsh last asked whether it was out of date.
+func GetLastUpdateCheck() string {
+	return viper.GetString("last_update_check")
+}
+
+// SetLastUpdateCheck records when epsh last asked.
+func SetLastUpdateCheck(when string) error {
+	viper.Set("last_update_check", when)
+	return viper.WriteConfig()
+}
+
+// GetNotifiedVersion is the newest version somebody has already been told about.
+func GetNotifiedVersion() string {
+	return viper.GetString("notified_version")
+}
+
+// SetNotifiedVersion records the version somebody has been told about, so the
+// same one is not announced every day.
+func SetNotifiedVersion(version string) error {
+	viper.Set("notified_version", version)
 	return viper.WriteConfig()
 }
 

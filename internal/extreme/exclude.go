@@ -1,6 +1,7 @@
 package extreme
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -45,44 +46,148 @@ var keptRe = regexp.MustCompile(`// Kept in the APK anyway: (.*)`)
 // before any of it is considered, which drops the kept class along with its
 // package and leaves the keep list silently dead.
 func blockFor(root string, keep []string) string {
-	// A keep entry is either a package, which ends in a slash once trimmed, or
-	// a single class. Both are matched by prefix, with the class form pinned to
-	// a dot so Foo does not also keep FooBar.
-	var conditions strings.Builder
-	for _, entry := range keep {
-		trimmed := strings.TrimSuffix(entry, "/")
-		if isClassEntry(root, trimmed) {
-			fmt.Fprintf(&conditions, " &&\n                        !path.startsWith('%s.')", trimmed)
-			continue
-		}
-		fmt.Fprintf(&conditions, " &&\n                        !path.startsWith('%s/')", trimmed)
-	}
-
 	kept := "nothing"
 	if len(keep) > 0 {
 		kept = strings.Join(keep, ", ")
 	}
 
-	return beginMarker + `
+	head := beginMarker + `
 //
 // Remove this block, or run the menu entry that added it, to go back to
 // packaging team code in the APK.
 //
-// Kept in the APK anyway: ` + kept + `
-android {
+// Kept in the APK anyway: ` + kept + "\n"
+
+	if KotlinDSL(root) {
+		return head + kotlinBlock(root, keep) + "\n" + endMarker
+	}
+	return head + groovyBlock(root, keep) + "\n" + endMarker
+}
+
+// conditions renders the keep list as the tail of the exclusion test.
+//
+// A keep entry is either a package, which ends in a slash once trimmed, or a
+// single class. Both are matched by prefix, with the class form pinned to a dot
+// so Foo does not also keep FooBar, and so it covers Foo.java and Foo.kt alike.
+func conditions(root string, keep []string, quote, indent string) string {
+	var out strings.Builder
+
+	for _, entry := range keep {
+		trimmed := strings.TrimSuffix(entry, "/")
+		suffix := "/"
+		if isClassEntry(root, trimmed) {
+			suffix = "."
+		}
+		fmt.Fprintf(&out, " &&\n%s!path.startsWith(%s%s%s%s)",
+			indent, quote, trimmed, suffix, quote)
+	}
+
+	return out.String()
+}
+
+func groovyBlock(root string, keep []string) string {
+	return `android {
     sourceSets {
         main {
             java {
                 exclude { details ->
                     def path = details.path
                     !details.directory &&
-                        path.startsWith('` + TeamPackage + `/')` + conditions.String() + `
+                        path.startsWith('` + TeamPackage + `/')` +
+		conditions(root, keep, "'", "                        ") + `
                 }
             }
         }
     }
 }
-` + endMarker
+
+` + kotlinTasks(`tasks.matching { it.name.startsWith('compile') && it.name.endsWith('Kotlin') }.configureEach {
+    exclude { details ->
+        def path = details.path
+        !details.directory &&
+            path.startsWith('`+TeamPackage+`/')`+
+		conditions(root, keep, "'", "            ")+`
+    }
+}`)
+}
+
+// kotlinBlock is the same exclusion for a build.gradle.kts.
+//
+// The cast is not decoration. The Kotlin DSL hands out the newer
+// com.android.build.api.dsl.AndroidSourceDirectorySet, which has no exclude at
+// all; the object behind it implements the older interface, which does. Groovy
+// never showed this because it dispatches dynamically.
+func kotlinBlock(root string, keep []string) string {
+	return `android {
+    sourceSets {
+        getByName("main") {
+            (java as com.android.build.gradle.api.AndroidSourceDirectorySet).exclude { details ->
+                val path = details.path
+                !details.isDirectory &&
+                    path.startsWith("` + TeamPackage + `/")` +
+		conditions(root, keep, `"`, "                    ") + `
+            }
+        }
+    }
+}
+
+` + kotlinTasks(`tasks.matching { it.name.startsWith("compile") && it.name.endsWith("Kotlin") }.configureEach {
+    (this as org.gradle.api.tasks.util.PatternFilterable).exclude { details ->
+        val path = details.path
+        !details.isDirectory &&
+            path.startsWith("`+TeamPackage+`/")`+
+		conditions(root, keep, `"`, "            ")+`
+    }
+}`)
+}
+
+// kotlinTasks explains the second half of the exclusion, which is the half that
+// is easy to leave out and impossible to notice missing.
+//
+// Excluding from the android source set does nothing to Kotlin. The Kotlin
+// plugin compiles from its own source set, so on a project with .kt files the
+// team's classes stayed in the APK while also being reloaded, and parent-first
+// delegation means the APK copy is the one that runs. Measured on a real
+// project: six of six Kotlin classes survived an exclusion that reported
+// success.
+//
+// Matched by task name rather than by type, so this file never has to mention a
+// plugin that a Java-only project does not apply. There, it matches nothing and
+// costs nothing.
+func kotlinTasks(block string) string {
+	return `// The Kotlin plugin compiles from its own source set, which the exclusion
+// above does not reach. Without this, .kt files stay in the APK and the reload
+// is overruled by them.
+` + block
+}
+
+// PowerPackage and ProfilePackage are the generated diagnostics, which have to
+// stay in the APK.
+//
+// Their entry point is a startup hook the robot controller calls when the web
+// server comes up. Reloaded classes are scanned long after that has happened,
+// so one that is not in the APK is collected and never called: it would sit
+// there looking installed and measure nothing.
+//
+// Named here rather than imported from the packages that generate them, because
+// those import this one to find out where team code lives.
+const (
+	PowerPackage   = TeamPackage + "/epshpower"
+	ProfilePackage = TeamPackage + "/epshprofile"
+)
+
+// alwaysKept is what has to be in the APK whatever the keep list says, when it
+// is in the project at all.
+func alwaysKept(root string) []string {
+	var out []string
+
+	for _, pkg := range []string{PowerPackage, ProfilePackage} {
+		if _, err := os.Stat(filepath.Join(root, SourceRoot, filepath.FromSlash(pkg))); err == nil {
+			out = append(out, pkg)
+		}
+	}
+
+	return out
 }
 
 // isClassEntry reports whether a keep entry names one class rather than a
@@ -95,8 +200,10 @@ android {
 // Only a root with neither on disk falls back to the convention.
 func isClassEntry(root, entry string) bool {
 	if root != "" {
-		if _, err := os.Stat(filepath.Join(root, SourceRoot, filepath.FromSlash(entry)+".java")); err == nil {
-			return true
+		for _, ext := range []string{".java", ".kt"} {
+			if _, err := os.Stat(filepath.Join(root, SourceRoot, filepath.FromSlash(entry)+ext)); err == nil {
+				return true
+			}
 		}
 		if info, err := os.Stat(filepath.Join(root, SourceRoot, filepath.FromSlash(entry))); err == nil {
 			return !info.IsDir()
@@ -110,9 +217,43 @@ func isClassEntry(root, entry string) bool {
 	return base != "" && base[0] >= 'A' && base[0] <= 'Z'
 }
 
-// GradleFile is the module file the exclusion lives in.
+// GradleFile is the module file the exclusion lives in, in whichever dialect
+// the project uses.
 func GradleFile(root string) string {
-	return filepath.Join(root, Module, "build.gradle")
+	groovy := filepath.Join(root, Module, "build.gradle")
+	if _, err := os.Stat(groovy); err == nil {
+		return groovy
+	}
+	if _, err := os.Stat(groovy + ".kts"); err == nil {
+		return groovy + ".kts"
+	}
+	return groovy
+}
+
+// KotlinDSL reports whether the module is configured with the Kotlin DSL, which
+// needs a differently written block.
+func KotlinDSL(root string) bool {
+	return strings.HasSuffix(GradleFile(root), ".kts")
+}
+
+// Supported reports whether this project can be reloaded at all, and why not.
+//
+// Checked before anything is written. Setting up a project that cannot reload
+// leaves team code out of the APK with nothing putting it back, which is a
+// robot with no OpModes.
+func Supported(root string) error {
+	if _, err := os.Stat(GradleFile(root)); err != nil {
+		return fmt.Errorf("no %s to add the exclusion to", filepath.Join(Module, "build.gradle"))
+	}
+
+	// Refused rather than warned about. Two reload systems on one robot is the
+	// failure that empties the OpMode list, and it outlives uninstalling
+	// epsh, so it has to be stopped before anything is written.
+	if UsesSloth(root) {
+		return errors.New(slothRefusal)
+	}
+
+	return nil
 }
 
 // Excluded reports whether team code is being kept out of the APK.
@@ -164,7 +305,11 @@ func Kept(root string) []string {
 // class's own dependencies leaves it in the source set with nothing to resolve
 // against, and the build fails on the import.
 func Exclude(root string, keep ...string) error {
-	keep = Closure(root, keep)
+	if err := Supported(root); err != nil {
+		return err
+	}
+
+	keep = Closure(root, append(keep, alwaysKept(root)...))
 
 	path := GradleFile(root)
 

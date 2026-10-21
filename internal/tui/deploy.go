@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/MunchemOG/ElectroPush/internal/config"
@@ -21,10 +20,6 @@ var deployItems = []string{
 	"Connection check timeout",
 	"Back",
 }
-
-// deployHelpLines is how many lines every note occupies, so the screen does not
-// change height as the cursor moves.
-const deployHelpLines = 3
 
 var deployHelp = []string{
 	"Sends only the parts of the APK that changed since the last deploy.\n" +
@@ -166,10 +161,6 @@ func (m *SettingsModel) ftcProject() (*ftcproject.Project, error) {
 }
 
 func (m *SettingsModel) viewDeploy() string {
-	var b strings.Builder
-
-	b.WriteString(helpStyle.Render("  Deploy speed") + "\n\n")
-
 	values := []string{
 		onOff(config.GetDeltaTransfer()),
 		onOff(config.GetSkipUnchanged()),
@@ -181,14 +172,12 @@ func (m *SettingsModel) viewDeploy() string {
 		"",
 	}
 
-	b.WriteString(m.renderList(len(deployItems), func(i int) string {
-		return renderRow(i == m.cursor, deployItems[i], values[i], 37)
-	}))
+	after := note(deployHelp, m.cursor, m.width) +
+		"\n" + helpStyle.Render("  "+fit("enter change · esc back · `epsh dev` measures the difference", textWidth(m.width))) + "\n"
 
-	b.WriteString(helpBlock(deployHelp, m.cursor, deployHelpLines))
-
-	b.WriteString("\n" + helpStyle.Render("  enter change · esc back · `epsh dev` measures the difference") + "\n")
-	return b.String()
+	return m.fill(helpStyle.Render("  Deploy speed")+"\n\n", after, len(deployItems), func(i int) string {
+		return renderRow(i == m.cursor, deployItems[i], values[i], 37, m.width)
+	})
 }
 
 func (m *SettingsModel) storeLibsLabel() string {

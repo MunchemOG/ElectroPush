@@ -7,8 +7,11 @@ import (
 	"strings"
 
 	"github.com/MunchemOG/ElectroPush/internal/config"
-	"github.com/MunchemOG/ElectroPush/internal/feature"
-	"github.com/MunchemOG/ElectroPush/internal/pathtrace"
+	"github.com/MunchemOG/ElectroPush/internal/ftcproject"
+	"github.com/MunchemOG/ElectroPush/internal/notify"
+	"github.com/MunchemOG/ElectroPush/internal/power"
+	"github.com/MunchemOG/ElectroPush/internal/profile"
+	"github.com/MunchemOG/ElectroPush/internal/robot"
 	"github.com/MunchemOG/ElectroPush/internal/wifi"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -33,9 +36,10 @@ const (
 	screenAddProfile
 	screenHomeNetwork
 	screenThreads
-	screenBlob
-	screenBlobRuns
-	screenBlobToken
+	screenPower
+	screenProfile
+	screenRelay
+	screenRelayNetwork
 	screenUpdate
 	screenDeploy
 	screenExtreme
@@ -61,6 +65,7 @@ type SettingsModel struct {
 	offset int
 
 	height int
+	width  int
 
 	cfg      *config.Config
 	profiles []string
@@ -73,11 +78,12 @@ type SettingsModel struct {
 	maskInput          bool
 	confirmDeleteIndex int
 
-	blob     blobState
-	extreme  extremeState
-	root     string
-	gateStep int
-	update   updateState
+	power   powerState
+	profile profileState
+	relay   relayState
+	extreme extremeState
+	root    string
+	update  updateState
 
 	status string
 	err    error
@@ -98,10 +104,14 @@ func NewSettingsModel() (*SettingsModel, error) {
 		return nil, err
 	}
 
-	m := &SettingsModel{cfg: cfg, confirmDeleteIndex: -1, height: defaultHeight}
-	m.blob.limits = pathtrace.DefaultLimits()
+	m := &SettingsModel{cfg: cfg, confirmDeleteIndex: -1}
 	m.refreshProfiles()
-	m.refreshBlob()
+
+	// Read once here as well as on the way into its own screen, so the main
+	// menu can say whether the project is still set up without going to disk
+	// on every keystroke.
+	m.refreshExtreme()
+
 	return m, nil
 }
 
@@ -151,20 +161,31 @@ var mainItems = []string{
 	"Slim APK before every push",
 	"Send only changed parts",
 	"Gradle threads",
-	"blob library",
+	"", // was blob library; left empty so the positions below stay put
 	"Deploy speed",
 	"Epsh Extreme",
 	"Dashboard tuning check",
 	"Update epsh",
 	"Exit",
+	"", // was Count this device; left empty so the positions below stay put
+	"Tell me about updates",
+	"Power monitor",
+	"Power readings",
+	"Sample rate",
+	"Loop profiler",
+	"Loop profiles",
+	"Profile rate",
+	"ADB relay",
 }
 
 // Update satisfies tea.Model.
 func (m *SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if size, ok := msg.(tea.WindowSizeMsg); ok {
 		m.height = size.Height
+		m.width = size.Width
 
-		m.offset = clampOffset(m.offset, m.cursor, m.visibleRows(), m.listLength())
+		// The window is worked out at render, against rows measured at this
+		// width. Nothing to do here but take the new size.
 		return m, nil
 	}
 
@@ -182,20 +203,159 @@ func (m *SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.update.err = msg.err
 		return m, nil
 
-	case blobAuthMsg:
-		m.blob.checking = false
-		m.blob.busy = false
-		m.blob.auth = msg.status
-		m.blob.creds = msg.creds
-		m.cursor, m.offset = 0, 0
+	case relayScanMsg:
+		m.relay.busy = false
+		m.relay.scanning = false
+		m.relay.setup = ""
+		m.relay.connect.consider(msg.err)
+
+		if msg.err != nil && !m.relay.connect.open {
+			m.err = msg.err
+			return m, nil
+		}
+
+		m.relay.seen = msg.seen
+		if len(msg.seen) == 0 && msg.err == nil {
+			m.status = "The robot heard nothing"
+		} else if msg.err == nil {
+			m.status = fmt.Sprintf("The robot can hear %d networks", len(msg.seen))
+		}
 		return m, nil
 
-	case blobOpMsg:
-		m.blob.busy = false
-		m.err = msg.err
-		m.status = msg.status
-		m.refreshBlob()
+	case relayConnectedMsg:
+		m.relay.busy = false
+		m.relay.connect.busy = false
+		m.relay.setup = ""
+
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		m.relay.connect.open = false
+		m.status = "Connected"
 		return m, nil
+
+	case relayStepMsg:
+		// Only while it is running: a step arriving after the end belongs to
+		// nothing on screen.
+		if !m.relay.busy {
+			return m, nil
+		}
+
+		m.relay.log = append(m.relay.log, msg.line)
+
+		// Only the last few, or a long setup pushes the menu off the screen.
+		const most = 8
+		if len(m.relay.log) > most {
+			m.relay.log = m.relay.log[len(m.relay.log)-most:]
+		}
+
+		return m, waitForRelayStep
+
+	case relaySetupMsg:
+		m.relay.busy = false
+		m.relay.setup = ""
+
+		if msg.err != nil {
+			// A robot that is not there is worth offering to go and get,
+			// rather than reporting as a failed setup.
+			m.relay.connect.consider(msg.err)
+			if !m.relay.connect.open {
+				m.err = msg.err
+			}
+			return m, nil
+		}
+
+		m.relay.spots = config.GetRobotSpots()
+		m.status = "The robot is on " + msg.network + " at " + msg.address
+		return m, nil
+
+	case relayFoundMsg:
+		m.relay.busy = false
+		m.relay.spots = config.GetRobotSpots()
+
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+
+		robot.Remember(msg.found)
+		m.relay.spots = config.GetRobotSpots()
+		m.relay.found = msg.found.Addr
+		m.status = "Robot at " + msg.found.Addr
+		return m, nil
+
+	case profileListMsg:
+		m.profile.busy = false
+		m.profile.serial = msg.serial
+		m.profile.runs = msg.runs
+		m.profile.err = msg.err
+		m.profile.connect.consider(msg.err)
+		m.cursor, m.offset = 0, 0
+
+		if m.profile.connect.open {
+			m.profile.err = nil
+		}
+		return m, nil
+
+	case profileConnectedMsg:
+		m.profile.busy = false
+		m.profile.connect.busy = false
+
+		if msg.err != nil {
+			m.profile.err = msg.err
+			return m, nil
+		}
+
+		m.profile.connect.open = false
+		return m, m.enterProfile()
+
+	case profileReportMsg:
+		m.profile.busy = false
+		m.err = msg.err
+		if msg.err == nil {
+			profile.Open(msg.path)
+			m.status = "Opened " + msg.path
+		}
+		return m, nil
+
+	case powerListMsg:
+		m.power.busy = false
+		m.power.serial = msg.serial
+		m.power.runs = msg.runs
+		m.power.err = msg.err
+		m.power.connect.consider(msg.err)
+		m.cursor, m.offset = 0, 0
+
+		// The offer stands in for the error, so showing both says the same
+		// thing twice in two registers.
+		if m.power.connect.open {
+			m.power.err = nil
+		}
+		return m, nil
+
+	case powerConnectedMsg:
+		m.power.busy = false
+		m.power.connect.busy = false
+
+		if msg.err != nil {
+			m.power.err = msg.err
+			return m, nil
+		}
+
+		// Connected, so the list this screen could not read is readable now.
+		m.power.connect.open = false
+		return m, m.enterPower()
+
+	case powerReportMsg:
+		m.power.busy = false
+		m.err = msg.err
+		if msg.err == nil {
+			power.Open(msg.path)
+			m.status = "Opened " + msg.path
+		}
+		return m, nil
+
 	}
 
 	key, ok := msg.(tea.KeyMsg)
@@ -219,12 +379,14 @@ func (m *SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateHomeNetwork(key)
 	case screenThreads:
 		return m.updateThreads(key)
-	case screenBlob:
-		return m.updateBlob(key)
-	case screenBlobRuns:
-		return m.updateBlobRuns(key)
-	case screenBlobToken:
-		return m.updateBlobToken(key)
+	case screenPower:
+		return m.updatePower(key)
+	case screenProfile:
+		return m.updateProfile(key)
+	case screenRelay:
+		return m.updateRelay(key)
+	case screenRelayNetwork:
+		return m.updateRelayNetwork(key)
 	case screenUpdate:
 		return m.updateUpdate(key)
 	case screenDeploy:
@@ -236,52 +398,26 @@ func (m *SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// Position in mainItems of the entry an install only shows once turned on.
-// rows() exists because the indexes stop lining up otherwise.
-const optionalRow = 7
-
-func (m *SettingsModel) rows() []int {
-	enabled := feature.Revealed()
-
-	out := make([]int, 0, len(mainItems))
-	for i := range mainItems {
-		if i == optionalRow && !enabled {
-			continue
-		}
-		out = append(out, i)
-	}
-	return out
+// mainSections group the settings by what somebody came to change. The order
+// here is the order on screen; the numbers are positions in mainItems, so
+// regrouping cannot change what an entry does.
+var mainSections = []menuSection{
+	{"Getting to the robot", []int{0, 1, 2, 3}},
+	{"Building and deploying", []int{6, 4, 5, 8}},
+	{"Reloading instead of installing", []int{9, 10}},
+	{"Reaching the robot over your own network", []int{21}},
+	{"Diagnostics", []int{15, 17, 16, 18, 20, 19}},
+	{"Epsh itself", []int{11, 14}},
+	{"", []int{12}},
 }
 
-func (m *SettingsModel) checkGate(key tea.KeyMsg) bool {
-	if feature.Revealed() {
-		return false
-	}
-
-	name := key.String()
-
-	next, done := feature.Match(m.gateStep, name)
-	m.gateStep = next
-
-	switch {
-	case done:
-		m.gateStep = 0
-		m.err = feature.Grant()
-		m.cursor, m.offset = 0, 0
-		return true
-
-	case next > 0 && name == "right":
-		return true
-	}
-
-	return false
+func (m *SettingsModel) layout() menuLayout {
+	return arrange(mainSections, nil)
 }
+
+func (m *SettingsModel) rows() []int { return m.layout().Rows }
 
 func (m *SettingsModel) updateMain(key tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if m.checkGate(key) {
-		return m, nil
-	}
-
 	rows := m.rows()
 
 	switch key.String() {
@@ -317,8 +453,6 @@ func (m *SettingsModel) updateMain(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case 6:
 			m.input = strconv.Itoa(config.GetThreads())
 			m.goTo(screenThreads, 0)
-		case 7:
-			return m, m.enterBlob()
 		case 8:
 			m.goTo(screenDeploy, 0)
 		case 9:
@@ -331,6 +465,22 @@ func (m *SettingsModel) updateMain(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case 12:
 			m.quit = true
 			return m, tea.Quit
+		case 14:
+			m.toggleUpdateNotify()
+		case 15:
+			m.togglePowerMonitor()
+		case 16:
+			return m, m.enterPower()
+		case 17:
+			m.cyclePowerPeriod()
+		case 18:
+			m.toggleLoopProfiler()
+		case 19:
+			return m, m.enterProfile()
+		case 20:
+			m.cycleProfilePeriod()
+		case 21:
+			m.enterRelay()
 		}
 	}
 
@@ -515,6 +665,15 @@ func (m *SettingsModel) updateThreads(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *SettingsModel) toggleAutoSlim() {
 	enabling := !config.GetAutoSlim()
 
+	// Said before it is turned on, since the alternative is finding out at the
+	// next deploy that nothing was slimmed.
+	if enabling {
+		if reason := ftcproject.Supported(m.projectRoot()); reason != nil {
+			m.err = reason
+			return
+		}
+	}
+
 	if err := config.SetAutoSlim(enabling); err != nil {
 		m.err = err
 		return
@@ -531,21 +690,27 @@ func (m *SettingsModel) toggleAutoSlim() {
 	}
 }
 
+// Moving the cursor moves the cursor. Where the window sits is worked out once,
+// at render, by fill: it is the only place that knows how tall each row came out
+// at this width and how much room the screen's own text left for them.
+//
+// There used to be a second answer here, computed from a guessed chrome height
+// against a row count rather than measured rows. The two disagreed, so the
+// window jumped when the render corrected the keypress, which is most of what
+// made these menus feel unpredictable to move around in.
 func (m *SettingsModel) moveCursor(delta, length int) {
 	if length <= 0 {
-		m.cursor = 0
-		m.offset = 0
+		m.cursor, m.offset = 0, 0
 		return
 	}
 
 	m.cursor = (m.cursor + delta + length) % length
-	m.offset = clampOffset(m.offset, m.cursor, m.visibleRows(), length)
 }
 
 func (m *SettingsModel) goTo(target screen, cursor int) {
 	m.screen = target
 	m.cursor = cursor
-	m.offset = clampOffset(0, cursor, m.visibleRows(), m.listLength())
+	m.offset = 0
 }
 
 func (m *SettingsModel) listLength() int {
@@ -557,11 +722,11 @@ func (m *SettingsModel) listLength() int {
 	case screenHomeNetwork:
 
 		return len(m.networks) + 1
-	case screenBlob:
-		return len(m.blobMenuItems())
-	case screenBlobRuns:
-		return len(m.blob.traces)
-	case screenBlobToken:
+	case screenProfile:
+		return len(m.profile.runs)
+	case screenRelay:
+		return m.relayLength()
+	case screenRelayNetwork:
 		return 0
 	case screenUpdate:
 		return 0
@@ -571,16 +736,6 @@ func (m *SettingsModel) listLength() int {
 		return len(extremeItems)
 	}
 	return 0
-}
-
-func (m *SettingsModel) visibleRows() int {
-	const chrome = 10
-
-	rows := m.height - chrome
-	if rows < minVisibleRows {
-		return minVisibleRows
-	}
-	return rows
 }
 
 func clampOffset(offset, cursor, visible, total int) int {
@@ -632,6 +787,19 @@ func (m *SettingsModel) View() string {
 		return ""
 	}
 
+	// Nothing is drawn until the terminal has said how big it is.
+	//
+	// Bubbletea renders one frame before it handles the first resize, so a
+	// model that starts with a height renders that height into whatever window
+	// it actually has. Twenty four rows into a fourteen row panel scrolls the
+	// terminal ten rows, and the renderer has been counting from where it
+	// started: from then on it repaints at the wrong height and leaves rows of
+	// old frames on screen. That is the duplicated entry, and it happens before
+	// a key is ever pressed.
+	if m.height <= 0 {
+		return ""
+	}
+
 	var b strings.Builder
 	b.WriteString(titleStyle.Render("Epsh Settings"))
 	b.WriteString("\n\n")
@@ -647,12 +815,14 @@ func (m *SettingsModel) View() string {
 		b.WriteString(m.viewHomeNetwork())
 	case screenThreads:
 		b.WriteString(m.viewThreads())
-	case screenBlob:
-		b.WriteString(m.viewBlob())
-	case screenBlobRuns:
-		b.WriteString(m.viewBlobRuns())
-	case screenBlobToken:
-		b.WriteString(m.viewBlobToken())
+	case screenPower:
+		b.WriteString(m.viewPower())
+	case screenProfile:
+		b.WriteString(m.viewProfile())
+	case screenRelay:
+		b.WriteString(m.viewRelay())
+	case screenRelayNetwork:
+		b.WriteString(m.viewRelayNetwork())
 	case screenUpdate:
 		b.WriteString(m.viewUpdate())
 	case screenDeploy:
@@ -661,13 +831,33 @@ func (m *SettingsModel) View() string {
 		b.WriteString(m.viewExtreme())
 	}
 
-	if m.err != nil {
-		b.WriteString("\n" + errStyle.Render("  ! "+m.err.Error()) + "\n")
-	} else if m.status != "" {
-		b.WriteString("\n" + okStyle.Render("  ✓ "+m.status) + "\n")
-	}
+	b.WriteString(m.statusArea())
 
-	return b.String()
+	return clamp(b.String(), m.width, usable(m.height))
+}
+
+// statusRows is how much room the status line takes, always.
+//
+// Always, because a menu that is one row taller while it has something to say
+// moves every entry on it the moment a setting is toggled. Reserving the space
+// costs a blank line and means nothing below the list ever moves.
+const statusRows = 2
+
+// statusArea is the message under the menu, or the space it would have taken.
+//
+// Fitted rather than wrapped: a message wider than the terminal would wrap onto
+// a row nothing budgeted for, and the view would run past the bottom of the
+// screen leaving the frame under it on display.
+func (m *SettingsModel) statusArea() string {
+	room := textWidth(m.width) - 2
+
+	switch {
+	case m.err != nil:
+		return "\n" + errStyle.Render("  ! "+fit(m.err.Error(), room)) + "\n"
+	case m.status != "":
+		return "\n" + okStyle.Render("  ✓ "+fit(m.status, room)) + "\n"
+	}
+	return "\n\n"
 }
 
 func (m *SettingsModel) toggleDashWatch() {
@@ -686,6 +876,217 @@ func (m *SettingsModel) toggleDashWatch() {
 	m.status = "Off: `epsh dash diff` still compares on demand"
 }
 
+func (m *SettingsModel) toggleUpdateNotify() {
+	enabling := !config.GetUpdateNotify()
+
+	if err := config.SetUpdateNotify(enabling); err != nil {
+		m.err = err
+		return
+	}
+
+	m.err = nil
+	if enabling {
+		m.status = "On: a desktop notification when a newer epsh is out"
+		return
+	}
+	m.status = "Off: epsh will not check for newer versions"
+}
+
+// updateNotifyLabel says what will happen, which is not the setting alone: a
+// machine with nowhere to deliver a notification is told so here rather than
+// left wondering why one never arrives.
+func (m *SettingsModel) updateNotifyLabel() string {
+	if !config.GetUpdateNotify() {
+		return "off"
+	}
+	if !notify.Enabled() {
+		return "on (no notifications here)"
+	}
+	return "on"
+}
+
+// The power monitor is a file in the team's project rather than a setting, so
+// this reads the project rather than the config: a toggle that disagreed with
+// what is on disk would be the same bug the Extreme setting had.
+func (m *SettingsModel) powerLabel() string {
+	if !power.Installed(m.projectRoot()) {
+		return "off"
+	}
+	return "on (costs loop time)"
+}
+
+func (m *SettingsModel) togglePowerMonitor() {
+	root := m.projectRoot()
+
+	if power.Installed(root) {
+		if err := power.Remove(root); err != nil {
+			m.err = err
+			return
+		}
+		m.err = nil
+		m.status = "Off: removed. Deploy to take it off the robot"
+		return
+	}
+
+	if err := power.Install(root); err != nil {
+		m.err = err
+		return
+	}
+
+	m.err = nil
+	m.status = "On: deploy, drive, then `epsh power`. Not for matches"
+}
+
+// The rates worth offering. Faster means more trips over the bus and less room
+// for the robot's own loop, which is why the menu says what each one costs
+// rather than presenting them as equivalent.
+var powerPeriods = []int{20, 50, 100, 200, 500}
+
+func (m *SettingsModel) powerPeriodLabel() string {
+	ms := config.GetPowerPeriod()
+
+	rate := fmt.Sprintf("%dms", ms)
+	switch {
+	case ms <= 20:
+		return rate + " (heaviest)"
+	case ms <= 50:
+		return rate + " (heavy)"
+	case ms >= 500:
+		return rate + " (coarse)"
+	}
+	return rate
+}
+
+// cyclePowerPeriod steps through the rates, and rewrites the monitor when there
+// is one, because the period lives in the generated file rather than in the
+// settings the robot cannot read.
+func (m *SettingsModel) cyclePowerPeriod() {
+	current := config.GetPowerPeriod()
+
+	next := powerPeriods[0]
+	for i, ms := range powerPeriods {
+		if ms == current {
+			next = powerPeriods[(i+1)%len(powerPeriods)]
+			break
+		}
+	}
+
+	if err := config.SetPowerPeriod(next); err != nil {
+		m.err = err
+		return
+	}
+
+	m.err = nil
+	m.status = fmt.Sprintf("Reading every %dms", next)
+
+	if !power.Installed(m.projectRoot()) {
+		return
+	}
+
+	if err := power.Install(m.projectRoot()); err != nil {
+		m.err = err
+		return
+	}
+	m.status = fmt.Sprintf("Reading every %dms. Deploy for the robot to use it", next)
+}
+
+// The profiler is a file in the team's project rather than a setting, so this
+// reads the project rather than the config: a toggle that disagreed with what
+// is on disk would be the same bug the Extreme setting had.
+func (m *SettingsModel) profilerLabel() string {
+	if !profile.Installed(m.projectRoot()) {
+		return "off"
+	}
+	return "on (costs loop time)"
+}
+
+func (m *SettingsModel) toggleLoopProfiler() {
+	root := m.projectRoot()
+
+	if profile.Installed(root) {
+		if err := profile.Remove(root); err != nil {
+			m.err = err
+			return
+		}
+		m.err = nil
+		m.status = "Off: removed. Deploy to take it off the robot"
+		return
+	}
+
+	if err := profile.Install(root); err != nil {
+		m.err = err
+		return
+	}
+
+	m.err = nil
+	m.status = "On: deploy, run an OpMode, then `epsh profile`. Not for matches"
+}
+
+// The rates worth offering. Faster resolves more of a short loop and stops the
+// OpMode's thread more often, so the menu says what each one costs rather than
+// presenting them as equivalent.
+var profilePeriods = []int{2, 5, 10, 20, 50}
+
+func (m *SettingsModel) profilePeriodLabel() string {
+	ms := config.GetProfilePeriod()
+
+	rate := fmt.Sprintf("%dms", ms)
+	switch {
+	case ms <= 2:
+		return rate + " (heaviest)"
+	case ms <= 5:
+		return rate + " (heavy)"
+	case ms >= 50:
+		return rate + " (coarse)"
+	}
+	return rate
+}
+
+// cycleProfilePeriod steps through the rates, and rewrites the profiler when
+// there is one, because the period lives in the generated file rather than in
+// settings the robot cannot read.
+func (m *SettingsModel) cycleProfilePeriod() {
+	current := config.GetProfilePeriod()
+
+	next := profilePeriods[0]
+	for i, ms := range profilePeriods {
+		if ms == current {
+			next = profilePeriods[(i+1)%len(profilePeriods)]
+			break
+		}
+	}
+
+	if err := config.SetProfilePeriod(next); err != nil {
+		m.err = err
+		return
+	}
+
+	m.err = nil
+	m.status = fmt.Sprintf("Sampling every %dms", next)
+
+	if !profile.Installed(m.projectRoot()) {
+		return
+	}
+
+	if err := profile.Install(m.projectRoot()); err != nil {
+		m.err = err
+		return
+	}
+	m.status = fmt.Sprintf("Sampling every %dms. Deploy for the robot to use it", next)
+}
+
+// relayLabel says whether epsh will look for the robot on this network, and
+// where it last found it, which is the question somebody actually has.
+func (m *SettingsModel) relayLabel() string {
+	if !config.GetRelay() {
+		return "off"
+	}
+	if addr := config.GetRobotAddress(); addr != "" {
+		return "on (" + addr + ")"
+	}
+	return "on (not found yet)"
+}
+
 func (m *SettingsModel) viewMain() string {
 	values := []string{
 		m.defaultProfileLabel(),
@@ -695,23 +1096,31 @@ func (m *SettingsModel) viewMain() string {
 		m.autoSlimLabel(),
 		onOff(config.GetDeltaTransfer()),
 		strconv.Itoa(config.GetThreads()),
-		m.blobLabel(),
+		"",
 		m.deployLabel(),
 		m.extremeLabel(),
 		onOff(config.GetDashWatch()),
 		m.updateLabel(),
 		"",
+		"",
+		m.updateNotifyLabel(),
+		m.powerLabel(),
+		"",
+		m.powerPeriodLabel(),
+		m.profilerLabel(),
+		"",
+		m.profilePeriodLabel(),
+		m.relayLabel(),
 	}
 
-	rows := m.rows()
+	list := m.layout()
 
-	var b strings.Builder
-	b.WriteString(m.renderList(len(rows), func(i int) string {
-		return renderRow(i == m.cursor, mainItems[rows[i]], values[rows[i]], 29)
-	}))
-
-	b.WriteString("\n" + helpStyle.Render("  ↑/↓ move · enter select · q quit") + "\n")
-	return b.String()
+	return m.fill("", "\n"+helpStyle.Render("  "+fit("↑/↓ move · enter select · q quit", textWidth(m.width)))+"\n",
+		len(list.Rows), func(i int) string {
+			return list.render(i,
+				renderRow(i == m.cursor, mainItems[list.Rows[i]], values[list.Rows[i]], 29, m.width),
+				m.width)
+		})
 }
 
 func (m *SettingsModel) autoSlimLabel() string {
@@ -739,33 +1148,34 @@ func (m *SettingsModel) viewProfiles() string {
 	b.WriteString(helpStyle.Render("  Robot profiles") + "\n\n")
 
 	if len(m.profiles) == 0 {
-		b.WriteString(unsetStyle.Render("  No profiles yet. Press 'a' to add one") + "\n")
+		b.WriteString(unsetStyle.Render("  "+fit("No profiles yet. Press 'a' to add one", textWidth(m.width))) + "\n")
 	}
 
-	b.WriteString(m.renderList(len(m.profiles), func(i int) string {
-		name := m.profiles[i]
+	head := b.String()
 
-		if i == m.confirmDeleteIndex {
-			return errStyle.Render(fmt.Sprintf("  > %s: delete? (y/n)", name)) + "\n"
-		}
+	return m.fill(head,
+		"\n"+helpStyle.Render("  "+fit("enter set default · a add · d delete · esc back", textWidth(m.width)))+"\n",
+		len(m.profiles), func(i int) string {
+			name := m.profiles[i]
 
-		marker := " "
-		if m.cfg != nil && name == m.cfg.DefaultProfile {
-			marker = "*"
-		}
-
-		ssid := ""
-		if m.cfg != nil {
-			if profile, ok := m.cfg.Profiles[name]; ok {
-				ssid = profile.SSID
+			if i == m.confirmDeleteIndex {
+				return errStyle.Render(fmt.Sprintf("  > %s: delete? (y/n)", name)) + "\n"
 			}
-		}
 
-		return renderRow(i == m.cursor, fmt.Sprintf("%s %s", marker, name), ssid, 26)
-	}))
+			marker := " "
+			if m.cfg != nil && name == m.cfg.DefaultProfile {
+				marker = "*"
+			}
 
-	b.WriteString("\n" + helpStyle.Render("  enter set default · a add · d delete · esc back") + "\n")
-	return b.String()
+			ssid := ""
+			if m.cfg != nil {
+				if profile, ok := m.cfg.Profiles[name]; ok {
+					ssid = profile.SSID
+				}
+			}
+
+			return renderRow(i == m.cursor, fmt.Sprintf("%s %s", marker, name), ssid, 26, m.width)
+		})
 }
 
 func (m *SettingsModel) viewAddProfile() string {
@@ -797,7 +1207,7 @@ func (m *SettingsModel) viewAddProfile() string {
 
 func (m *SettingsModel) viewHomeNetwork() string {
 	var b strings.Builder
-	b.WriteString(helpStyle.Render("  Network to return to after deploying") + "\n\n")
+	b.WriteString(helpStyle.Render("  "+fit("Network to return to after deploying", textWidth(m.width))) + "\n\n")
 
 	if len(m.networks) == 0 {
 		b.WriteString(unsetStyle.Render("  No saved Wi-Fi networks found") + "\n")
@@ -805,28 +1215,27 @@ func (m *SettingsModel) viewHomeNetwork() string {
 
 	current := config.GetHomeSSID()
 
-	b.WriteString(m.renderList(len(m.networks)+1, func(i int) string {
-		if i == 0 {
-			return renderRow(m.cursor == 0, "(none, stay on the robot)", "", 32)
-		}
+	return m.fill(b.String(),
+		"\n"+helpStyle.Render("  "+fit("↑/↓ move · enter select · esc back", textWidth(m.width)))+"\n",
+		len(m.networks)+1, func(i int) string {
+			if i == 0 {
+				return renderRow(m.cursor == 0, "(none, stay on the robot)", "", 32, m.width)
+			}
 
-		ssid := m.networks[i-1]
-		value := ""
-		if ssid == current {
-			value = "current"
-		}
-		return renderRow(m.cursor == i, ssid, value, 32)
-	}))
-
-	b.WriteString("\n" + helpStyle.Render("  ↑/↓ move · enter select · esc back") + "\n")
-	return b.String()
+			ssid := m.networks[i-1]
+			value := ""
+			if ssid == current {
+				value = "current"
+			}
+			return renderRow(m.cursor == i, ssid, value, 32, m.width)
+		})
 }
 
 func (m *SettingsModel) viewThreads() string {
 	var b strings.Builder
 	b.WriteString(helpStyle.Render("  Gradle worker threads") + "\n\n")
 	b.WriteString(fmt.Sprintf("  Threads: %s\n", valueStyle.Render(m.input+"▌")))
-	b.WriteString("\n" + helpStyle.Render("  enter save · esc cancel") + "\n")
+	b.WriteString("\n" + helpStyle.Render("  "+fit("enter save · esc cancel", textWidth(m.width))) + "\n")
 	return b.String()
 }
 
@@ -835,67 +1244,169 @@ func (m *SettingsModel) viewThreads() string {
 // A screen whose height changes as the cursor moves leaves the taller frame's
 // leftovers behind, which reads as the menu being broken while scrolling. Every
 // note is padded to the same number of lines instead.
-func helpBlock(notes []string, index, lines int) string {
-	var b strings.Builder
-	b.WriteString("\n")
 
-	shown := 0
-	if index >= 0 && index < len(notes) && notes[index] != "" {
-		for _, line := range strings.Split(notes[index], "\n") {
-			b.WriteString("  " + helpStyle.Render(line) + "\n")
-			shown++
-		}
+// fill lays a list into whatever room is left once everything else on the
+// screen has been laid out.
+//
+// Measured rather than guessed at. The room a list has was a constant subtracted
+// from the terminal height, which was too pessimistic on a short terminal, where
+// it scrolled a list that would have fitted, and too crude on a tall one, where
+// the extra lines went unused. Neither is something a person should have to
+// work around by resizing.
+//
+// Rows are counted as the height they render to, so an entry carrying a group
+// heading takes the two lines it really occupies.
+func (m *SettingsModel) fill(before, after string, total int, row func(int) string) string {
+	rendered := make([]string, total)
+	for i := range rendered {
+		rendered[i] = row(i)
 	}
 
-	for ; shown < lines; shown++ {
+	block, start := pane(rendered, m.width, m.budget(before, after), m.offset, m.cursor)
+	m.offset = start
+
+	return before + block + after
+}
+
+// budget is how many rows the list may use: the terminal, less the title, less
+// the status area, less whatever the screen puts above and below the list.
+//
+// Measured in rows the terminal will actually use rather than newlines, since a
+// line wider than the terminal is wrapped onto rows nothing here budgeted for.
+func (m *SettingsModel) budget(before, after string) int {
+	// The title and the blank under it, then the status area, which is two rows
+	// whether or not there is anything in it.
+	chrome := 2 + statusRows + height(before, m.width) + height(after, m.width)
+
+	if budget := usable(m.height) - chrome; budget >= minVisibleRows {
+		return budget
+	}
+	return minVisibleRows
+}
+
+// pane windows a list into a block of exactly budget rows, and says where the
+// window ended up so the caller can remember it.
+//
+// Exactly, including the padding. A list that grew a row the moment a marker
+// appeared and lost one again at either end changed the height of the whole
+// menu as the cursor moved through it: the footer walked up and down the
+// screen, and a frame that had been taller left its bottom rows behind. Going
+// down a list and back up was enough to do it, which is why it looked like the
+// menu breaking rather than a layout being one row out.
+func pane(rendered []string, width, budget, offset, cursor int) (block string, start int) {
+	tall := make([]int, len(rendered))
+	for i, row := range rendered {
+		tall[i] = height(row, width)
+	}
+
+	start, end := window(tall, offset, cursor, budget)
+
+	var b strings.Builder
+	shown := 0
+
+	if start > 0 {
+		b.WriteString(scrollStyle.Render(fmt.Sprintf("   ↑ %d more above", start)) + "\n")
+		shown++
+	}
+	for i := start; i < end; i++ {
+		b.WriteString(rendered[i])
+		shown += tall[i]
+	}
+	if end < len(rendered) {
+		b.WriteString(scrollStyle.Render(fmt.Sprintf("   ↓ %d more below", len(rendered)-end)) + "\n")
+		shown++
+	}
+
+	for ; shown < budget; shown++ {
 		b.WriteString("\n")
 	}
 
-	return b.String()
+	return b.String(), start
 }
 
-func (m *SettingsModel) renderList(total int, row func(int) string) string {
-	visible := m.visibleRows()
+// window picks the run of rows to show: as many as fit, keeping the cursor
+// inside, and leaving room for the markers that say a list continues.
+func window(tall []int, offset, cursor, budget int) (start, end int) {
+	total := len(tall)
+	if total == 0 {
+		return 0, 0
+	}
 
-	start := m.offset
-	if start > total-visible {
-		start = total - visible
+	fits := func(from int) int {
+		used, to := 0, from
+		if from > 0 {
+			used++
+		}
+		for to < total {
+			room := budget - used
+			if to+1 < total {
+				room--
+			}
+			// The first row goes in whatever the budget, so a terminal too
+			// short for one entry and its markers shows the entry rather than
+			// two arrows and nothing between them.
+			if to > from && tall[to] > room {
+				break
+			}
+			used += tall[to]
+			to++
+		}
+		return to
+	}
+
+	start = offset
+	if start > cursor {
+		start = cursor
 	}
 	if start < 0 {
 		start = 0
 	}
 
-	end := start + visible
-	if end > total {
-		end = total
+	// Walk the top down until the cursor is on screen. Terminates: the cursor
+	// is always inside a window that starts at it.
+	for start < cursor && fits(start) <= cursor {
+		start++
 	}
 
-	var b strings.Builder
-
-	if start > 0 {
-		b.WriteString(scrollStyle.Render(fmt.Sprintf("   ↑ %d more above", start)) + "\n")
+	// And back up while there is room going spare, so the last screenful is
+	// full rather than a few rows against the bottom.
+	for start > 0 {
+		if fits(start-1) <= cursor {
+			break
+		}
+		start--
 	}
 
-	for i := start; i < end; i++ {
-		b.WriteString(row(i))
-	}
-
-	if end < total {
-		b.WriteString(scrollStyle.Render(fmt.Sprintf("   ↓ %d more below", total-end)) + "\n")
-	}
-
-	return b.String()
+	return start, fits(start)
 }
 
-func renderRow(selected bool, label, value string, width int) string {
+// renderRow draws one entry. column is where the values would like to line up
+// and width is the terminal, which wins: a row wider than the terminal wraps,
+// and a view built to a fixed number of lines then leaves the taller frame
+// behind on screen.
+//
+// Both texts are cut before they are styled, since trimming a string that
+// already carries colour escapes can cut one in half.
+func renderRow(selected bool, label, value string, column, width int) string {
+	// Only an unset width falls back to a default. Treating a narrow terminal
+	// as eighty columns is what padded rows out past the edge of it.
+	if width <= 0 {
+		width = defaultWidth
+	}
+
+	// The value keeps what it needs, up to leaving the label something to live
+	// in, and the label takes what is left.
+	value = fit(value, width-rowPrefix-1-8)
+	column = labelWidth(width, column, lipgloss.Width(value))
+	label = fit(label, column)
+
 	prefix := "   "
 	if selected {
 		prefix = cursorOn.Render(" > ")
 		label = cursorOn.Render(label)
-
 	}
 
-	pad := width - lipgloss.Width(label)
+	pad := column - lipgloss.Width(label)
 	if pad < 1 {
 		pad = 1
 	}

@@ -9,8 +9,10 @@ import (
 
 	"github.com/MunchemOG/ElectroPush/internal/adb"
 	"github.com/MunchemOG/ElectroPush/internal/config"
+	"github.com/MunchemOG/ElectroPush/internal/extreme"
 	"github.com/MunchemOG/ElectroPush/internal/ftcproject"
 	"github.com/MunchemOG/ElectroPush/internal/gradle"
+	"github.com/MunchemOG/ElectroPush/internal/robot"
 	"github.com/MunchemOG/ElectroPush/internal/wifi"
 	"github.com/spf13/cobra"
 )
@@ -31,6 +33,8 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	uiNote(fmt.Sprintf("Platform · %s/%s · Wi-Fi via %s", runtime.GOOS, runtime.GOARCH, wifiBackend()))
 
 	locationOK := reportWiFi()
+	fmt.Println()
+	reportHubAP()
 	fmt.Println()
 	reportADB()
 	fmt.Println()
@@ -85,7 +89,7 @@ func reportWiFi() bool {
 	case errors.Is(ssidErr, wifi.ErrSSIDUnavailable):
 		fmt.Println("  Current network    : hidden by the OS")
 
-		inferred, _ := wifiMgr.MostRecentNetwork(robotSSIDs()...)
+		inferred, _ := wifiMgr.MostRecentNetwork(robot.SSIDs()...)
 		if inferred != "" {
 			fmt.Printf("  Inferred as        : %s\n", inferred)
 		} else {
@@ -116,6 +120,46 @@ func reportWiFi() bool {
 	}
 
 	return true
+}
+
+// reportHubAP answers the question a failed join leaves open: was the hub even
+// broadcasting? Its own section because the Wi-Fi one gives up early on a macOS
+// that will not name the current network, which is every macOS since 15.
+func reportHubAP() {
+	fmt.Println("Robot Wi-Fi")
+	fmt.Println("─────────────────────────────────────────")
+
+	profile, err := config.GetDefaultProfile()
+	if err != nil || profile.SSID == "" {
+		fmt.Println("  Network            : none configured")
+		fmt.Println("  Add one with 'epsh settings' -> Robot profiles.")
+		return
+	}
+
+	fmt.Printf("  Network            : %s\n", profile.SSID)
+
+	if !wifi.ScanningEnabled() {
+		fmt.Println("  Broadcasting       : cannot look")
+		fmt.Println()
+		for _, line := range strings.Split(wifi.ScanNote, "\n") {
+			fmt.Println("  " + line)
+		}
+		return
+	}
+
+	// The label goes out before the scan, which takes a few seconds, so the
+	// pause reads as epsh working rather than epsh hanging.
+	fmt.Print("  Broadcasting       : ")
+
+	switch present, err := wifi.NewManager().Visible(profile.SSID); {
+	case err != nil:
+		fmt.Printf("could not tell: %v\n", err)
+	case present:
+		fmt.Println("yes, in range now")
+	default:
+		fmt.Println("no")
+		fmt.Println("  The hub is switched off, still starting up, or out of range.")
+	}
 }
 
 func reportADB() {
@@ -167,6 +211,21 @@ func reportProject() {
 	if err != nil {
 		fmt.Printf("  FTC project        : %v\n", err)
 		return
+	}
+
+	// The pairing that empties the OpMode list. Setup is refused now, but a
+	// project set up before that check existed still has the block in its
+	// gradle file and a dex on its robot, and neither goes away on its own.
+	if extreme.UsesSloth(root) {
+		fmt.Println("  Hot reload         : Sloth")
+		if extreme.Excluded(root) {
+			fmt.Println("                       ^ Epsh Extreme is also set up here, and the two")
+			fmt.Println("                         cannot share a robot: both put team code on it and")
+			fmt.Println("                         the robot loads whichever copy it finds first,")
+			fmt.Println("                         which is how an OpMode list comes up empty.")
+			fmt.Println("                         Undo it in `epsh settings` with the robot")
+			fmt.Println("                         connected, so the dex comes off the robot too.")
+		}
 	}
 
 	if analysis, err := project.Analyze(); err == nil {

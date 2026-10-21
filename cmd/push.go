@@ -12,12 +12,11 @@ import (
 	"github.com/MunchemOG/ElectroPush/internal/adb"
 	"github.com/MunchemOG/ElectroPush/internal/config"
 	"github.com/MunchemOG/ElectroPush/internal/gradle"
+	"github.com/MunchemOG/ElectroPush/internal/robot"
 	"github.com/MunchemOG/ElectroPush/internal/wifi"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
-
-const joinTimeout = 45 * time.Second
 
 var pushCmd = &cobra.Command{
 	Use:   "push",
@@ -39,8 +38,24 @@ func runPush(cmd *cobra.Command, args []string) error {
 	}
 	uiStatus("ok", fmt.Sprintf("Gradle wrapper · %s", gradlePath))
 
+	return push(gradlePath)
+}
+
+func push(gradlePath string) error {
+
 	if !adb.IsInstalled() {
 		return fmt.Errorf("adb not found - please install Android SDK Platform-Tools")
+	}
+
+	warnPowerMonitor(gradle.ProjectDir(gradlePath))
+	warnLoopProfiler(gradle.ProjectDir(gradlePath))
+
+	// Before the build, the Wi-Fi hop and the install, so a deploy that would
+	// have silently skipped slimming stops while stopping is still cheap.
+	if config.GetAutoSlim() {
+		if err := warnSlimUnsupported(gradle.ProjectDir(gradlePath)); err != nil {
+			return err
+		}
 	}
 
 	if config.GetPreferUSB() {
@@ -79,6 +94,16 @@ func pushOverWiFi(gradlePath string) error {
 
 	switchBack := config.GetSwitchBack()
 
+	// Started before the build, not before the join: a scan is slow, and one
+	// that runs alongside a build costs the deploy nothing, whereas one that
+	// runs at the join costs it every second. By the time the build is done the
+	// hub is in the list of nearby networks that the join consults.
+	var watcher *wifi.Watcher
+	if !onRobot {
+		watcher = wifiMgr.Watch(profile.SSID)
+		defer watcher.Stop()
+	}
+
 	home, err := resolveHomeNetwork(wifiMgr, onRobot, switchBack, profile.SSID)
 	if err != nil {
 		return err
@@ -100,9 +125,9 @@ func pushOverWiFi(gradlePath string) error {
 
 	if !onRobot {
 		uiStatus("run", "Joining robot Wi-Fi · "+profile.SSID)
-		ip, err := wifiMgr.JoinAndWait(profile.SSID, profile.Password, wifi.RobotSubnet, joinTimeout)
+		ip, err := robot.Join(os.Stdout, wifiMgr, watcher, profile)
 		if err != nil {
-			return fmt.Errorf("failed to join %q: %w", profile.SSID, err)
+			return err
 		}
 		uiStatus("ok", fmt.Sprintf("On the robot network · %s", ip))
 	} else {
@@ -119,7 +144,7 @@ func pushOverWiFi(gradlePath string) error {
 
 	if leavingRobot {
 		uiStatus("run", "Returning to "+home)
-		if err := wifiMgr.Rejoin(home, robotSSIDs()); err != nil {
+		if err := wifiMgr.Rejoin(home, robot.SSIDs()); err != nil {
 			uiStatus("warn", fmt.Sprintf("Could not rejoin %s · %v", home, err))
 			uiNote("You will need to switch back manually.")
 		} else if _, err := wifiMgr.WaitToLeave(wifi.RobotSubnet, 45*time.Second); err != nil {
@@ -290,22 +315,6 @@ func deployOnce(gradlePath, serial string) error {
 	// until the reload has run. Skipping it leaves a robot that deployed
 	// successfully and has nothing to run.
 	return reloadAfterInstall(serial)
-}
-
-func robotSSIDs() []string {
-	cfg, err := config.Load()
-	if err != nil {
-		return nil
-	}
-
-	ssids := make([]string, 0, len(cfg.Profiles))
-	for _, profile := range cfg.Profiles {
-		if profile != nil && profile.SSID != "" {
-			ssids = append(ssids, profile.SSID)
-		}
-	}
-
-	return ssids
 }
 
 func ensureProfile() error {

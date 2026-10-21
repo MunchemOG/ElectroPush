@@ -1,0 +1,372 @@
+# Changelog
+
+Every push to `main` cuts a release: the series comes from `VERSION` and the
+patch counts what has landed since that file last changed. So a version here is
+one commit, and the numbers are the ones on the releases page rather than a
+grouping invented afterwards.
+
+Anything not listed is in `git log`, which is the complete record.
+
+This fork numbers its own releases, from 0.0 up. The entries from 1.3.3 down
+are upstream Pusher's, under Pusher's numbers, kept because their work is what
+the fork was merged from.
+
+## 0.0.5
+
+- **Upstream Pusher 1.3.3 merged in.** That brings `epsh relay` for putting the
+  robot on your own Wi-Fi over a USB adapter, `epsh ip`, the power monitor and
+  `epsh power`, the loop profiler and `epsh profile`, Kotlin support and
+  OpMode-registration checks in Epsh Extreme, and the rest of upstream's
+  entries below.
+- **Without blob, the path visualiser or telemetry.** See the first entry under
+  1.3.3.
+- **`FEATURES.md` lists every feature** with its flags and settings, as a
+  shorter inventory beside the README.
+
+## 0.0.4
+
+- **Dropped wireless ADB connections are recovered during a deploy** instead
+  of failing it.
+
+## 0.0.3
+
+- **The CLI output has one visual language**, with consistent headings, status
+  lines and formatting across commands.
+
+## 1.3.3
+
+- **blob, the path visualiser and usage counting are gone from this fork.**
+  Upstream's 1.3.3 added a viewer for blob's follower logs on top of the path
+  visualiser. This fork carries neither: blob is a private library it cannot
+  build against, so the blob library menu, its update notices, `epsh
+  visualiser` and the follower logs were all taken out, along with the
+  "Count this device" setting and the telemetry behind it. `docs/blob.md`
+  records what they did. The older entries below still describe them, because
+  that is what those releases shipped.
+
+- **The help lists the commands that are already there.** `epsh ip`, `epsh
+  relay` and its two subcommands, `epsh power`, `epsh profile` and `epsh
+  doctor` had all shipped without ever reaching `epsh help`. A new section
+  next to the Epsh Extreme one says which page answers which question: where
+  the battery went, and where the loop time went.
+
+## 1.3.0
+
+- **The robot can join your Wi-Fi, so deploying stops meaning switching
+  networks.** Plug a USB Wi-Fi adapter into the Control Hub, run `epsh relay
+  setup "YourWiFi" "password"`, and the hub joins your network while still
+  serving its own access point to the Driver Station. Deploys, both dashboards
+  and the Limelight then work over the network you were already on.
+
+  Inspired by Dhruv, FTC 32001L, whose ADB relay bridged adb from the robot's
+  access point to the local network with a Linux box in between. The want is
+  theirs; this reaches it from the other end.
+
+  The hub's own radio cannot do this: it is the access point, and the SDK has no
+  client mode for it. So a second radio is needed, and a driver for it, and a
+  driver is compiled against one exact kernel and cannot be downloaded. Epsh
+  therefore carries six, built from the kernel source REV publishes — one per
+  Control Hub OS release from 1.0.0 to 1.1.6 — and picks by OS release, falling
+  back to any built for the same kernel, which is what the hub itself checks. A
+  hub it has nothing for is told so by name, with a link to ask for one.
+
+  It stays. A boot hook rejoins the network on every power cycle and watches
+  from then on: unplug the adapter and put it back and the robot is on the
+  network again within half a minute, without a laptop. `epsh relay forget`
+  takes all of it off.
+
+  **Networks are browsed rather than typed.** The robot scans from where it is
+  sitting, which is the only vantage point that matters, and reports what it can
+  hear with signal, band and whether it is open. Networks it has joined before
+  are remembered, so a workshop and a venue are a choice rather than a retype.
+
+  When the robot is somewhere on your network already, epsh finds it: the
+  address it was last at, then the hub's own access point, then a sweep. A sweep
+  only walks a subnet small enough to be somebody's own network, and something
+  answering on the adb port is not enough to be treated as a robot — epsh asks
+  the device what it is and leaves it alone if it turns out to be a phone.
+
+- **`epsh ip`** asks the robot where it is and knocks on every door: its
+  addresses, its hostname and `.local` name when this network resolves one, and
+  the hub's manage page, FtcDashboard, Panels, the Panels socket and the
+  Limelight through the Panels proxy. Only what actually answered is reported,
+  so an address printed there is one that can be pasted into a browser. Ports
+  read out of the published artifacts rather than from memory.
+
+- **A flame chart of where the loop time goes.** The power monitor says what the
+  battery is going into; this says where the time is going, which is the other
+  half of the same question. Turn **Loop profiler** on in `epsh settings`,
+  deploy, run an OpMode, then `epsh profile`. Nothing is instrumented and no
+  OpMode is edited: a thread wakes every few milliseconds, asks the thread
+  running the OpMode what it is in the middle of, and files the answer, so time
+  is counted in samples. Each bar on the chart is as wide as the share of the
+  run spent inside that method and everything it called, your own code is drawn
+  in blue, and clicking a bar zooms into it. The table ranks by time spent in a
+  method rather than under it, which is the difference between the code that was
+  running and a list of everything that called it. The page says how much of the
+  run the sampler actually got, because a profile that stands for a third of a
+  run should not look like one that stands for all of it. It costs loop time,
+  says so on every deploy, and is not for matches.
+
+- **The menus stop drawing over themselves.** The repeated entry had two causes,
+  and the first one happens before a key is pressed: bubbletea draws one frame
+  before it handles the first resize, and the menus started out believing they
+  had twenty four rows. In a fourteen row panel that first frame scrolled the
+  terminal ten rows out from under the renderer, which had been counting from
+  where it started, so every repaint after that landed at the wrong height and
+  left rows of old frames on screen. Nothing is drawn now until the terminal has
+  said how big it is.
+
+  The second is that a frame exactly as tall as the window scrolls it as the
+  last line is written, which puts the renderer one row out for the same reason.
+  Every frame now leaves a row spare, which is what the lists padding themselves
+  out to fill the window exactly had taken away.
+
+- **The menus stop changing height as you move through them.** Going down a list
+  and back up was enough to break them, and the shape was always the same: the
+  block grew a row the moment a scroll marker appeared and lost one again at
+  either end, so the whole view changed height as the cursor moved. The footer
+  walked up and down the screen and a frame that had been taller left its bottom
+  rows behind. Every list is now padded to a fixed height, the room for a status
+  message is reserved whether or not there is one, and the six screens that had
+  their own copy of the layout code use the one that measures rather than
+  guesses. The hardware configuration menu had the same fault and its own copy
+  again, and on a short terminal it overflowed outright: fourteen rows into ten.
+
+  Moving the cursor now only moves the cursor. There used to be a second answer
+  for where the window sits, computed on the keypress from a guessed chrome
+  height, which the render then disagreed with and corrected. That is most of
+  what made these menus feel unpredictable to move around in.
+
+- **The path visualiser draws the run, not just the plan.** Every recorded
+  position was counted in the caption and then thrown away, so the page drew the
+  route the robot was asked to follow and called it the run. The driven path is
+  now the solid line, taken from the robot's own positions in the order it
+  recorded them and coloured by the speed it was really doing, with the planned
+  path dashed underneath, so the gap between them is the following error. The
+  view is sized to include both, since a run that overshot went outside the
+  planned area by definition.
+
+- **Straight legs are estimated again.** blob describes a straight leg with the
+  only two points it needs, its ends, and both of those are stationary, so the
+  model treated it as a segment that was stopped everywhere it had a point.
+  Every straight leg estimated zero, which took the run's estimate, every peak
+  and the whole colour scale with it: a page reporting `0.00 s` against a
+  measured `28.97`, `-100%`, and a speed ramp topping out at 1 in/s. Curves are
+  resampled before profiling, which is exact for a line and lets the heat map
+  show the acceleration along one. The demo trace hid this for the life of the
+  feature by sampling even its straight legs 49 times; it now records them the
+  way blob does.
+
+- **Epsh Extreme will not set up alongside Sloth.** Both reload team code onto
+  the robot and both install a class loader for it, so the robot ends up holding
+  two copies and loading whichever it reaches first. Traced from a team's robot
+  log: Sloth's loader picked up the dex epsh had left in the OnBotJava jars
+  directory nine hours earlier, every one of their fifteen classes failed to
+  define because the copy epsh ships carries team code alone and the library
+  those classes extend was not reachable from that loader, and the Driver
+  Station listed no OpModes at all. It survives uninstalling epsh, the broken
+  copy being on the robot rather than the laptop. Setup is now refused, and
+  `epsh doctor` names the pairing for a project already in that state.
+
+- **A reload nobody could check says so.** The check that the robot actually
+  registered what a reload sent asked FtcDashboard, and said nothing at all when
+  it could not ask, on the grounds that a dashboard is not a requirement. That
+  is exactly backwards for a check whose whole purpose is the deploy that did
+  not work, and the team it happened to ran Panels. A reload that cannot be
+  verified now says which OpModes went unchecked and how to check them.
+
+- **Panels is supported alongside FtcDashboard.** `epsh dash diff`, the
+  dashboard watch and the post-reload check all ask both, because a team runs
+  one or the other and which one is not something a laptop can tell without
+  asking. Read out of the published AARs rather than from documentation: Panels
+  serves a WebSocket on 8002, frames are `{pluginID, messageID, data}`, and the
+  OpMode list and the tunables arrive unasked for when a client connects. Panels
+  reports fully qualified class names where FtcDashboard reports simple ones,
+  so its values are keyed the same way the source is and the comparison does not
+  care which answered. `@Configurable` classes are read like `@Config` ones.
+
+- **Anything that needs the robot offers to go and get it.** `epsh power`,
+  `epsh hwconfig`, `epsh dash diff` and the visualiser stopped at "no robot
+  connected - run `epsh connect`", which is one command telling you to run a
+  second command so you can run the first one again. They now say what network
+  they would join and ask, and connect if you say yes. Declining leaves the
+  error exactly as it was, and a epsh running in a script is never asked
+  anything: it gets the error it always got.
+
+  The menus make the same offer with a key, since there is nowhere in a menu to
+  print a question or read an answer. The hardware configuration menu, Power
+  readings, the run picker and the developer menu say what would be joined and
+  take `c`, then go back for whatever they could not read.
+
+- **`epsh hwconfig push` checks that the robot got what it was sent.** Every
+  configuration is read back and compared byte for byte, and the robot's own
+  list is checked for the name. A push that adb reported as fine but that left
+  nothing usable behind now fails where it happens instead of turning up later
+  as a configuration that never appears.
+
+- **`--restart`** on that push restarts the robot controller afterwards. The
+  robot controller lists the directory afresh whenever it is asked, so a pushed
+  configuration is there the next time the Driver Station asks; what it does not
+  do is notice one appearing underneath a screen that is already open. Pushing
+  now says so, and `--restart` settles it.
+
+## 1.2.25
+
+- **Power readings** in `epsh settings` lists the runs on the robot and opens
+  any of them as a page, the way the path visualiser does, in the same style.
+  Current against time for every motor and their sum, battery voltage against
+  time, and a table ranked by charge drawn rather than by peak, since a motor
+  that pulls 20 A for a tenth of a second costs the battery far less than one
+  sitting at 4 A all match. Each run is its own recording, named by OpMode and
+  time so two runs of the same OpMode are told apart.
+
+  The graph is worked rather than looked at: drag across it to zoom in like an
+  oscilloscope, double-click to zoom back out, click a name to take that line
+  out of the way, and the battery graph follows the same window because the
+  question after seeing a spike is always what the battery did at that moment.
+  Moving across it reads out every value at that instant. All of it is inline,
+  so the page still works on a laptop with no route anywhere.
+
+  The monitor now keeps every reading rather than only the totals, which is what
+  makes the graphs possible. Added as lines an older epsh skips, so recordings
+  stay readable both ways. `epsh power` opens the newest; `--text` prints the
+  numbers instead.
+
+- **Everything the hardware can measure, not just motors.** The hub reports two
+  more rails, and both are now recorded: the servo bus and the I2C bus. Neither
+  servos nor I2C sensors have current sensing of their own, so one number each
+  is all there is, and it is more than nothing. A Limelight is reported too, as
+  how hard it is working rather than what it draws: it is not on a rail the hub
+  measures, so its draw is inside the hub's total and nowhere else. It is found
+  by name through reflection, so the generated file still compiles for a team on
+  an SDK that has never heard of one.
+
+- **Sample rate** in `epsh settings` chooses how often the monitor reads,
+  from 20 ms to 500 ms. It is the whole cost of the feature, so the menu says
+  what each rate costs rather than presenting them as equivalent. The value is
+  baked into the generated file, since the robot cannot read this laptop's
+  settings, so changing it rewrites the monitor and wants a deploy.
+
+- **Changing the blob library forces a full install.** Adding, removing or
+  swapping an AAR changes what the APK contains, and a reload only ever carries
+  team code. Epsh worked that out for itself from the build inputs, but only
+  once it had seen the robot: a library swapped in the menu with no robot
+  connected left the next deploy reloading against the jar that was there
+  before. It now says so up front and installs.
+
+## 1.2.24
+
+- **`epsh power` shows what drew the most current.** Turn the monitor on in
+  `epsh settings` -> Power monitor, deploy, drive, and it reports peak and
+  average draw per motor, the hub's total, and how far the battery sagged,
+  ranked worst first, with the moment each peak happened. The monitor is one
+  generated file that attaches itself through the same `@OnCreateEventLoop`
+  hook FtcDashboard uses, so no OpMode changes and nothing to remember before a
+  practice run.
+
+  It costs loop time. A motor's current cannot be read in a bulk transfer, so
+  every reading is its own round trip over the bus, and epsh says so on every
+  deploy while the monitor is installed. **Not for use in an official match.**
+
+- When the monitor records nothing it leaves a note on the robot saying why, and
+  `epsh power` shows the note instead of an empty directory. The log would
+  have done, if anybody could read it: it is a ring buffer on a robot somebody
+  has to plug into, and by the time the question is asked the line has gone.
+
+- A robot with no recordings yet is no longer reported as a failure to look.
+  `ls` on a directory that does not exist exits non-zero, adb passes that back
+  as its own exit code, and the result was that "you have nothing recorded yet"
+  surfaced as `cannot list ... exit status 1`. The same fault was in the trace
+  listing, so `epsh visualiser` reported it too rather than saying there were
+  no traces.
+
+## 1.2.23
+
+- **The blob menu picks a release branch.** blob publishes branch work as a
+  labelled tag, `v1.8.0-RSTController.1`, which GitHub marks as a pre-release;
+  the label up to its first dot is the branch. **Release branch** lists the
+  branches that have releases and moves the project onto the newest one from
+  whichever you choose. **Version**, and the line a deploy prints, then follow
+  that branch rather than main.
+
+## 1.2.22
+
+- **A newer epsh announces itself.** Once a day, in the background, epsh
+  asks whether a newer release exists and says so with a desktop notification
+  rather than a line that scrolls past the end of a deploy. macOS through
+  osascript, Linux through notify-send, Windows through a WinRT toast. The same
+  version is announced once, not once a day until it is installed. Turn it off
+  in `epsh settings` -> Tell me about updates, or with `EPSH_NO_NOTIFY=1`.
+- **A deploy says when blob has moved on**, at the start and again at the end,
+  because the start is when it is still cheap to act on and the end is what is
+  still on screen. The check runs beside the deploy rather than in front of it.
+
+## 1.2.21
+
+- Menus lay themselves out to a small terminal instead of treating anything
+  under thirty-two columns as unset and pretending it was eighty. Scrolling a
+  narrow window showed duplicates and pieces of the previous frame, because
+  every row was padded past the edge, wrapped, and the view ran off the bottom.
+
+## 1.2.20
+
+- The dashboard tuning check now saves. It was on the config struct, had a
+  getter and a setter, and was never written to the file, so every toggle
+  reported success and came back off.
+- A status message is cut to one line, which is the two lines the layout
+  budgets for it.
+
+## 1.2.19
+
+- What the APK carries is decided by the gradle file rather than the setting.
+  Turning Epsh Extreme off without undoing the setup left every deploy
+  installing an APK with no team code in it and skipping the reload that
+  supplies it, so the robot went on serving the dex from the last reload.
+
+## 1.2.18
+
+- Epsh checks that the robot registered the OpModes it was sent, instead of
+  reporting success for a reload that registered none of them.
+- Fixed the dashboard client reading a `data` key the robot does not send, which
+  made `epsh dash diff` find nothing on a real robot.
+
+## 1.2.17
+
+- Epsh Extreme compiles and reloads Kotlin sources, with the compiler the
+  project already builds with.
+- The APK exclusion covers the Kotlin compile tasks too. Without that, team
+  Kotlin stayed in the APK while also being reloaded, and the packaged copy is
+  the one that runs.
+
+## 1.2.16
+
+- Epsh counts the devices it runs on: a random ID, the version and the
+  platform, once a day. See [What epsh sends](README.md#what-epsh-sends).
+
+## 1.2.15
+
+- Epsh looks for the robot's Wi-Fi while the project builds, so the hub is in
+  range by the time it joins, and a failed join says whether the hub was ever
+  broadcasting.
+
+## 1.2.11 - 1.2.14
+
+- `epsh slim` stops rather than pretending to slim a Kotlin DSL project, where
+  every pattern it edits matches nothing.
+- Epsh Extreme writes its exclusion in the module's own gradle dialect.
+- Extreme refuses a project it cannot reload rather than reloading part of it.
+
+## 1.2.7 - 1.2.10
+
+- Menus are grouped and laid out to the terminal.
+- The signature that decides whether a reload is honest counts Kotlin DSL build
+  files and version catalogs as build inputs.
+
+## 1.2.1 - 1.2.6
+
+- `epsh update` names the tap when handing an upgrade to Homebrew, and checks
+  that brew actually upgraded before saying it did.
+- `epsh dash diff` compares the robot's dashboard tuning against the source.
+- A reload follows an install, so the robot is never left with no OpModes.
+- The keep list expands to everything a kept class needs to compile.

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/MunchemOG/ElectroPush/internal/feature"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 )
@@ -82,14 +81,19 @@ func runHelp(cmd *cobra.Command, args []string) {
 	fmt.Println(section("Deploy"))
 	fmt.Println(row(2, cmdStyle.Render("epsh"), "Build and deploy to the robot"))
 	fmt.Println(row(2, cmdStyle.Render("epsh slim"), "Shrink the APK so deploys transfer less"))
-	fmt.Println(row(4, subStyle.Render("↳ --undo"), "Revert slim changes"))
+	fmt.Println(row(4, subStyle.Render("↳ --undo"), "Put the gradle files back"))
 	fmt.Println(row(2, cmdStyle.Render("epsh prepare"), "Cache dependencies while you have internet"))
+	fmt.Println(row(2, cmdStyle.Render("--ignore-warnings"), "Carry on past a check that would stop a command"))
 	fmt.Println()
 
 	fmt.Println(section("Connection"))
 	fmt.Println(row(2, cmdStyle.Render("epsh connect"), "Join the robot Wi-Fi and connect adb"))
 	fmt.Println(row(2, cmdStyle.Render("epsh exit"), "Disconnect adb and go back to your Wi-Fi"))
 	fmt.Println(row(2, cmdStyle.Render("epsh dc")+pipeStyle.Render(" | ")+cmdStyle.Render("disconnect"), "Disconnect adb only"))
+	fmt.Println(row(2, cmdStyle.Render("epsh ip"), "Show where the robot is and what it is serving"))
+	fmt.Println(row(2, cmdStyle.Render("epsh relay"), "Put the robot on your own Wi-Fi, over a USB adapter"))
+	fmt.Println(row(4, subStyle.Render("↳ setup <wifi> <pass>"), "Join that network, and keep the robot on it"))
+	fmt.Println(row(4, subStyle.Render("↳ forget"), "Undo it, and leave the robot as it was"))
 	fmt.Println()
 
 	fmt.Println(section("Config"))
@@ -99,12 +103,15 @@ func runHelp(cmd *cobra.Command, args []string) {
 	fmt.Println(row(4, subStyle.Render("↳ pull"), "Copy the robot's configs into your project"))
 	fmt.Println(row(4, subStyle.Render("↳ push <name>"), "Copy a config back to the robot"))
 	fmt.Println(row(2, cmdStyle.Render("epsh dash diff"), "What the robot holds that your code does not"))
-	if feature.Revealed() {
-		fmt.Println(row(2, cmdStyle.Render("epsh visualiser")+pipeStyle.Render(" | ")+cmdStyle.Render("vis"), "Draw the path an auto drove"))
-	}
+	fmt.Println()
+
+	fmt.Println(section("Analysis"))
+	fmt.Println(row(2, cmdStyle.Render("epsh power"), "Show what drew the most current on the last run"))
+	fmt.Println(row(2, cmdStyle.Render("epsh profile"), "Show what ate the loop time on the last run"))
 	fmt.Println()
 
 	fmt.Println(section("Maintenance"))
+	fmt.Println(row(2, cmdStyle.Render("epsh doctor"), "Check that everything epsh needs is working"))
 	fmt.Println(row(2, cmdStyle.Render("epsh update"), "Update epsh itself to the latest release"))
 	fmt.Println(row(4, subStyle.Render("↳ --check"), "Say what is available, install nothing"))
 	fmt.Println(row(2, cmdStyle.Render("epsh dev"), warnStyle.Render("Measure deploy cost (advanced)")))
@@ -113,9 +120,12 @@ func runHelp(cmd *cobra.Command, args []string) {
 	fmt.Println()
 
 	fmt.Println(ruleStyle.Render(strings.Repeat("─", 78)))
-	fmt.Println(noteStyle.Render("Epsh Extreme   reloads OpModes onto a running robot in <1s instead of ~40s."))
+	fmt.Println(noteStyle.Render("Epsh Extreme   reloads OpModes onto a running robot in ~3s instead of ~40s."))
 	fmt.Println(noteStyle.Render("               Set it up in 'epsh settings' → Epsh Extreme, which also"))
 	fmt.Println(noteStyle.Render("               undoes it. While active, your team code isn't in the APK."))
+	fmt.Println()
+	fmt.Println(noteStyle.Render("Looking at     'epsh power' says where the battery went and 'epsh profile'"))
+	fmt.Println(noteStyle.Render("a run          says where the loop time went."))
 	fmt.Println()
 	fmt.Println(noteStyle.Render("Deploying      a hub on USB is used automatically and your Wi-Fi is left"))
 	fmt.Println(noteStyle.Render("               alone. Otherwise epsh builds first, hops to the robot,"))

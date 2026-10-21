@@ -3,78 +3,89 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"os"
 
-	"github.com/MunchemOG/ElectroPush/internal/adb"
 	"github.com/MunchemOG/ElectroPush/internal/config"
-	"github.com/MunchemOG/ElectroPush/internal/wifi"
+	"github.com/MunchemOG/ElectroPush/internal/robot"
 	"github.com/spf13/cobra"
 )
+
+var connectFind bool
 
 var connectCmd = &cobra.Command{
 	Use:   "connect",
 	Short: "Join the robot's Wi-Fi and connect ADB",
-	Long:  `Joins the robot's Wi-Fi network and establishes an ADB connection, without building or deploying.`,
-	RunE:  runConnect,
+	Long: `Joins the robot's Wi-Fi network and establishes an ADB connection, without
+building or deploying.
+
+With ADB relay on, this looks for the robot on the network you are already on
+first, and only takes over your Wi-Fi if it is not there. --find sweeps the
+whole network for it, which is what to run the first time or after it moves.`,
+	RunE: runConnect,
+}
+
+func init() {
+	connectCmd.Flags().BoolVar(&connectFind, "find", false,
+		"Sweep this network for the robot rather than only looking where it was")
 }
 
 func runConnect(cmd *cobra.Command, args []string) error {
-	if !adb.IsInstalled() {
-		return fmt.Errorf("adb not found - please install Android SDK Platform-Tools")
-	}
+	uiHeading("Connection", "Robot link")
 
-	if device, ok := adb.FindUSBDevice(); ok {
-		uiHeading("Connection", "Robot link")
-		uiStatus("ok", fmt.Sprintf("Hub attached over USB · %s", device.Label()))
-		uiNote("Run `epsh` to build and deploy.")
-		return nil
-	}
-
-	wifiMgr := wifi.NewManager()
-
-	onRobot, err := wifiMgr.IsOnRobotNetwork()
-	if err != nil {
-		return fmt.Errorf("failed to check the current network: %w", err)
-	}
-
-	if onRobot {
-		uiHeading("Connection", "Robot link")
-		uiStatus("ok", "Already on the robot network")
-	} else {
-		if err := ensureProfile(); err != nil {
+	if connectFind {
+		found, err := robot.Locate(os.Stdout, true)
+		if err != nil {
 			return err
 		}
 
-		profile, err := config.GetDefaultProfile()
-		if err != nil {
-			return fmt.Errorf("no robot profile configured: %w\n\nRun 'epsh settings' to add one", err)
-		}
+		robot.Remember(found)
+		uiStatus("ok", fmt.Sprintf("%s at %s", orRobot(found.Model), found.Addr))
+		uiNote("Remembered, so the next run finds it straight away.")
 
-		ssid, ssidErr := wifiMgr.CurrentSSID()
-		switch {
-		case ssidErr == nil && ssid != "":
-			uiStatus("run", fmt.Sprintf("Currently on %s", ssid))
-		case errors.Is(ssidErr, wifi.ErrSSIDUnavailable):
-			if inferred, err := wifiMgr.MostRecentNetwork(robotSSIDs()...); err == nil && inferred != "" {
-				uiStatus("wait", fmt.Sprintf("Network name hidden · assuming %q", inferred))
-			}
+		if !config.GetRelay() {
+			uiStatus("warn", "ADB relay is off, so deploys will still join the robot's own Wi-Fi")
+			uiNote("Turn it on in `epsh settings` → ADB relay.")
 		}
-
-		uiStatus("run", fmt.Sprintf("Joining robot Wi-Fi · %s", profile.SSID))
-		ip, err := wifiMgr.JoinAndWait(profile.SSID, profile.Password, wifi.RobotSubnet, joinTimeout)
-		if err != nil {
-			return fmt.Errorf("failed to join %q: %w", profile.SSID, err)
-		}
-		uiStatus("ok", fmt.Sprintf("On the robot network · %s", ip))
+		return nil
 	}
 
-	uiRule()
-	uiStatus("run", "Connecting to robot via ADB")
-	if err := adb.Connect(); err != nil {
-		return fmt.Errorf("failed to connect via ADB: %w", err)
+	return connectAndSay()
+}
+
+func orRobot(model string) string {
+	if model == "" {
+		return "Robot"
+	}
+	return model
+}
+
+func connectAndSay() error {
+	if err := connectRobot(); err != nil {
+		return err
 	}
 
-	uiStatus("ok", "Connected via ADB")
 	uiNote("Run `epsh` to build and deploy, or `epsh exit` when you're done.")
-
 	return nil
+}
+
+// connectRobot runs the connect flow, and sets up a profile first if there is
+// no network on file and somebody here to be asked for one.
+func connectRobot() error {
+	err := robot.Connect(os.Stdout)
+	if !errors.Is(err, robot.ErrNoProfile) {
+		return err
+	}
+
+	// Nothing on file at all is a first run, and worth asking about. A config
+	// that has profiles but no default one is a mistake in the config, which is
+	// answered in settings rather than by asking the same questions again.
+	if has, _ := config.HasProfiles(); has {
+		return fmt.Errorf("%w\n\nRun 'epsh settings' to pick one", err)
+	}
+
+	if err := firstRunSetup(); err != nil {
+		return err
+	}
+
+	return robot.Connect(os.Stdout)
 }

@@ -27,6 +27,10 @@ const (
 // by seconds.
 const benchRepeats = 3
 
+// devBanner is the warning above the tools.
+const devBanner = "These measure by deploying to the robot over and over. " +
+	"If you do not already know why you want this, you do not want it."
+
 var devItems = []string{
 	"Benchmark the deploy",
 	"Hot reload feasibility",
@@ -38,8 +42,18 @@ var devItems = []string{
 	"Exit",
 }
 
-// devHelpLines keeps the screen a fixed height as the cursor moves.
-const devHelpLines = 4
+// devSections group the tools by what they are for. The numbers are positions
+// in devItems, so regrouping cannot change what an entry does.
+var devSections = []menuSection{
+	{"Measuring", []int{0, 4, 2, 1}},
+	{"Trying things out", []int{3, 6}},
+	{"When something went wrong", []int{5}},
+	{"", []int{7}},
+}
+
+func (m *devModel) layout() menuLayout {
+	return arrange(devSections, nil)
+}
 
 var devHelp = []string{
 	"Deploys the current build with different settings and times each one,\n" +
@@ -74,6 +88,7 @@ type devModel struct {
 	screen devScreen
 	cursor int
 	height int
+	width  int
 
 	project string
 	apk     string
@@ -91,6 +106,8 @@ type devModel struct {
 	status string
 	err    error
 	quit   bool
+
+	connect connectOffer
 }
 
 // reloadDoneMsg carries the hot reload attempt back to the menu.
@@ -124,19 +141,32 @@ func devTick() tea.Cmd {
 
 // RunDev opens the developer menu.
 func RunDev(projectRoot, apk string, splits []string) error {
+	_, err := tea.NewProgram(newDevModel(projectRoot, apk, splits)).Run()
+	return err
+}
+
+// newDevModel builds the developer menu.
+//
+// Deliberately with no size on it, for the same reason the others have none.
+func newDevModel(projectRoot, apk string, splits []string) *devModel {
 	m := &devModel{
-		height:  defaultHeight,
 		project: projectRoot,
 		apk:     apk,
 		splits:  splits,
 	}
 
-	if serial, err := adb.Target(); err == nil {
+	serial, err := adb.Target()
+	if err == nil {
 		m.serial = serial
 	}
+	m.connect.consider(err)
 
-	_, err := tea.NewProgram(m).Run()
-	return err
+	return m
+}
+
+// devConnectedMsg is the outcome of the menu going and getting the robot.
+type devConnectedMsg struct {
+	err error
 }
 
 // Init satisfies tea.Model.
@@ -147,6 +177,7 @@ func (m *devModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.height = msg.Height
+		m.width = msg.Width
 		return m, nil
 
 	case devProgressMsg:
@@ -169,6 +200,23 @@ func (m *devModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.reload = msg.result
 		if msg.err == nil && msg.result != nil && msg.result.Err == nil {
 			m.screen = devScreenReload
+		}
+		return m, nil
+
+	case devConnectedMsg:
+		m.busy = ""
+
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+
+		// Every entry here needs the serial, so this is the one that unblocks
+		// the rest of the menu rather than producing anything itself.
+		if serial, err := adb.Target(); err == nil {
+			m.serial = serial
+			m.connect.open = false
+			m.status = "Connected to " + serial
 		}
 		return m, nil
 
@@ -211,16 +259,29 @@ func (m *devModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.quit = true
 		return m, tea.Quit
 
+	case "c":
+		if !m.connect.open {
+			return m, nil
+		}
+
+		m.busy = m.connect.working()
+		m.started = time.Now()
+		m.err, m.status = nil, ""
+
+		return m, connect(func(err error) tea.Msg { return devConnectedMsg{err: err} })
+
 	case "up", "k":
-		m.cursor = (m.cursor - 1 + len(devItems)) % len(devItems)
+		rows := m.layout().Rows
+		m.cursor = (m.cursor - 1 + len(rows)) % len(rows)
 	case "down", "j":
-		m.cursor = (m.cursor + 1) % len(devItems)
+		rows := m.layout().Rows
+		m.cursor = (m.cursor + 1) % len(rows)
 
 	case "enter", " ", "right", "l":
 		m.err = nil
 		m.status = ""
 
-		switch m.cursor {
+		switch m.layout().Rows[m.cursor] {
 		case 0:
 			return m, m.run(true, false)
 		case 1:
@@ -246,7 +307,7 @@ func (m *devModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *devModel) run(deploy, reload bool) tea.Cmd {
 	if m.serial == "" {
-		m.err = fmt.Errorf("no robot connected - plug in USB or run `epsh connect`")
+		m.err = noRobotHere(m.connect)
 		return nil
 	}
 	if m.apk == "" {
@@ -322,6 +383,19 @@ func (m *devModel) View() string {
 		return ""
 	}
 
+	// Nothing is drawn until the terminal has said how big it is.
+	//
+	// Bubbletea renders one frame before it handles the first resize, so a
+	// model that starts with a height renders that height into whatever window
+	// it actually has. Twenty four rows into a fourteen row panel scrolls the
+	// terminal ten rows, and the renderer has been counting from where it
+	// started: from then on it repaints at the wrong height and leaves rows of
+	// old frames on screen. That is the duplicated entry, and it happens before
+	// a key is ever pressed.
+	if m.height <= 0 {
+		return ""
+	}
+
 	var b strings.Builder
 	b.WriteString(titleStyle.Render("Epsh developer tools"))
 	b.WriteString("\n\n")
@@ -343,21 +417,26 @@ func (m *devModel) View() string {
 		}
 		b.WriteString("\n" + scrollStyle.Render(status) + "\n")
 	case m.err != nil:
-		b.WriteString("\n" + errStyle.Render("  ! "+m.err.Error()) + "\n")
+		b.WriteString("\n" + errStyle.Render("  ! "+fit(m.err.Error(), textWidth(m.width)-2)) + "\n")
 	case m.status != "":
-		b.WriteString("\n" + okStyle.Render("  ✓ "+m.status) + "\n")
+		b.WriteString("\n" + okStyle.Render("  ✓ "+fit(m.status, textWidth(m.width)-2)) + "\n")
 	}
 
-	return b.String()
+	return clamp(b.String(), m.width, usable(m.height))
 }
 
 func (m *devModel) viewDevMain() string {
 	var b strings.Builder
 
-	b.WriteString("  " + errStyle.Render("These measure by deploying to the robot over and over.") + "\n")
-	b.WriteString("  " + helpStyle.Render("If you do not already know why you want this, you do not want it.") + "\n\n")
+	for _, line := range wrap(devBanner, textWidth(m.width)) {
+		b.WriteString("  " + errStyle.Render(line) + "\n")
+	}
+	b.WriteString("\n")
 
 	robot := "no robot connected"
+	if m.connect.open {
+		robot = "no robot connected · press c to connect"
+	}
 	if m.serial != "" {
 		robot = "robot: " + m.serial
 	}
@@ -370,19 +449,20 @@ func (m *devModel) viewDevMain() string {
 			apk += fmt.Sprintf("  (+%d split(s))", len(m.splits)-1)
 		}
 	}
-	fmt.Fprintf(&b, "  %s\n\n", helpStyle.Render(apk))
+	fmt.Fprintf(&b, "  %s\n\n", helpStyle.Render(fit(apk, textWidth(m.width))))
 
-	for i, item := range devItems {
+	list := m.layout()
+	for i, row := range list.Rows {
 		cursor := "  "
 		if i == m.cursor {
 			cursor = cursorOn.Render("> ")
 		}
-		fmt.Fprintf(&b, "%s%s\n", cursor, item)
+		b.WriteString(list.render(i, fmt.Sprintf("%s%s\n", cursor, fit(devItems[row], textWidth(m.width)-2)), m.width))
 	}
 
-	b.WriteString(helpBlock(devHelp, m.cursor, devHelpLines))
+	b.WriteString(note(devHelp, list.Rows[m.cursor], m.width))
 
-	b.WriteString("\n" + helpStyle.Render("  enter run · up/down move · q quit") + "\n")
+	b.WriteString("\n" + helpStyle.Render("  "+fit("enter run · up/down move · q quit", textWidth(m.width))) + "\n")
 	return b.String()
 }
 
@@ -430,7 +510,7 @@ func DevTargets() (project, apk string, splits []string) {
 // change, not merely be present.
 func (m *devModel) tryReload() tea.Cmd {
 	if m.serial == "" {
-		m.err = fmt.Errorf("no robot connected - plug in USB or run `epsh connect`")
+		m.err = noRobotHere(m.connect)
 		return nil
 	}
 
@@ -577,7 +657,7 @@ func wrapAt(s string, width int) []string {
 // benchExtreme times a real reload of the project's own team code.
 func (m *devModel) benchExtreme() tea.Cmd {
 	if m.serial == "" {
-		m.err = fmt.Errorf("no robot connected - plug in USB or run `epsh connect`")
+		m.err = noRobotHere(m.connect)
 		return nil
 	}
 
@@ -641,7 +721,7 @@ func extremeSummary(r extreme.BenchResult) string {
 // that adb logcat loses.
 func (m *devModel) collectLogs() tea.Cmd {
 	if m.serial == "" {
-		m.err = fmt.Errorf("no robot connected - plug in USB or run `epsh connect`")
+		m.err = noRobotHere(m.connect)
 		return nil
 	}
 

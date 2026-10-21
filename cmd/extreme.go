@@ -26,6 +26,14 @@ func tryExtreme(gradlePath, serial, apkPath string) (bool, error) {
 		return false, nil
 	}
 
+	// Asked before the signature, because this is the case the signature cannot
+	// see: a library swapped in a menu with no robot connected leaves the robot
+	// agreeing with a signature taken before the swap.
+	if config.GetForceInstall() {
+		fmt.Println("\n[*] Epsh Extreme is on, but installing this time: the library changed, which a reload cannot carry")
+		return false, nil
+	}
+
 	state := extreme.Status(project.Root, serial, apkPath)
 	if !state.Usable() {
 		uiStatus("wait", "Epsh Extreme will install this time · "+state.Reason)
@@ -64,6 +72,17 @@ func tryExtreme(gradlePath, serial, apkPath string) (bool, error) {
 	return true, nil
 }
 
+// apkCarriesTeamCode reports whether a build still packages the team's classes.
+//
+// Deliberately not a question about settings. The exclusion lives in the
+// module's gradle file, so the file is what the build obeys, and the two
+// disagree the moment somebody turns Epsh Extreme off without undoing the
+// setup. Asking the setting instead produced a deploy that installed an APK
+// with nothing in it and then went home.
+func apkCarriesTeamCode(root string) bool {
+	return !extreme.Excluded(root)
+}
+
 // recordExtremeState notes what the robot now holds, after an install that
 // went through the ordinary path. Without it the next deploy cannot tell
 // whether anything outside team code changed and installs again.
@@ -77,13 +96,21 @@ func recordExtremeState(serial string) {
 	// packaged team code has to take the signature away rather than let the
 	// robot keep agreeing with it. It would otherwise reload classes the APK
 	// already has, and the SDK then registers no OpModes at all.
-	if !config.GetExtreme() || !extreme.Excluded(project.Root) {
+	//
+	// Whether the APK packaged team code is a question about the gradle file,
+	// which is why the setting is not consulted here either.
+	if apkCarriesTeamCode(project.Root) {
 		extreme.ForgetSignature(serial)
 		return
 	}
 
 	if signature, err := extreme.Signature(project.Root); err == nil {
 		extreme.RecordSignature(serial, signature)
+	}
+
+	// The install has happened, so whatever needed one has been carried.
+	if config.GetForceInstall() {
+		_ = config.SetForceInstall(false)
 	}
 }
 
@@ -94,14 +121,24 @@ func recordExtremeState(serial string) {
 // excluded from the APK, and the reload that supplies them has not happened.
 // Reporting a successful deploy in that state is how somebody gets to a match
 // with an empty OpMode list.
+//
+// The gradle block decides this, not the setting. They disagree whenever the
+// setting is turned off without undoing the setup, and it is the file the build
+// obeys: the APK comes out empty of team code either way. Gating this on the
+// setting instead meant those deploys installed an empty APK and stopped, while
+// the robot went on serving the dex left behind by the last reload. Everything
+// written before that reload still appeared, so the robot looked fine, and
+// anything written since was simply absent.
 func reloadAfterInstall(serial string) error {
-	if !config.GetExtreme() {
+	project, err := extreme.FindProject()
+	if err != nil || apkCarriesTeamCode(project.Root) {
 		return nil
 	}
 
-	project, err := extreme.FindProject()
-	if err != nil || !extreme.Excluded(project.Root) {
-		return nil
+	if !config.GetExtreme() {
+		fmt.Println("\n[!] Epsh Extreme is turned off, but this project is still set up for it.")
+		fmt.Println("    The APK that was just installed carries no team code, so it has to be")
+		fmt.Println("    reloaded anyway. Undo the setup in `epsh settings` for ordinary APKs.")
 	}
 
 	stranded := func(err error) error {
