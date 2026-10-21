@@ -12,6 +12,9 @@ The default command. Run it from anywhere inside an FTC project.
 
 - **USB first.** If a hub is attached over USB, epsh deploys over it and leaves
   your Wi-Fi alone (**Prefer USB when attached** in settings).
+- **Through a bridge, when this laptop has joined one.** It deploys over the
+  bridge's shared adb connection and never touches your Wi-Fi or runs `adb
+  disconnect`, since the connection is the whole team's. See `epsh bridge`.
 - **Otherwise it hops networks for you.** It builds first, joins the robot's
   Wi-Fi, deploys, and puts you back on the network you started on (**Return to
   previous Wi-Fi**).
@@ -29,6 +32,10 @@ The default command. Run it from anywhere inside an FTC project.
 - **It reports what the deploy overwrote.** With **Dashboard tuning check** on,
   epsh reads FtcDashboard or Panels before the deploy and tells you afterwards
   which tuned values the deploy replaced with the ones in your code.
+- **It offers tuning the robot has and the project doesn't.** In a project that
+  uses ElectroDromos, it asks the robot for its tuners' result files before
+  installing, lists every value the project lacks, and offers to pull them in
+  and build with them. See `epsh tune`.
 - **It warns on every deploy** while the power monitor or loop profiler is
   installed, because both cost loop time and shouldn't go into a match.
 - `--ignore-warnings` carries on past a check that would otherwise stop the
@@ -80,6 +87,11 @@ instead of installing an APK. Measured at **2.89 s instead of about 39 s**
   anything outside team code changed, a library changed, or the robot isn't
   running the build this project produces, it installs instead and says which
   input changed.
+- **Libraries published to Maven local count.** A library republished with
+  `publishToMavenLocal` under the same version, like ElectroDromos or
+  ElectroTelos during development, makes the next deploy install, because the
+  APK still carries the old one. Only the coordinates a `mavenLocal` build names
+  are hashed.
 - **Files are checked on the robot before the reload is triggered.**
 - **It checks that the robot registered your OpModes.** After a reload it asks
   FtcDashboard or Panels for the robot's own OpMode list, compares it with the
@@ -155,9 +167,52 @@ already on.
 
 Shows the robot's addresses and hostname, then probes every service and lists
 only what actually answered: ADB, the Robot Controller page, FtcDashboard,
-Panels, the Panels socket and the Limelight. `--adapters` shows which USB
+Panels, the Panels socket, the Limelight and Pedro's AutoTune. Through a bridge
+it probes the tunnel's end of each and gives `localhost` addresses. `--adapters` shows which USB
 adapters the hub can see, which ones its kernel can drive, and what the kernel
 logged about them.
+
+### `epsh open <page>` — open a robot page
+
+Opens `rc` (the hub's manage page), `dash` (FtcDashboard), `panels`,
+`autotune` (Pedro's AutoTune, with ElectroDromos's tuners) or `limelight` in
+your browser, at the address that works from here: the robot's own over Wi-Fi,
+the tunnel's end through a bridge, and over USB a port forward, including the
+sockets each page opens after it loads. `--print` prints the address instead.
+
+### `epsh bridge` — share the robot between laptops
+
+A small Linux computer, usually a Raspberry Pi, sits on the robot's Wi-Fi and
+keeps one adb connection to the hub; every laptop reaches it through an SSH
+tunnel, so Android Studio and epsh on each see the hub as an ordinary device.
+Works from other networks with Tailscale. Relay's design
+([Bob-41/Relay](https://github.com/Bob-41/Relay)), and compatible with it in
+both directions.
+
+| Subcommand | Where | What it does |
+|---|---|---|
+| `setup` | bridge, with sudo | Joins the robot's Wi-Fi on a spare adapter and installs the services (`--ssid`, `--password`, `--interface`, `--user`, `--host`, `--port`) |
+| `remove` | bridge, with sudo | Removes the services and the Wi-Fi connection |
+| `join <host>` | laptop | Installs a key, then keeps the tunnel open at every login (`--user`, `--port`) |
+| `leave` | laptop | Closes the tunnel and gives the laptop its own adb back |
+| `status` | either | Every step between here and the hub, stopping at the first that is wrong |
+
+- **The bridge runs three services:** an adb server bound to its loopback only,
+  a watchdog that keeps the robot's Wi-Fi and the adb connection up through
+  power cycles and logs why when it can't, and a nightly `epsh update`.
+- **No driver needed for the hub's kernel**, so it works with any Control Hub
+  OS and any adapter, unlike `epsh relay`.
+- **The tunnel forwards the web tools too**, on the laptop's loopback: the
+  Robot Controller at `localhost:8091` (FtcDashboard at `/dash`), Panels at
+  8001, AutoTune at 10158, the Limelight at 5801, and their sockets. A port
+  something else already holds is left out rather than failing the tunnel.
+- **Careful with what is shared.** `epsh exit` and `epsh dc` never disconnect
+  the bridge's adb; the tunnel never sends `adb kill-server` to a port another
+  ssh holds; and epsh refuses to talk through the bridge when the laptop's adb
+  version differs from the bridge's, because a mismatched client restarts the
+  server for the whole team.
+- While the tunnel is up, a hub plugged into the laptop over USB is not seen.
+- Releases include a `linux-arm64` build for the Pi.
 
 ### Per-OS network handling
 
@@ -207,6 +262,35 @@ Both monitors are added as one generated file in an `epshpower` package, which
 attaches itself through `@WebHandlerRegistrar`. Your OpModes aren't edited.
 Turning the setting off deletes the file. With Epsh Extreme set up, the monitor
 is kept in the APK automatically.
+
+## ElectroDromos
+
+### `epsh tune` — tuning results the project is missing
+
+ElectroDromos's tuners write `DromosTuning.java` and one `<Auto>Tuning.java`
+per tuned auto to `/sdcard/FIRST/electrodromos/tuning` on the robot.
+
+- `epsh tune` lists every value the project's copies lack, with the tuner's
+  `@TunedBy` note, and each auto's corrected poses.
+- `epsh tune pull` copies them into the package each file names, byte for byte,
+  and offers to deploy (`--deploy` to skip the question, `--dry-run` to change
+  nothing). A file ElectroDromos didn't generate is never overwritten.
+- Every deploy runs the same check and offers to pull before it builds.
+
+### `epsh runs` — a run, with the battery and the loop on one clock
+
+Opens a Record Auto or Path Tuner recording as a page: the driven path over the
+planned one on the field, coloured by how far off it was, and one scrubbable,
+zoomable timeline of the following error, the battery and the drive powers.
+
+- **With the power monitor's and loop profiler's recordings on the same
+  timeline** when either was installed during the run: every motor's current,
+  and which of your own methods the loop thread was in.
+- **Lined up by the battery.** The run is stamped to the second, so where both
+  the run and the power monitor recorded the battery, the traces are slid
+  against each other until they agree.
+- `--list`, `epsh runs <number>`, `--text`, `--pull <folder>` (for the docs
+  site's Run Viewer), `--clear`, `-o` for where the page goes.
 
 ## Tuning and configuration
 
@@ -318,6 +402,6 @@ use.
 
 - `epsh help` lists every command. `epsh --version` (`-v`) shows the version.
 - **No telemetry.** The only network call epsh makes on its own is the GitHub
-  release check.
+  release check, plus the SSH tunnel to a bridge this laptop has joined.
 - Removed from this fork: the blob library integration, `epsh visualiser`,
   follower logs, and device counting. See [docs/blob.md](docs/blob.md).

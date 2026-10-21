@@ -83,6 +83,11 @@ type Config struct {
 	HubNetworks   []HubNetwork `mapstructure:"hub_networks"`
 
 	ForceInstall bool `mapstructure:"force_install"`
+
+	BridgeHost string `mapstructure:"bridge_host"`
+	BridgeUser string `mapstructure:"bridge_user"`
+	BridgePort int    `mapstructure:"bridge_port"`
+	BridgeKey  string `mapstructure:"bridge_key"`
 }
 
 var (
@@ -143,6 +148,10 @@ func Initialize() error {
 	viper.SetDefault("hub_password", "")
 	viper.SetDefault("hub_networks", []HubNetwork{})
 	viper.SetDefault("force_install", false)
+	viper.SetDefault("bridge_host", "")
+	viper.SetDefault("bridge_user", "")
+	viper.SetDefault("bridge_port", 0)
+	viper.SetDefault("bridge_key", "")
 
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {
 
@@ -198,6 +207,10 @@ func Save(cfg *Config) error {
 	viper.Set("hub_password", cfg.HubPassword)
 	viper.Set("hub_networks", cfg.HubNetworks)
 	viper.Set("force_install", cfg.ForceInstall)
+	viper.Set("bridge_host", cfg.BridgeHost)
+	viper.Set("bridge_user", cfg.BridgeUser)
+	viper.Set("bridge_port", cfg.BridgePort)
+	viper.Set("bridge_key", cfg.BridgeKey)
 
 	if err := viper.WriteConfig(); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
@@ -802,3 +815,21 @@ func SetDashWatch(enabled bool) error {
 
 // Dir is where epsh keeps everything it remembers.
 func Dir() string { return configDir }
+
+// GetBridge is the bridge this laptop reaches the robot through: its host, the
+// user to sign in as, its adb server port and the key the tunnel uses. The host
+// is empty when there is none.
+func GetBridge() (host, user string, port int, key string) {
+	return viper.GetString("bridge_host"), viper.GetString("bridge_user"),
+		viper.GetInt("bridge_port"), viper.GetString("bridge_key")
+}
+
+// SetBridge records it. An empty host forgets it.
+func SetBridge(host, user string, port int, key string) error {
+	cfg, err := Load()
+	if err != nil {
+		return err
+	}
+	cfg.BridgeHost, cfg.BridgeUser, cfg.BridgePort, cfg.BridgeKey = host, user, port, key
+	return Save(cfg)
+}

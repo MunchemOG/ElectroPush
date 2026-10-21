@@ -514,6 +514,99 @@ func TestTheSignatureNoticesAVersionCatalog(t *testing.T) {
 	}
 }
 
+// A library published with publishToMavenLocal is republished under the same
+// version every time it changes, and nothing in the project moves when it is.
+// Signing only the project reloaded team code compiled against the new library
+// onto an APK that still carried the old one.
+func TestTheSignatureNoticesARepublishedLocalLibrary(t *testing.T) {
+	repo := t.TempDir()
+	restore := localRepository
+	localRepository = func() string { return repo }
+	defer func() { localRepository = restore }()
+
+	write := func(path, content string) {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	library := filepath.Join(repo, "me", "munchem", "electrodromos", "0.0.1-PreAlpha")
+	aar := filepath.Join(library, "electrodromos-0.0.1-PreAlpha.aar")
+	metadata := filepath.Join(repo, "me", "munchem", "electrodromos", "maven-metadata-local.xml")
+	unrelated := filepath.Join(repo, "org", "other", "thing", "1.0", "thing-1.0.jar")
+
+	for _, tc := range []struct {
+		name   string
+		build  string
+		change string
+		counts bool
+	}{
+		{
+			name:   "a republished library the build names",
+			build:  "repositories { mavenLocal() }\ndependencies { implementation 'me.munchem:electrodromos:0.0.1-PreAlpha' }\n",
+			change: aar,
+			counts: true,
+		},
+		{
+			name:   "the same library named in the Kotlin DSL",
+			build:  "repositories { mavenLocal() }\ndependencies { implementation(\"me.munchem:electrodromos:0.0.1-PreAlpha\") }\n",
+			change: aar,
+			counts: true,
+		},
+		{
+			name:   "the same library named in a catalog's group and name",
+			build:  "repositories { mavenLocal() }\n[libraries]\ndromos = { group = \"me.munchem\", name = \"electrodromos\", version = \"0.0.1\" }\n",
+			change: aar,
+			counts: true,
+		},
+		{
+			name:   "a library in the repository that the build does not name",
+			build:  "repositories { mavenLocal() }\ndependencies { implementation 'me.munchem:electrodromos:0.0.1-PreAlpha' }\n",
+			change: unrelated,
+			counts: false,
+		},
+		{
+			name:   "republish metadata, which carries a timestamp",
+			build:  "repositories { mavenLocal() }\ndependencies { implementation 'me.munchem:electrodromos:0.0.1-PreAlpha' }\n",
+			change: metadata,
+			counts: false,
+		},
+		{
+			name:   "a build that never reads mavenLocal",
+			build:  "repositories { mavenCentral() }\ndependencies { implementation 'me.munchem:electrodromos:0.0.1-PreAlpha' }\n",
+			change: aar,
+			counts: false,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			write(filepath.Join(root, "build.gradle"), tc.build)
+			write(aar, "aar v1")
+			write(metadata, "<lastUpdated>1</lastUpdated>")
+			write(unrelated, "jar v1")
+
+			before, err := Signature(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			write(tc.change, "changed")
+
+			after, err := Signature(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if changed := before != after; changed != tc.counts {
+				t.Errorf("signature changed = %v, want %v", changed, tc.counts)
+			}
+		})
+	}
+}
+
 func TestBuildInputsCoverBothGradleDialects(t *testing.T) {
 	for _, name := range []string{
 		"build.gradle", "build.gradle.kts", "settings.gradle.kts",

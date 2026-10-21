@@ -286,3 +286,30 @@ func TestEverySettingSurvivesASave(t *testing.T) {
 		}
 	}
 }
+
+// Saving any other setting goes through Save, which rewrites every key from the
+// struct. A bridge that was not carried through it would be forgotten the next
+// time somebody changed an unrelated preference.
+func TestTheBridgeSurvivesOtherSettingsBeingSaved(t *testing.T) {
+	cleanup := setupTest(t)
+	defer cleanup()
+
+	if err := SetBridge("100.64.0.7", "pi", 5037, "/home/me/.ssh/epsh_bridge_100.64.0.7"); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetDashWatch(true); err != nil {
+		t.Fatal(err)
+	}
+
+	host, user, port, key := GetBridge()
+	if host != "100.64.0.7" || user != "pi" || port != 5037 || key != "/home/me/.ssh/epsh_bridge_100.64.0.7" {
+		t.Errorf("got %q %q %d %q", host, user, port, key)
+	}
+
+	if err := SetBridge("", "", 0, ""); err != nil {
+		t.Fatal(err)
+	}
+	if host, _, _, _ := GetBridge(); host != "" {
+		t.Errorf("leaving the bridge left %q behind", host)
+	}
+}

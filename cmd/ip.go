@@ -14,8 +14,8 @@ var ipCmd = &cobra.Command{
 	Use:   "ip",
 	Short: "Show where the robot is and what it is serving",
 	Long: `Prints the robot's addresses and every port worth knowing about: the hub's
-own manage page, FtcDashboard, Panels, and the Limelight through the Panels
-proxy.
+own manage page, FtcDashboard, Panels, Pedro's AutoTune, and the Limelight
+through the Panels proxy.
 
 Only what actually answered is reported, so an address printed here is one you
 can paste into a browser rather than one epsh thinks ought to work.`,
@@ -60,6 +60,10 @@ func runIP(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  .local       %s.local does not resolve from here\n", survey.Hostname)
 	}
 
+	if survey.Bridge != "" {
+		fmt.Printf("  through      the bridge at %s, so everything below is on this laptop\n", survey.Bridge)
+	}
+
 	if survey.Host == "" {
 		fmt.Println("\n  Nothing to knock on: epsh reached this robot over USB and it")
 		fmt.Println("  reported no address, so it is not on a network you can open.")
@@ -77,7 +81,10 @@ func runIP(cmd *cobra.Command, args []string) error {
 		if where == "" {
 			where = fmt.Sprintf("%s:%d", survey.Host, service.Port)
 		}
-		if !service.Reachable {
+		switch {
+		case service.Unforwarded:
+			where = "not carried by the bridge"
+		case !service.Reachable:
 			where = "not answering on " + fmt.Sprintf("%d", service.Port)
 		}
 

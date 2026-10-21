@@ -40,6 +40,10 @@ CGO_ENABLED=1 CC="clang -arch arm64" GOOS=darwin GOARCH=arm64 \
 echo "[*] Building for Linux..."
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o ${OUTPUT_DIR}/epsh-linux-amd64
 
+# Linux on ARM, for a Raspberry Pi running `epsh bridge`
+echo "[*] Building for Linux (ARM)..."
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o ${OUTPUT_DIR}/epsh-linux-arm64
+
 # Windows
 echo "[*] Building for Windows..."
 CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o ${OUTPUT_DIR}/epsh-windows-amd64.exe

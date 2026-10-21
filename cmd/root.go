@@ -49,7 +49,12 @@ func Execute(version string) {
 	// A robot that was found somewhere other than its own access point is still
 	// there next time, and every command needs to know before it asks adb
 	// anything. Cheap: one string out of the config, no sockets.
-	if config.GetRelay() {
+	//
+	// Not with a bridge, though: the bridge reaches the hub on the hub's own
+	// access point, whatever this laptop once found it at.
+	if host, _, _, _ := config.GetBridge(); host != "" {
+		adb.UseOwnAccessPoint()
+	} else if config.GetRelay() {
 		if addr := config.GetRobotAddress(); addr != "" {
 			adb.UseAddress(addr)
 		}
@@ -95,6 +100,10 @@ func init() {
 	rootCmd.AddCommand(profileCmd)
 	rootCmd.AddCommand(ipCmd)
 	rootCmd.AddCommand(relayCmd)
+	rootCmd.AddCommand(bridgeCmd)
+	rootCmd.AddCommand(openCmd)
+	rootCmd.AddCommand(tuneCmd)
+	rootCmd.AddCommand(runsCmd)
 	rootCmd.AddCommand(devCmd)
 	rootCmd.AddCommand(helpCmd)
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/MunchemOG/ElectroPush/internal/adb"
+	"github.com/MunchemOG/ElectroPush/internal/bridge"
 	"github.com/spf13/cobra"
 )
 
@@ -17,6 +18,13 @@ var disconnectCmd = &cobra.Command{
 
 func runDisconnect(cmd *cobra.Command, args []string) error {
 	uiHeading("Connection", "Disconnect ADB")
+
+	// `adb disconnect` here would reach the bridge's server and drop the robot
+	// for every laptop on the team, not just this one.
+	if link, ok := bridge.Joined(); ok {
+		return fmt.Errorf("this laptop reaches the robot through the bridge at %s, and that connection is "+
+			"shared with the team: `epsh bridge leave` stops this laptop using it", link.Host)
+	}
 	uiStatus("run", "Disconnecting ADB")
 
 	if !adb.IsInstalled() {

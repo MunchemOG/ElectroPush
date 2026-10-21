@@ -24,6 +24,16 @@ import (
 // network the laptop is on, which is not something to do to somebody who typed
 // `epsh hwconfig` to look at a file in their project.
 func requireRobot() (string, error) {
+	// A laptop on a bridge has nothing to join: the robot is wherever the
+	// bridge has it, and when it is not there the useful answer is which step
+	// is missing, not an offer to take over the Wi-Fi.
+	if bridged, problem := bridgeProblem(); bridged {
+		if problem != nil {
+			return "", fmt.Errorf("%w\n    `epsh bridge status` shows every step", problem)
+		}
+		return adb.RobotAddr(), nil
+	}
+
 	serial, err := adb.Target()
 	if err == nil {
 		return serial, nil

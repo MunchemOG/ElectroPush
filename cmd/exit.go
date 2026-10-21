@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/MunchemOG/ElectroPush/internal/adb"
+	"github.com/MunchemOG/ElectroPush/internal/bridge"
 	"github.com/MunchemOG/ElectroPush/internal/config"
 	"github.com/MunchemOG/ElectroPush/internal/robot"
 	"github.com/MunchemOG/ElectroPush/internal/wifi"
@@ -20,6 +21,14 @@ var exitCmd = &cobra.Command{
 
 func runExit(cmd *cobra.Command, args []string) error {
 	uiHeading("Connection", "Return to your network")
+
+	if link, ok := bridge.Joined(); ok {
+		uiStatus("ok", "Reaching the robot through the bridge at "+link.Host+" · nothing to undo")
+		uiNote("The adb connection is the bridge's, shared with the team, so it stays up.")
+		uiNote("`epsh bridge leave` stops this laptop using the bridge.")
+		return nil
+	}
+
 	uiStatus("run", "Disconnecting ADB")
 	if adb.IsInstalled() {
 		if err := adb.Disconnect(); err != nil {

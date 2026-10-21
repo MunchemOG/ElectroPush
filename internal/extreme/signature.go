@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -114,25 +115,129 @@ func Signature(root string) (string, error) {
 		return "", fmt.Errorf("nothing to sign in %s", root)
 	}
 
+	var buildText strings.Builder
 	for _, path := range paths {
 		rel, err := filepath.Rel(root, path)
 		if err != nil {
 			continue
 		}
+		hashFile(sum, filepath.ToSlash(rel), path)
 
-		// The name goes in as well as the contents, so moving a file counts as
-		// a change rather than cancelling out against another one.
-		fmt.Fprintf(sum, "%s\n", filepath.ToSlash(rel))
-
-		file, err := os.Open(path)
-		if err != nil {
-			continue
+		if isBuildInput(filepath.Base(path)) && !isArchive(path) {
+			if data, err := os.ReadFile(path); err == nil {
+				buildText.Write(data)
+				buildText.WriteByte('\n')
+			}
 		}
-		io.Copy(sum, file)
-		file.Close()
+	}
+
+	if repo := localRepository(); repo != "" {
+		for _, path := range localLibraries(repo, buildText.String()) {
+			rel, err := filepath.Rel(repo, path)
+			if err != nil {
+				continue
+			}
+			hashFile(sum, "mavenLocal/"+filepath.ToSlash(rel), path)
+		}
 	}
 
 	return hex.EncodeToString(sum.Sum(nil)), nil
+}
+
+// hashFile adds one file to the signature. The name goes in as well as the
+// contents, so moving a file counts as a change rather than cancelling out
+// against another one.
+func hashFile(sum io.Writer, name, path string) {
+	fmt.Fprintf(sum, "%s\n", name)
+
+	file, err := os.Open(path)
+	if err != nil {
+		return
+	}
+	io.Copy(sum, file)
+	file.Close()
+}
+
+func isArchive(path string) bool {
+	return strings.HasSuffix(path, ".aar") || strings.HasSuffix(path, ".jar")
+}
+
+// A library published with `publishToMavenLocal` lives outside the project, in
+// Maven's local repository, and is republished under the same version every
+// time it changes. Nothing in the project moves when that happens, so the
+// signature agreed with a robot whose APK still carried the old library while
+// team code compiled against the new one was reloaded onto it. That is stale
+// code with everything reporting success, or a NoSuchMethodError at init.
+//
+// Gradle only reads that repository when a build file asks for mavenLocal, and
+// only for the coordinates the build names, so those are what get hashed. The
+// rest of the repository is left alone, however large it is.
+
+// localRepository is where `publishToMavenLocal` writes. A variable so tests can
+// point it somewhere else.
+var localRepository = func() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".m2", "repository")
+}
+
+var (
+	// 'group:artifact' or 'group:artifact:version', in either quote, which is
+	// how both gradle dialects and a version catalog's module = "..." write it.
+	coordinateRe = regexp.MustCompile(`["']([A-Za-z0-9_.\-]+):([A-Za-z0-9_.\-]+)(?::[^"'\s]*)?["']`)
+	// A version catalog's other form: group = "...", name = "...".
+	catalogRe = regexp.MustCompile(`group\s*=\s*"([^"]+)"\s*,\s*name\s*=\s*"([^"]+)"`)
+)
+
+// localLibraries is every file in the local repository that a build naming
+// these coordinates could read, sorted so the signature is stable.
+func localLibraries(repo, buildText string) []string {
+	if !strings.Contains(buildText, "mavenLocal") {
+		return nil
+	}
+
+	seen := map[string]bool{}
+	var dirs []string
+	add := func(group, artifact string) {
+		dir := filepath.Join(append([]string{repo}, append(strings.Split(group, "."), artifact)...)...)
+		if seen[dir] {
+			return
+		}
+		seen[dir] = true
+		if info, err := os.Stat(dir); err == nil && info.IsDir() {
+			dirs = append(dirs, dir)
+		}
+	}
+	for _, m := range coordinateRe.FindAllStringSubmatch(buildText, -1) {
+		add(m[1], m[2])
+	}
+	for _, m := range catalogRe.FindAllStringSubmatch(buildText, -1) {
+		add(m[1], m[2])
+	}
+
+	// Every version, because which one the build picks can come from a
+	// variable. Publishing an unrelated version costs one install, which is
+	// the safe way to be wrong.
+	var paths []string
+	for _, dir := range dirs {
+		filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+			if err != nil || info.IsDir() {
+				return nil
+			}
+			// What a build actually consumes. Metadata files carry publish
+			// timestamps, and would make every republish an install even
+			// when nothing in the library changed.
+			if isArchive(path) || strings.HasSuffix(path, ".pom") {
+				paths = append(paths, path)
+			}
+			return nil
+		})
+	}
+
+	sort.Strings(paths)
+	return paths
 }
 
 // RecordSignature notes on the robot which project state it now holds.

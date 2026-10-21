@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/MunchemOG/ElectroPush/internal/adb"
+	"github.com/MunchemOG/ElectroPush/internal/bridge"
 	"github.com/MunchemOG/ElectroPush/internal/config"
 	"github.com/MunchemOG/ElectroPush/internal/extreme"
 	"github.com/MunchemOG/ElectroPush/internal/ftcproject"
@@ -36,7 +37,9 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	reportHubAP()
 	fmt.Println()
-	reportADB()
+	if reportBridgeLink() {
+		reportADB()
+	}
 	fmt.Println()
 	reportProject()
 
@@ -160,6 +163,30 @@ func reportHubAP() {
 		fmt.Println("no")
 		fmt.Println("  The hub is switched off, still starting up, or out of range.")
 	}
+}
+
+// reportBridgeLink checks the bridge, when this laptop uses one, and reports
+// whether asking adb anything is safe. It is not when the adb versions differ:
+// the local client would kill the bridge's server on finding it, and with it
+// the robot for every laptop on the team.
+func reportBridgeLink() bool {
+	link, ok := bridge.Joined()
+	if !ok {
+		return true
+	}
+
+	uiHeading("Bridge", "Reaching the robot through "+link.Host)
+	checks := bridge.Diagnose(link)
+	printChecks(checks)
+	fmt.Println()
+
+	for _, c := range checks {
+		if c.Label == "adb versions" && !c.OK {
+			uiStatus("warn", "Skipped asking adb for devices: it would restart the bridge's server")
+			return false
+		}
+	}
+	return true
 }
 
 func reportADB() {

@@ -107,6 +107,10 @@ Requires `adb` and an FTC project with a Gradle wrapper.
 | `epsh profile` | Flame chart of what ate the loop time on the last run |
 | `epsh ip` | Where the robot is, and every port it is serving |
 | `epsh relay setup` | Put the robot on your own Wi-Fi over a USB adapter |
+| `epsh bridge` | Share the robot between laptops, through a Pi on its Wi-Fi |
+| `epsh open <page>` | Open `rc`, `dash`, `panels`, `autotune` or `limelight`, however the robot is attached |
+| `epsh tune pull` | Bring ElectroDromos's tuning results into the project |
+| `epsh runs` | An ElectroDromos run, with the battery and the loop on the same clock |
 | `epsh prepare` | Cache Gradle dependencies while online |
 | `epsh help` | Help |
 
@@ -310,10 +314,85 @@ Control Hub v1.0 (192.168.1.183:5555)
   ✓ Panels             http://192.168.1.183:8001 tuning and telemetry
   ✓ Panels socket      192.168.1.183:8002        what `epsh dash diff` reads
   ✓ Limelight          http://192.168.1.183:5801 through the Panels proxy
+  ✓ Pedro AutoTune     http://192.168.1.183:10158 Pedro's tuners, and ElectroDromos's
 ```
 
 Only what actually answered is reported, so an address printed there is one you
 can paste into a browser rather than one epsh believes ought to work.
+
+`epsh open <page>` goes one step further and opens it: `rc`, `dash`, `panels`,
+`autotune` or `limelight`, at whichever address works from here. Over USB that
+means forwarding a port, and not only the page's: Panels opens its socket on
+8002 and AutoTune on 12649 once they load, from the address they were loaded
+from, so each of those is forwarded on its own number too.
+
+## Sharing one robot between laptops
+
+`epsh relay` puts the robot on your network. A bridge does it the other way
+round: a small Linux computer, usually a Raspberry Pi, sits next to the robot,
+joins its Wi-Fi, and keeps one adb connection to the hub. Every laptop on the
+team reaches that connection through an SSH tunnel, so Android Studio and epsh
+on each of them see the hub as an ordinary device, and nobody leaves the
+network they are on. With [Tailscale](https://tailscale.com) on the bridge and
+the laptops, "the network they are on" can be a different building.
+
+This is [Relay](https://github.com/Bob-41/Relay)'s idea, by Bob-41, and the two
+work together: the contract between bridge and laptop is Relay's own, an adb
+server on the bridge's loopback and an SSH forward to it. An epsh laptop can
+join a Relay bridge, and a Relay laptop an epsh bridge.
+
+On the bridge, once:
+
+```
+sudo epsh bridge setup
+```
+
+It asks for the robot's Wi-Fi, picks the adapter that is not this machine's
+own way out (or says why it cannot), installs adb if it is missing, and leaves
+three services behind:
+
+- **an adb server**, run by an ordinary user and bound to the bridge's loopback
+  only. Never `-a`: a server on every interface would hand the robot to anyone
+  on the shop network.
+- **a watchdog** that keeps the adapter on the robot's Wi-Fi and the server
+  attached to the hub, through power cycles at either end. It logs every change
+  of state and, after two minutes of not finding the hub, the likeliest reason:
+  an adapter NetworkManager does not manage, or one that cannot do the hub's
+  band. `journalctl -u epsh-bridge` is the log.
+- **a nightly `epsh update`**, which only ever moves to a newer release.
+
+It ends by printing the line to run on each laptop:
+
+```
+epsh bridge join 100.64.0.7 --user pi
+```
+
+That makes a key for this bridge, asks for the bridge user's password once to
+install it, and starts the tunnel at every login (a LaunchAgent on macOS, a
+systemd user service on Linux, a scheduled task on Windows). From then on `epsh`
+deploys through the bridge without touching your Wi-Fi, `epsh ip` and `epsh
+open` give `localhost` addresses for every page, and `epsh dash diff` reads the
+dashboards through the tunnel. `epsh bridge status` walks every step between
+the laptop and the hub and stops at the first one that is wrong; `epsh bridge
+leave` gives the laptop its own adb back.
+
+Three things it is careful about, because each one takes the robot away from
+the whole team rather than one laptop:
+
+- **`adb disconnect` is never sent through the tunnel.** The connection is the
+  bridge's. `epsh exit` leaves it alone and `epsh dc` refuses.
+- **Nothing is killed that might be the bridge's.** Android Studio restarts a
+  local adb server on port 5037 whenever it finds none, so the tunnel has to
+  take the port back. It shuts down a local adb server, and leaves any ssh it
+  did not start alone, since an `adb kill-server` sent to a tunnel kills the
+  bridge's server.
+- **Mismatched adb versions are refused.** An adb client that finds a server of
+  another version kills it and starts its own, so every command from a laptop
+  with a different adb would restart the bridge's server for everybody. epsh
+  checks the two versions first and says which to update.
+
+While the tunnel is up, a hub plugged into the laptop over USB is invisible to
+it, because the adb server answering on the standard port is the bridge's.
 
 ## What is eating the loop time
 
@@ -393,6 +472,57 @@ With Epsh Extreme set up, the monitor is kept in the APK rather than reloaded.
 It has to be: the startup hook is called when the robot controller's web server
 comes up, long before anything is reloaded, so a monitor that arrived in a
 reload would be found and never called. Epsh adds it to the keep list itself.
+
+## ElectroDromos
+
+[ElectroDromos](https://github.com/Munchem-ElectroLib/ElectroDromos), the
+supplement to Pedro Pathing, tunes on the robot and writes its results as Java
+files: `DromosTuning.java` for the robot, and an `<Auto>Tuning.java` for each
+auto the Path Tuner corrects. They do nothing until they are in the project and
+deployed, and the robot keeps them whether or not anybody copies them off.
+
+`epsh tune` says which of them the project is missing, value by value, with the
+tuner's own note on how each was measured:
+
+```
+◆ DromosTuning.java · changed · TeamCode/src/main/java/.../tuning/DromosTuning.java
+    NOMINAL_VOLTAGE        12.0 → 12.62   Voltage tuner, 2026-10-04, spread 0.21 V
+    X_POD_OFFSET           new → 0.42     Spin Check, 2026-10-04, drift 0.08 in
+◆ RedNearTuning.java · new
+    SCORE                  designed → 40.62, 69.4, 0.7801   Path tuner, 2026-10-06
+```
+
+`epsh tune pull` copies them into the package each one names, byte for byte,
+and offers to deploy; with Epsh Extreme that is a reload of a few seconds, so a
+Path Tuner round is tune, pull, reload. A file in the project that ElectroDromos
+did not generate is never overwritten.
+
+**Every deploy checks too.** In a project that uses ElectroDromos, `epsh` asks
+the robot for its tuning files before installing, and when the project lacks
+any it lists them and offers to pull them in and build with them. The mistake
+it is there for is easy to make: the tuner says "tuned", the robot is
+redeployed, and it drives exactly as it did before.
+
+### Looking at a run
+
+Record Auto and every round of the Path Tuner leave a recording on the robot.
+`epsh runs` opens the newest as a page: the driven path over the planned one,
+coloured by how far off it was, and under it, on one timeline that scrubs and
+zooms, how far off the path the robot was, the battery and the drive powers.
+
+When the power monitor and the loop profiler were installed during the run,
+their recordings go on the same timeline: every motor's current, and which of
+your own methods the loop thread was inside. That is the question none of the
+three can answer alone: when the robot came off its path, what were the battery
+and the loop doing at that moment.
+
+All three are stamped by the robot's clock, but the run's stamp is only to the
+second. So where both the run and the power monitor recorded the battery, epsh
+slides one trace against the other until they agree, and the lanes line up to
+a few hundredths of a second. The page says when it could only use the clock.
+
+`--list` shows every recording, `epsh runs 3` opens one, `--text` prints it, and
+`--pull <folder>` copies them off for the Run Viewer on the docs site.
 
 ## Hardware configurations
 
@@ -658,6 +788,21 @@ The reasoning missed the point of the check: it exists for the deploy that did
 not work, and the one team it happened to ran Panels, so epsh had nothing to
 say while their Driver Station listed nothing at all.
 
+### A library you publish yourself
+
+Whether a reload is safe is decided by hashing everything the APK is built from
+except team code. That used to stop at the project folder, which missed one
+case entirely: a library published with `publishToMavenLocal`, the way
+ElectroDromos and ElectroTelos are during development. It lives in `~/.m2`, and
+is republished under the same version every time it changes, so nothing in the
+project moved. The next deploy reloaded team code compiled against the new
+library onto an APK still carrying the old one, which is stale code or a
+`NoSuchMethodError` at init with everything reporting success.
+
+When a build file asks for `mavenLocal`, the artifacts it names there are now
+hashed too, so republishing one makes the next deploy install. Only the
+coordinates the build names are read, not the whole repository.
+
 ### It will not set up alongside Sloth
 
 Sloth reloads team code onto the robot, which is what Epsh Extreme does, and
@@ -799,11 +944,14 @@ Nothing about you or your team. epsh has no usage counting or telemetry; the
 device counter in upstream Pusher was removed from this fork.
 
 epsh does talk to GitHub to check for a newer epsh release (turn that off with
-**Tell me about updates** in `epsh settings`).
+**Tell me about updates** in `epsh settings`). A laptop that has joined a
+bridge keeps an SSH connection to that bridge, and to nothing else.
 
 ## Credits
 
 Made with love by **Andrei "PzmuV1517" Banu**
+
+The bridge is [Relay](https://github.com/Bob-41/Relay)'s design, by Bob-41.
 
 From **Team #14270**
 

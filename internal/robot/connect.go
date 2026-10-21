@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/MunchemOG/ElectroPush/internal/adb"
+	"github.com/MunchemOG/ElectroPush/internal/bridge"
 	"github.com/MunchemOG/ElectroPush/internal/config"
 	"github.com/MunchemOG/ElectroPush/internal/wifi"
 )
@@ -44,6 +45,16 @@ const enoughMisses = 3
 func Connect(out io.Writer) error {
 	if !adb.IsInstalled() {
 		return fmt.Errorf("%w - please install Android SDK Platform-Tools", adb.ErrNoADB)
+	}
+
+	// Before USB: with the tunnel up, the adb server here is the bridge's, and
+	// joining the robot's Wi-Fi would do nothing for it.
+	if link, ok := bridge.Joined(); ok {
+		if err := bridge.Problem(link); err != nil {
+			return fmt.Errorf("%w\n    `epsh bridge status` shows every step", err)
+		}
+		fmt.Fprintf(out, "[OK] Robot attached through the bridge at %s\n", link.Host)
+		return nil
 	}
 
 	if device, ok := adb.FindUSBDevice(); ok {

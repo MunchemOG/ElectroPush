@@ -11,6 +11,30 @@ This fork numbers its own releases, from 0.0 up. The entries from 1.3.3 down
 are upstream Pusher's, under Pusher's numbers, kept because their work is what
 the fork was merged from.
 
+## Unreleased
+
+- **Epsh Extreme notices a library republished to Maven local.** A library
+  published with `publishToMavenLocal`, like ElectroDromos and ElectroTelos
+  during development, is republished under the same version each time, and
+  nothing in the project moved when it was. The next deploy reloaded team code
+  compiled against the new library onto an APK that still carried the old one.
+  The artifacts a `mavenLocal` build names are now part of what decides whether
+  a reload is safe, so republishing one makes the next deploy install.
+- **`epsh bridge` shares one robot between every laptop**, through a Raspberry
+  Pi or any Linux machine on the robot's Wi-Fi: Relay's design, by Bob-41, and
+  compatible with Relay in both directions. `sudo epsh bridge setup` on the
+  bridge; `epsh bridge join <host>` on each laptop. Deploys, `epsh ip`, `epsh
+  open` and `epsh dash diff` all go through it, with Tailscale from anywhere.
+  Releases now include `epsh-linux-arm64` for the Pi.
+- **`epsh open <page>`** opens the Robot Controller page, FtcDashboard, Panels,
+  Pedro's AutoTune or the Limelight at the address that works from here, and
+  `epsh ip` checks AutoTune too.
+- **`epsh tune pull`** brings ElectroDromos's tuning results off the robot into
+  the project, says which values changed, and offers to deploy. Every deploy
+  checks for results the project is missing and offers to pull them first.
+- **`epsh runs`** opens an ElectroDromos run with the power monitor's and loop
+  profiler's recordings on the same timeline, lined up by the battery.
+
 ## 0.0.31
 
 - **Upstream Pusher 1.3.3 merged in.** That brings `epsh relay` for putting the

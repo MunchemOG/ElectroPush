@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/MunchemOG/ElectroPush/internal/adb"
+	"github.com/MunchemOG/ElectroPush/internal/bridge"
 )
 
 // Everything that talks to the robot does it over a port, and every one of them
@@ -24,7 +25,8 @@ import (
 // Ports read out of the published artifacts rather than from memory:
 // FtcDashboard on 8000, Panels on 8001 with its socket on 8002 (Panels.kt), and
 // the Panels Limelight proxy on 5800, 5801 and 5805, which it forwards to the
-// Limelight itself at 172.29.0.1.
+// Limelight itself at 172.29.0.1. Pedro's AutoTune serves its page on 10158 and
+// its socket on 12649, the two Relay forwards for it.
 
 // Service is one thing the robot serves.
 type Service struct {
@@ -39,6 +41,10 @@ type Service struct {
 	Note string
 
 	Reachable bool
+
+	// Unforwarded is a port the bridge's tunnel does not carry, so it cannot
+	// answer here whatever the robot is doing.
+	Unforwarded bool
 }
 
 // URL is the address to open, empty when this is not something a browser opens.
@@ -59,6 +65,8 @@ var services = []Service{
 	{Name: "Limelight", Port: 5801, Scheme: "http", Note: "through the Panels proxy"},
 	{Name: "Limelight stream", Port: 5800, Scheme: "http", Note: "through the Panels proxy"},
 	{Name: "Limelight socket", Port: 5805, Note: "through the Panels proxy"},
+	{Name: "Pedro AutoTune", Port: 10158, Scheme: "http", Note: "Pedro's tuners, and ElectroDromos's"},
+	{Name: "AutoTune socket", Port: 12649, Note: "what the AutoTune page reads"},
 }
 
 // Survey is where the robot is and what it is currently serving.
@@ -77,6 +85,10 @@ type Survey struct {
 	Local string
 
 	Services []Service
+
+	// Bridge is the bridge this laptop reached the robot through, empty when it
+	// reached it directly. The services are then on this laptop's own ports.
+	Bridge string
 }
 
 // Take asks the robot where it is and knocks on every door.
@@ -91,6 +103,15 @@ func Take(serial string) (Survey, error) {
 	}
 
 	s.Addresses = addresses(serial)
+
+	// Through a bridge the robot's own addresses are on a network only the
+	// bridge is on. What this laptop can open is the tunnel's end of each.
+	if link, bridged := bridge.Joined(); bridged && serial == adb.RobotAddr() {
+		s.Bridge = link.Host
+		s.Host = "localhost"
+		s.Services = knockThroughBridge()
+		return s, nil
+	}
 
 	// Over Wi-Fi the serial is already the address epsh is using, and that is
 	// the one worth knocking on: the robot may have several and only one of
@@ -129,6 +150,34 @@ func knock(host string) []Service {
 		go func(i int) {
 			defer wg.Done()
 			out[i].Reachable = reachable(fmt.Sprintf("%s:%d", host, out[i].Port))
+		}(i)
+	}
+	wg.Wait()
+
+	return out
+}
+
+// knockThroughBridge tries every service at the local end of the tunnel.
+func knockThroughBridge() []Service {
+	out := make([]Service, len(services))
+	copy(out, services)
+
+	var wg sync.WaitGroup
+	for i := range out {
+		if out[i].Port == AdbPort {
+			out[i].Port = bridge.DefaultADBPort
+			out[i].Note = "the bridge's shared adb server"
+		} else if local, ok := bridge.Local(out[i].Port); ok {
+			out[i].Port = local
+		} else {
+			out[i].Unforwarded = true
+			continue
+		}
+
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			out[i].Reachable = reachable(fmt.Sprintf("127.0.0.1:%d", out[i].Port))
 		}(i)
 	}
 	wg.Wait()

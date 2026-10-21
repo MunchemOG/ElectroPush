@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/MunchemOG/ElectroPush/internal/adb"
+	"github.com/MunchemOG/ElectroPush/internal/bridge"
 	"github.com/MunchemOG/ElectroPush/internal/config"
 	"github.com/MunchemOG/ElectroPush/internal/gradle"
 	"github.com/MunchemOG/ElectroPush/internal/robot"
@@ -58,6 +59,14 @@ func push(gradlePath string) error {
 		}
 	}
 
+	// Ahead of USB, because with the tunnel up the adb server this laptop talks
+	// to is the bridge's, so there is no USB of this laptop's to ask about. And
+	// never on to the Wi-Fi hop: joining the robot's network does nothing for
+	// a server that lives on the bridge.
+	if bridged, problem := bridgeProblem(); bridged {
+		return pushThroughBridge(gradlePath, problem)
+	}
+
 	if config.GetPreferUSB() {
 		if device, ok := adb.FindUSBDevice(); ok {
 			uiStatus("ok", fmt.Sprintf("Hub attached over USB · %s", device.Label()))
@@ -73,6 +82,32 @@ func push(gradlePath string) error {
 	}
 
 	return pushOverWiFi(gradlePath)
+}
+
+// pushThroughBridge deploys over the bridge's shared adb connection.
+//
+// No `adb disconnect` afterwards, unlike the Wi-Fi path: the connection is the
+// bridge's, and every other laptop on the team is using it too.
+func pushThroughBridge(gradlePath string, problem error) error {
+	link, _ := bridge.Joined()
+
+	// Checked before the build as well as after, so a bridge that is down is
+	// found out in a second rather than at the end of a minute of Gradle.
+	if problem != nil {
+		return fmt.Errorf("%w\n    `epsh bridge status` shows every step", problem)
+	}
+	uiStatus("ok", fmt.Sprintf("Robot reachable through the bridge · %s", link.Host))
+	uiNote("Using the bridge · your Wi-Fi will not be touched")
+
+	rememberHubABI(link.Robot)
+	if config.GetAutoSlim() {
+		applyAutoSlim()
+	}
+	if err := buildProject(gradlePath, false); err != nil {
+		return err
+	}
+
+	return install(gradlePath, link.Robot)
 }
 
 func pushOverWiFi(gradlePath string) error {
@@ -254,6 +289,14 @@ func deploy(gradlePath, serial string, offline bool) error {
 // The reading has to be taken here rather than inside either path, because both
 // of them put the code's values back.
 func install(gradlePath, serial string) error {
+	// Offline, because the build that just ran resolved every dependency, and
+	// on the robot's own network there is nothing to resolve them from.
+	if offerTuning(gradlePath, serial) {
+		if err := buildProject(gradlePath, true); err != nil {
+			return err
+		}
+	}
+
 	watch := beginDashWatch(serial)
 
 	if err := deployOnce(gradlePath, serial); err != nil {

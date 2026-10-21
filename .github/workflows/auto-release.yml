@@ -123,6 +123,10 @@ jobs:
           GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.VERSION }}" \
             -o dist/binaries/epsh-linux-amd64
           
+          # Linux on ARM, for a Raspberry Pi running `epsh bridge`
+          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.VERSION }}" \
+            -o dist/binaries/epsh-linux-arm64
+          
           # Windows
           GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.VERSION }}" \
             -o dist/binaries/epsh-windows-amd64.exe
@@ -153,6 +157,7 @@ jobs:
             dist/binaries/epsh-darwin-arm64
             dist/binaries/epsh-darwin-universal
             dist/binaries/epsh-linux-amd64
+            dist/binaries/epsh-linux-arm64
             dist/binaries/epsh-windows-amd64.exe
             dist/binaries/SHA256SUMS
           body: |
@@ -188,6 +193,7 @@ jobs:
             - **macOS (Intel)**: `epsh-darwin-amd64`
             - **macOS (Apple Silicon)**: `epsh-darwin-arm64`
             - **Linux**: `epsh-linux-amd64`
+            - **Linux (ARM, Raspberry Pi)**: `epsh-linux-arm64`
             - **Windows**: `epsh-windows-amd64.exe`
             
             #### macOS/Linux
@@ -284,6 +290,7 @@ jobs:
           - **macOS (Intel)**: \`epsh-darwin-amd64\`
           - **macOS (Apple Silicon)**: \`epsh-darwin-arm64\`
           - **Linux**: \`epsh-linux-amd64\`
+          - **Linux (ARM, Raspberry Pi)**: \`epsh-linux-arm64\`
           - **Windows**: \`epsh-windows-amd64.exe\`
           
           #### macOS/Linux

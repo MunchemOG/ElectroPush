@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/MunchemOG/ElectroPush/internal/adb"
+	"github.com/MunchemOG/ElectroPush/internal/bridge"
 )
 
 // The dashboard listens on the robot's own network interface, so over Wi-Fi it
@@ -49,6 +50,16 @@ func Open(serial string) (Reach, error) { return OpenPort(serial, Port) }
 func OpenPort(serial string, port int) (Reach, error) {
 	if serial == "" {
 		return Reach{}, fmt.Errorf("no robot connected")
+	}
+
+	// Through a bridge the robot's address is on a network only the bridge is
+	// on, and an adb forward would open its local end on the bridge rather than
+	// here. The tunnel already carries the dashboards' ports to this laptop.
+	if _, bridged := bridge.Joined(); bridged && serial == adb.RobotAddr() {
+		if local, ok := bridge.Local(port); ok {
+			return Reach{Addr: fmt.Sprintf("127.0.0.1:%d", local)}, nil
+		}
+		return Reach{}, fmt.Errorf("the bridge's tunnel does not carry port %d", port)
 	}
 
 	// A Wi-Fi serial is already an address, and the dashboard is on the same
